@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('class_tbl', function(Blueprint $table){
+        //
+        Schema::create('exam_session_tbl', function(Blueprint $table){
             $table -> id();
-            $table -> string('class_name');
+            $table -> string('session_name');
             $table -> boolean('activate');
             $table -> timestamps();
         });
-        //
     }
 
     /**
@@ -25,7 +25,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('class_tbl');
         //
+        Schema::dropIfExists('exam_session_tbl');
     }
 };

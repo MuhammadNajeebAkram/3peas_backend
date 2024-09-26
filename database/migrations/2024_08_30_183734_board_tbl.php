@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('board_tbl', function(Blueprint $table){
             $table -> id();
             $table -> string('board_name');
+            $table -> string('icon_name');
             $table -> timestamps();
         });
         //

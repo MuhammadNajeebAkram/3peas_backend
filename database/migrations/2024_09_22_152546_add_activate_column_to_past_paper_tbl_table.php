@@ -11,13 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('class_tbl', function(Blueprint $table){
-            $table -> id();
-            $table -> string('class_name');
-            $table -> boolean('activate');
-            $table -> timestamps();
+        Schema::table('past_paper_tbl', function (Blueprint $table) {
+            //
+            $table->boolean('activate')->default(true)->after('group');
         });
-        //
     }
 
     /**
@@ -25,7 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('class_tbl');
-        //
+        Schema::table('past_paper_tbl', function (Blueprint $table) {
+            //
+            $table->dropColumn('activate');
+        });
     }
 };
