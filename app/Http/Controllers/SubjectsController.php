@@ -52,7 +52,7 @@ class SubjectsController extends Controller
     public function getAllSubjects(Request $request){
         try {
             $subjects = DB::table('subject_tbl')
-                        ->select(['id', 'subject_name', 'activate'])
+                        ->select(['id', 'subject_name', 'icon_name', 'activate'])
                         ->get();
 
             return response()->json([
@@ -69,31 +69,77 @@ class SubjectsController extends Controller
         }
     }
 
-    public function saveSubject(Request $request){
-        DB::table('subject_tbl')
-        ->insert(['subject_name' => $request -> subject_name,
-                  'icon_name' => $request -> icon_name,
-                  'activate' => 1,
-                  'created_at' => now(),
-                  'updated_at' => now()]);
-
+    public function saveSubject(Request $request)
+{
+    try {
+        // Check for duplicate subject name
+        $checkDuplicate = DB::table('subject_tbl')
+            ->where('subject_name', '=', $request->subject_name)
+            ->exists();  // Use exists() to check if the record exists
+    
+        if (!$checkDuplicate) {
+            // Insert the new subject
+            DB::table('subject_tbl')
+                ->insert([
+                    'subject_name' => $request->subject_name,
+                    'icon_name' => $request->icon_name,
+                    'activate' => 1,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+    
+            return response()->json([
+                'success' => 1 // Successfully inserted
+            ]);
+        } else {
+            // Duplicate Record Exists
+            return response()->json([
+                'success' => 2, // Duplicate entry
+                'message' => 'Subject already exists.'
+            ]);
+        }
+    } catch (\Exception $e) {
         return response()->json([
-            'success' => 1
+            'success' => 0,  // Error occurred
+            'error' => $e->getMessage(),
         ]);
     }
+}
+
 
     public function editSubject(Request $request){
+        try{
+
+        
+        if($request -> subject_name != $request -> oldSubjectName){
+            $checkDuplicate = DB::table('subject_tbl')
+            ->where('subject_name', '=', $request->subject_name)
+            ->exists();  // Use exists() to check if the record exists
+            if($checkDuplicate){
+                return response()->json([
+                    'success' => 2, // Duplicate entry
+                    'message' => 'Subject already exists.'
+                ]); 
+            }
+    
+        }
         $subjectClass = DB::table('subject_tbl')
          ->where('id', '=', $request -> id)
-        ->update(['subject_name' => $request -> className,
+        ->update(['subject_name' => $request -> subject_name,
                   'icon_name' => $request -> icon_name,
                   'updated_at' => now()]);
 
         if ($subjectClass) {
             return response()->json(['success' => 1], 200);
         } else {
-            return response()->json(['success' => 0], 400);
+            return response()->json(['success' => 3, 'message' => 'Bad Request'], 400);
         }
+    }catch(\Exception $e){
+        return response()->json([
+            'success' => 0, // error
+            'message' => $e->getMessage(),
+        ]);
+    }
     }
     public function activateSubject(Request $request){
         $editSubject = DB::table('subject_tbl')

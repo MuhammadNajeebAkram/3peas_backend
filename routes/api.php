@@ -28,10 +28,14 @@ Route::post('/activate_subject', [SubjectsController::class, 'activateSubject'])
 
 Route::get('/boards/{id}/{subject_id}', [BoardsController::class, 'getBoardsByClass_Subjects']);
 Route::get('/get_boards', [BoardsController::class, 'getBoards']);
+Route::get('/get_all_boards', [BoardsController::class, 'getAllBoards']);
+Route::post('/add_board', [BoardsController::class, 'saveBoard']);
+Route::post('/update_board', [BoardsController::class, 'editBoard']);
+Route::post('/activate_board', [BoardsController::class, 'activateBoard']);
 
 Route::get('/exam_sessions', [ExamSessionController::class, 'getAllExamSessions']);
 Route::get('/get_exam_sessions', [ExamSessionController::class, 'getExamSessions']);
-Route::post('/add_exam_session/{name}', [ExamSessionController::class, 'saveSession']);
+Route::post('/add_exam_session', [ExamSessionController::class, 'saveSession']);
 Route::post('/update_exam_session', [ExamSessionController::class, 'editSession']);
 Route::post('/activate_exam_session', [ExamSessionController::class, 'activateSession']);
 

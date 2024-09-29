@@ -49,40 +49,89 @@ class ExamSessionController extends Controller
         }
     }
 
-    public function saveSession($name){
-        DB::table('exam_session_tbl')
-        ->insert(['session_name' => $name,
-                  'activate' => 1,
-                  'created_at' => now(),
-                  'updated_at' => now()]);
-
-        return response()->json([
-            'success' => 1
-        ]);
+    public function saveSession(Request $request){
+        try{
+            $checkDuplicate = DB::table('exam_session_tbl')
+        ->where('session_name', '=', $request -> session_name)
+        ->exists();  // Use exists() to check if the record exists
+        if (!$checkDuplicate){
+            DB::table('exam_session_tbl')
+            ->insert(['session_name' => $request -> session_name,
+                      'activate' => 1,
+                      'created_at' => now(),
+                      'updated_at' => now()]);
+    
+            return response()->json([
+                'success' => 1
+            ]);
+        }else {
+            // Duplicate Record Exists
+            return response()->json([
+                'success' => 2, // Duplicate entry
+                'message' => 'Session is already exists.'
+            ]);
+        }
+            
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'message' => $e -> getMessage()
+            ]);
+        }
+        
     }
 
     public function editSession(Request $request){
-        $editSession = DB::table('exam_session_tbl')
-         ->where('id', '=', $request -> id)
-        ->update(['session_name' => $request -> sessionName,
-                  'updated_at' => now()]);
-
-        if ($editSession) {
-            return response()->json(['success' => 1], 200);
-        } else {
-            return response()->json(['success' => 0], 400);
+        try{
+            if($request -> session_name != $request -> oldSessionName){
+                $checkDuplicate = DB::table('exam_session_tbl')
+                ->where('session_name', '=', $request->session_name)
+                ->exists();  // Use exists() to check if the record exists
+                if($checkDuplicate){
+                    return response()->json([
+                        'success' => 2, // Duplicate entry
+                        'message' => 'Session Name already exists.'
+                    ]); 
+                }
+            }
+            $editSession = DB::table('exam_session_tbl')
+            ->where('id', '=', $request -> id)
+           ->update(['session_name' => $request -> session_name,
+                     'updated_at' => now()]);
+   
+           if ($editSession) {
+               return response()->json(['success' => 1], 200);
+           } else {
+               return response()->json(['success' => 0], 400);
+           }
         }
+        catch(\Exception $e){
+            return response()->json(
+                ['success' => 0,
+                 'message' => $e -> getMessage(),]
+                , 200);
+        }
+        
     }
     public function activateSession(Request $request){
-        $editSession = DB::table('exam_session_tbl')
-         ->where('id', '=', $request -> id)
-        ->update(['activate' => $request -> activate,
-                  'updated_at' => now()]);
-
-        if ($editSession) {
-            return response()->json(['success' => 1], 200);
-        } else {
-            return response()->json(['success' => 0], 400);
+        try{
+            $editSession = DB::table('exam_session_tbl')
+            ->where('id', '=', $request -> id)
+           ->update(['activate' => $request -> activate,
+                     'updated_at' => now()]);
+   
+           if ($editSession) {
+               return response()->json(['success' => 1], 200);
+           } else {
+               return response()->json(['success' => 0], 400);
+           }
+        } catch(\Exception $e){
+            return response()->json(
+                ['success' => 0,
+                 'message' => $e -> getMessage(),]
+                , 200);
         }
+        
     }
 }
