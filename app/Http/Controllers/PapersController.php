@@ -15,7 +15,7 @@ class PapersController extends Controller
                         ->where('subject_id', '=', $subject_id)
                         ->where('board_id', '=', $board_id)
                         ->where('year', '=', $year)
-                        ->select('paper_path')
+                        ->select('paper_path', 'paper_name')
                         ->get();
 
             return response()->json([
