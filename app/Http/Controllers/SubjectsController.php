@@ -34,6 +34,7 @@ class SubjectsController extends Controller
             $subjects = DB::table('subject_tbl')
                         ->where('activate', '=', 1)
                         ->select(['id', 'subject_name'])
+                        ->orderBy('subject_name')
                         ->get();
 
             return response()->json([
