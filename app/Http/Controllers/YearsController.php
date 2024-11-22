@@ -14,7 +14,8 @@ class YearsController extends Controller
                         ->where('class_id', '=', $id)
                         ->where('subject_id', '=', $subject_id)
                         ->where('board_id', '=', $board_id)
-                        ->select('year')
+                        ->orderBy('year', 'desc')
+                        ->select('year')                        
                         ->get();
 
             return response()->json([
