@@ -14,6 +14,8 @@ use App\Http\Controllers\UnitsController;
 use App\Http\Controllers\TopicsController;
 use App\Http\Controllers\QuestionTypesController;
 use App\Http\Controllers\QuestionsController;
+use App\Http\Controllers\NewsController;
+use App\Http\Controllers\NewsCategoryController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -78,4 +80,17 @@ Route::post('/update_question_type', [QuestionTypesController::class, 'editType'
 Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType']);
 
 Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']);
+
+Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
+Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
+Route::get('/get_news_content/{id}', [NewsController::class, 'getNewsContentById']);
+Route::post('/add_news', [NewsController::class, 'saveNews']);
+Route::post('/update_news', [NewsController::class, 'editNews']);
+Route::post('/activate_news', [NewsController::class, 'activateNews']);
+
+Route::get('/get_all_news_categories', [NewsCategoryController::class, 'getAllNewsCategory']);
+Route::post('/add_news_categories', [NewsCategoryController::class, 'saveCategory']);
+Route::post('/update_news_categories', [NewsCategoryController::class, 'editCategory']);
+Route::post('/activate_news_category', [NewsCategoryController::class, 'activateCategory']);
+Route::get('/get_news_categories', [NewsCategoryController::class, 'getActiveNewsCategory']);
 
