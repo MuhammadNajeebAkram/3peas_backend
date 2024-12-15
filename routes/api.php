@@ -16,6 +16,8 @@ use App\Http\Controllers\QuestionTypesController;
 use App\Http\Controllers\QuestionsController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
+use App\Http\Controllers\BlogsController;
+use App\Http\Controllers\BlogsCategoryController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -83,7 +85,9 @@ Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']
 
 Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
 Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
+Route::get('/get_top_active_news_title', [NewsController::class, 'getActiveTopNewsTitle']);
 Route::get('/get_news_content/{id}', [NewsController::class, 'getNewsContentById']);
+Route::get('/get_news_content_by_slug/{slug}', [NewsController::class, 'getNewsContentBySlug']);
 Route::post('/add_news', [NewsController::class, 'saveNews']);
 Route::post('/update_news', [NewsController::class, 'editNews']);
 Route::post('/activate_news', [NewsController::class, 'activateNews']);
@@ -93,4 +97,17 @@ Route::post('/add_news_categories', [NewsCategoryController::class, 'saveCategor
 Route::post('/update_news_categories', [NewsCategoryController::class, 'editCategory']);
 Route::post('/activate_news_category', [NewsCategoryController::class, 'activateCategory']);
 Route::get('/get_news_categories', [NewsCategoryController::class, 'getActiveNewsCategory']);
+
+Route::get('/get_all_blogs', [BlogsController::class, 'getAllBlogs']);
+Route::get('/get_top_active_blog_title', [BlogsController::class, 'getActiveTopBlogTitle']);
+Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlogsContentBySlug']);
+Route::post('/add_blogs', [BlogsController::class, 'saveBlogs']);
+Route::post('/update_blogs', [BlogsController::class, 'editBlogs']);
+Route::post('/activate_blogs', [BlogsController::class, 'activateBlogs']);
+
+Route::get('/get_all_blogs_categories', [BlogsCategoryController::class, 'getAllBlogsCategory']);
+Route::post('/add_blogs_categories', [BlogsCategoryController::class, 'saveCategory']);
+Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCategory']);
+Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
+Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
 
