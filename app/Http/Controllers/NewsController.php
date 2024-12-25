@@ -34,6 +34,7 @@ class NewsController extends Controller
                 'id',
                 'title',
                 'language',
+                'description',
                 DB::raw('DATE(created_at) as Date')
             ])
             ->orderby('created_at', 'desc')
@@ -49,6 +50,41 @@ class NewsController extends Controller
             return response()->json([
                 'success' => 0,
                 'news' => 'Failed to retrieve news'], 500);
+
+        }
+    }
+
+    public function getActiveAllNewsArchive(Request $request){
+        try{
+            $news = DB::table('news_tbl')
+            ->where('activate', '=', 1)
+            ->select([
+                'id',
+                'title',
+                'language',
+                'slug',
+                'description',
+                DB::raw('DATE(created_at) as Date')
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'news' => $news,               
+                
+                
+            ]);
+
+        }
+        catch(\Exception $e){
+
+            return response()->json([
+                'success' => 0,
+                'error' => $e.getMessage(),               
+                
+                
+            ]);
 
         }
     }
@@ -167,12 +203,20 @@ class NewsController extends Controller
             ->select(['path'])
             ->get();
 
+            
+            $news_images = DB::table('news_files_tbl')
+            ->where('news_id', '=', $id)
+            ->where('file_type', 'like', '%image%')             
+            ->select(['path', 'description'])
+            ->get();
+
            
 
             return response()->json([
                 'success' => 1,
                 'news' => $news,
                 'news_files' => $news_files,
+                'news_images' => $news_images,
             ]);
 
         }
@@ -181,6 +225,7 @@ class NewsController extends Controller
                 'success' => 0,
                 'news' => 'Failed to retrieve news',
                 'news_files' => 'Failed to retrieve news files',
+                'news_images' => 'Failed to retrieve news images',
                 'error' => $e], 500);
 
         }

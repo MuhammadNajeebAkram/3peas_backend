@@ -49,6 +49,30 @@ class UnitsController extends Controller
 
         }
     }
+    public function getUnitsByBook(Request $request){
+        try{
+            $units = DB::table('book_unit_tbl')
+            ->where('book_id', '=', $request -> book_id)
+            ->where('activate', '=', 1)
+            ->select([
+                'id',
+                'unit_name'
+            ])
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'units' => $units
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'units' => 'Failed to retrieve units'], 500);
+
+        }
+    }
 
     public function saveUnit(Request $request){
         try{

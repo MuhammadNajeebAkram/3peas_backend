@@ -32,6 +32,31 @@ class QuestionTypesController extends Controller
         }
     }
 
+    public function getActivateQuestionTypes(Request $request){
+        try{
+            $types = DB::table('question_type_tbl')
+            ->where('activate', '=', 1)
+            ->select([
+                'id',
+                'type_name',                
+            ])
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'types' => $types
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'types' => 'Failed to retrieve types'], 500);
+
+        }
+    }
+
+
     public function saveType(Request $request){
         try{
 

@@ -48,6 +48,32 @@ class BooksController extends Controller
 
         }
     }
+
+    public function getBooksByClassAndSubject(Request $request){
+        try{
+            $books = DB::table('book_tbl')
+            ->where('activate', '=', 1)
+            ->where('class_id', '=', $request -> class_id)
+            ->where('subject_id', '=', $request -> subject_id)
+            ->select([
+                'id',
+                'book_name'
+            ])
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'books' => $books
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'books' => 'Failed to retrieve books'], 500);
+
+        }
+    }
     public function saveBook(Request $request){
         try{
 

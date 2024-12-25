@@ -61,27 +61,39 @@ Route::post('/update_papers', [PapersController::class, 'updatePastPapers']);
 
 Route::get('/get_all_books', [BooksController::class, 'getAllBooks']);
 Route::get('/get_books', [BooksController::class, 'getBooks']);
+Route::POST('/get_books_by_class_subject', [BooksController::class, 'getBooksByClassAndSubject']);
 Route::post('/add_books', [BooksController::class, 'saveBook']);
 Route::post('/update_books', [BooksController::class, 'editBook']);
 Route::post('/activate_book', [BooksController::class, 'activateBook']);
 
 Route::get('/get_all_units', [UnitsController::class, 'getAllUnits']);
 Route::get('/get_units_of_book/{book_id}', [UnitsController::class, 'getUnitsOfBook']);
+Route::POST('/get_units_by_book', [UnitsController::class, 'getUnitsByBook']);
 Route::post('/add_units', [UnitsController::class, 'saveUnit']);
 Route::post('/update_units', [UnitsController::class, 'editUnit']);
 Route::post('/activate_unit', [UnitsController::class, 'activateUnit']);
 
 Route::get('/get_all_topics', [TopicsController::class, 'getAllTopics']);
+Route::POST('/get_topics_by_unit', [TopicsController::class, 'getTopicsByUnit']);
 Route::post('/add_topics', [TopicsController::class, 'saveTopic']);
 Route::post('/update_topics', [TopicsController::class, 'editTopic']);
 Route::post('/activate_topic', [TopicsController::class, 'activateTopic']);
 
 Route::get('/get_all_question_types', [QuestionTypesController::class, 'getAllTypes']);
+Route::get('/get_activate_question_types', [QuestionTypesController::class, 'getActivateQuestionTypes']);
 Route::post('/add_question_types', [QuestionTypesController::class, 'saveType']);
 Route::post('/update_question_type', [QuestionTypesController::class, 'editType']);
 Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType']);
 
 Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']);
+Route::post('/get_questions_by_topic', [QuestionsController::class, 'getQuestionsByTopic']);
+Route::post('/get_questions_by_unit', [QuestionsController::class, 'getQuestionsByUnit']);
+Route::post('/get_questions_by_book', [QuestionsController::class, 'getQuestionsByBook']);
+Route::post('/get_questions_by_board', [QuestionsController::class, 'getQuestionsByBoard']);
+Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestionDataById']);
+Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
+Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
+Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
 
 Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
 Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
@@ -91,6 +103,7 @@ Route::get('/get_news_content_by_slug/{slug}', [NewsController::class, 'getNewsC
 Route::post('/add_news', [NewsController::class, 'saveNews']);
 Route::post('/update_news', [NewsController::class, 'editNews']);
 Route::post('/activate_news', [NewsController::class, 'activateNews']);
+Route::get('/get_all_news_archive', [NewsController::class, 'getActiveAllNewsArchive']);
 
 Route::get('/get_all_news_categories', [NewsCategoryController::class, 'getAllNewsCategory']);
 Route::post('/add_news_categories', [NewsCategoryController::class, 'saveCategory']);
@@ -104,6 +117,7 @@ Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlo
 Route::post('/add_blogs', [BlogsController::class, 'saveBlogs']);
 Route::post('/update_blogs', [BlogsController::class, 'editBlogs']);
 Route::post('/activate_blogs', [BlogsController::class, 'activateBlogs']);
+Route::get('/get_all_blogs_archive', [BlogsController::class, 'getActiveAllBlogsArchive']);
 
 Route::get('/get_all_blogs_categories', [BlogsCategoryController::class, 'getAllBlogsCategory']);
 Route::post('/add_blogs_categories', [BlogsCategoryController::class, 'saveCategory']);

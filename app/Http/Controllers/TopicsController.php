@@ -26,6 +26,31 @@ class TopicsController extends Controller
         }
     }
 
+    public function getTopicsByUnit(Request $request){
+        try{
+            $topics = DB::table('book_unit_topic_tbl')
+            ->where('activate', '=', 1)
+            ->where('unit_id', '=', $request -> unit_id)
+            ->select([
+                'id',
+                'topic_name',
+            ])
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'topics' => $topics
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'topics' => 'Failed to retrieve topics'], 500);
+
+        }
+    }
+
     public function saveTopic(Request $request){
         try{
 

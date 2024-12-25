@@ -25,6 +25,41 @@ class BlogsController extends Controller
 
         }
     }
+    public function getActiveAllBlogsArchive(Request $request){
+        try{
+            $blogs = DB::table('blog_tbl')
+            ->where('activate', '=', 1)
+            ->select([
+                'id',
+                'title',
+                'language',
+                'slug',
+                'description',
+                DB::raw('DATE(created_at) as Date')
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'blogs' => $blogs,               
+                
+                
+            ]);
+
+        }
+        catch(\Exception $e){
+
+            return response()->json([
+                'success' => 0,
+                'error' => $e.getMessage(),               
+                
+                
+            ]);
+
+        }
+    }
+
 
     public function getActiveTopBlogTitle(Request $request){
         try{
