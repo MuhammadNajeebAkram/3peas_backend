@@ -111,14 +111,14 @@ class TopicsController extends Controller
         
             }
 
-            $unit = DB::table('book_unit_topic_tbl')
+            $topic = DB::table('book_unit_topic_tbl')
          ->where('id', '=', $request -> id)
         ->update(['topic_name' => $request -> topic_name,
                   'topic_no' => $request -> topic_no,
                   'unit_id' => $request -> unit_id,                  
                   'updated_at' => now()]);
 
-                  if ($book) {
+                  if ($topic) {
                     return response()->json(['success' => 1], 200);
                 } else {
                     return response()->json(['success' => 3, 'message' => 'Bad Request'], 400);

@@ -265,10 +265,7 @@ class QuestionsController extends Controller
 
             DB::rollBack();
 
-            \Log::error('Error saving question:', [
-                'error' => $e->getMessage(),
-                'request' => $request->all()
-            ]);
+            
 
             return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
 
@@ -371,4 +368,6 @@ class QuestionsController extends Controller
 
         }
     }
+
+    
 }
