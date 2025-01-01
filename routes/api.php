@@ -94,6 +94,7 @@ Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestio
 Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
 Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
+Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
 
 Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
 Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
@@ -125,3 +126,6 @@ Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCa
 Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
 Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
 
+
+Route::get('/get_test', [QuestionsController::class, 'getTest']);
+Route::post('/save_test', [QuestionsController::class, 'saveTest']);

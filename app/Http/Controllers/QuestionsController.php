@@ -335,7 +335,7 @@ class QuestionsController extends Controller
 
 
             $exists = DB::table('exam_question_board_tbl')
-            ->where('question_id', $request->question_id)
+            ->where('question_id', $request->id)
             ->where('board_id', $request->board_id)
             ->where('session_id', $request->session_id)
             ->where('group_id', $request->group_id)
@@ -348,7 +348,7 @@ class QuestionsController extends Controller
 
             $board_question = DB::table('exam_question_board_tbl')
             ->insert([
-                'question_id' => $request -> question_id,
+                'question_id' => $request -> id,
                 'board_id' => $request -> board_id,
                 'session_id' => $request -> session_id,
                 'group_id' => $request -> group_id,
@@ -357,7 +357,27 @@ class QuestionsController extends Controller
                 'updated_at' => now(), 
             ]);
 
-            return response()->json(['success' => true, 'message' => 'Question and options saved successfully.']);
+            return response()->json(['success' => true, 'message' => 'Question repeated successfully.']);
+
+
+        }
+        catch(\Exception $e){
+
+            return response()->json(['success' => false, 'message' => 'Error repeating question.', 'error' => $e->getMessage()]);
+
+
+        }
+    }
+
+    public function getTest(Request $request){
+        try{
+
+            $question = DB::table('exam_question_tbl')
+            ->where('id', '=', 24)
+            ->select('question')
+            ->get();
+
+            return response()->json(['success' => true, 'question' => $question]);
 
 
         }
@@ -365,6 +385,32 @@ class QuestionsController extends Controller
 
             return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
 
+
+        }
+    }
+
+    public function saveTest(Request $request){
+        try{
+            $question = DB::table('exam_question_tbl')
+            ->insertGetId([
+                'question' => $request -> question,
+                'question_um' => $request -> question,
+                'topic_id' =>  1,
+                'question_type' => 1,
+                'exercise_question' => 1,
+                'marks' => 1,
+                'activate' => 1,
+                'created_at' => now(),
+                'updated_at' => now(), 
+
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Question and options saved successfully.']);
+
+
+        }
+        catch(\Exception $e){
+            return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
 
         }
     }
