@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class QuestionsController extends Controller
 {
@@ -285,17 +286,35 @@ class QuestionsController extends Controller
                     'topic_id' => $request->topic_id,
                     'question_type' => $request->question_type,
                     'exercise_question' => $request->exercise_question,
+                    'marks' => $request -> marks,
                     'updated_at' => now(),
                 ]);
 
-                if ($request -> answer != "" || $request ->answer_um != ""){
-                    $answer = DB::table('exam_answer_tbl')
-                    ->where('question_id', '=', $request -> id)
-                    ->update([
-                        'answer' => $request -> answer,
-                        'answer_um' => $request -> answer_um,                        
-                        'updated_at' => now(), 
-                    ]);
+               
+                    $existingRecord = DB::table('exam_answer_tbl')
+    ->where('question_id', $request->id)
+    ->first();
+
+if ($existingRecord) {
+    // Update the existing record
+    DB::table('exam_answer_tbl')
+        ->where('question_id', $request->id)
+        ->update([
+            'answer' => $request->answer,
+            'answer_um' => $request->answer_um,
+            'updated_at' => now(),
+        ]);
+} else {
+    // Insert a new record
+    DB::table('exam_answer_tbl')
+        ->insert([
+            'question_id' => $request->id,
+            'answer' => $request->answer,
+            'answer_um' => $request->answer_um,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
                 }
     
             // Handle options update
@@ -318,12 +337,12 @@ class QuestionsController extends Controller
             return response()->json(['success' => true, 'message' => 'Question and options updated successfully.']);
         } catch(\Exception $e) {
             DB::rollBack();
-    
+    /*
             \Log::error('Error saving question:', [
                 'error' => $e->getMessage(),
                 'request' => $request->all()
             ]);
-    
+    */
             return response()->json(['success' => false, 'message' => 'Error updating question.', 'error' => $e->getMessage()]);
         }
     }
@@ -373,8 +392,8 @@ class QuestionsController extends Controller
         try{
 
             $question = DB::table('exam_question_tbl')
-            ->where('id', '=', 24)
-            ->select('question')
+            ->where('id', '=', 26)
+            ->select('question_um')
             ->get();
 
             return response()->json(['success' => true, 'question' => $question]);
