@@ -32,8 +32,69 @@ class QuestionsController extends Controller
             $questions = DB::table('exam_question_tbl')
     ->join('book_unit_topic_tbl', 'exam_question_tbl.topic_id', '=', 'book_unit_topic_tbl.id')
     ->join('question_type_tbl', 'exam_question_tbl.question_type', '=', 'question_type_tbl.id')
+    ->leftJoinSub(
+        DB::table('exam_question_options_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'eo',
+        'exam_question_tbl.id',
+        '=',
+        'eo.question_id'
+    )
+    ->leftJoinSub(
+        DB::table('exam_answer_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'ea',
+        'exam_question_tbl.id',
+        '=',
+        'ea.question_id'
+    )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id')
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    DB::raw("
+            CASE
+            WHEN exam_question_tbl.question_type = 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_question_options_tbl eo1 
+                    WHERE eo1.question_id = exam_question_tbl.id 
+                    AND eo1.is_answer = 1
+                ) THEN 0
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea1 
+                    WHERE ea1.question_id = exam_question_tbl.id 
+                    AND ea1.answer IS NOT NULL 
+                    AND ea1.answer != ''
+                    AND (ea1.answer_um IS NULL
+                    OR ea1.answer_um = '')
+                ) THEN 1
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea2 
+                    WHERE ea2.question_id = exam_question_tbl.id                     
+                    AND ea2.answer_um IS NOT NULL 
+                    AND ea2.answer_um != ''
+                    AND (ea2.answer IS NULL
+                    OR ea2.answer = '')
+                ) THEN 2
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea3 
+                    WHERE ea3.question_id = exam_question_tbl.id 
+                    AND ea3.answer IS NOT NULL 
+                    AND ea3.answer != '' 
+                    AND ea3.answer_um IS NOT NULL 
+                    AND ea3.answer_um != ''
+                ) THEN 3
+            ELSE 4
+        END AS color
+        ")
+    )
     ->where('exam_question_tbl.topic_id', $request -> topic_id)
     ->get();
 
@@ -57,8 +118,69 @@ class QuestionsController extends Controller
     ->join('book_unit_topic_tbl', 'exam_question_tbl.topic_id', '=', 'book_unit_topic_tbl.id')
     ->join('question_type_tbl', 'exam_question_tbl.question_type', '=', 'question_type_tbl.id')
     ->join('book_unit_tbl', 'book_unit_topic_tbl.unit_id', '=', 'book_unit_tbl.id')
+    ->leftJoinSub(
+        DB::table('exam_question_options_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'eo',
+        'exam_question_tbl.id',
+        '=',
+        'eo.question_id'
+    )
+    ->leftJoinSub(
+        DB::table('exam_answer_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'ea',
+        'exam_question_tbl.id',
+        '=',
+        'ea.question_id'
+    )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id')
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    DB::raw("
+            CASE
+            WHEN exam_question_tbl.question_type = 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_question_options_tbl eo1 
+                    WHERE eo1.question_id = exam_question_tbl.id 
+                    AND eo1.is_answer = 1
+                ) THEN 0
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea1 
+                    WHERE ea1.question_id = exam_question_tbl.id 
+                    AND ea1.answer IS NOT NULL 
+                    AND ea1.answer != ''
+                    AND (ea1.answer_um IS NULL
+                    OR ea1.answer_um = '')
+                ) THEN 1
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea2 
+                    WHERE ea2.question_id = exam_question_tbl.id                     
+                    AND ea2.answer_um IS NOT NULL 
+                    AND ea2.answer_um != ''
+                    AND (ea2.answer IS NULL
+                    OR ea2.answer = '')
+                ) THEN 2
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea3 
+                    WHERE ea3.question_id = exam_question_tbl.id 
+                    AND ea3.answer IS NOT NULL 
+                    AND ea3.answer != '' 
+                    AND ea3.answer_um IS NOT NULL 
+                    AND ea3.answer_um != ''
+                ) THEN 3
+            ELSE 4
+        END AS color
+        ")
+    )
     ->where('book_unit_tbl.id', $request -> unit_id)
     ->get();
 
@@ -83,8 +205,69 @@ class QuestionsController extends Controller
     ->join('question_type_tbl', 'exam_question_tbl.question_type', '=', 'question_type_tbl.id')
     ->join('book_unit_tbl', 'book_unit_topic_tbl.unit_id', '=', 'book_unit_tbl.id')
     ->join('book_tbl', 'book_unit_tbl.book_id', '=', 'book_tbl.id')
+    ->leftJoinSub(
+        DB::table('exam_question_options_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'eo',
+        'exam_question_tbl.id',
+        '=',
+        'eo.question_id'
+    )
+    ->leftJoinSub(
+        DB::table('exam_answer_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'ea',
+        'exam_question_tbl.id',
+        '=',
+        'ea.question_id'
+    )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id')
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    DB::raw("
+            CASE
+            WHEN exam_question_tbl.question_type = 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_question_options_tbl eo1 
+                    WHERE eo1.question_id = exam_question_tbl.id 
+                    AND eo1.is_answer = 1
+                ) THEN 0
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea1 
+                    WHERE ea1.question_id = exam_question_tbl.id 
+                    AND ea1.answer IS NOT NULL 
+                    AND ea1.answer != ''
+                    AND (ea1.answer_um IS NULL
+                    OR ea1.answer_um = '')
+                ) THEN 1
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea2 
+                    WHERE ea2.question_id = exam_question_tbl.id                     
+                    AND ea2.answer_um IS NOT NULL 
+                    AND ea2.answer_um != ''
+                    AND (ea2.answer IS NULL
+                    OR ea2.answer = '')
+                ) THEN 2
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea3 
+                    WHERE ea3.question_id = exam_question_tbl.id 
+                    AND ea3.answer IS NOT NULL 
+                    AND ea3.answer != '' 
+                    AND ea3.answer_um IS NOT NULL 
+                    AND ea3.answer_um != ''
+                ) THEN 3
+            ELSE 4
+        END AS color
+        ")
+    )
     ->where('book_tbl.id', $request -> book_id)
     ->get();
 
@@ -104,6 +287,7 @@ class QuestionsController extends Controller
 
     public function getQuestionsByBoard(Request $request){
         try{
+            /*
             $questions = DB::table('exam_question_tbl')
     ->join('book_unit_topic_tbl', 'exam_question_tbl.topic_id', '=', 'book_unit_topic_tbl.id')
     ->join('question_type_tbl', 'exam_question_tbl.question_type', '=', 'question_type_tbl.id')
@@ -119,6 +303,98 @@ class QuestionsController extends Controller
     ->where('exam_question_board_tbl.year', $request -> year)
     ->where('exam_question_board_tbl.group_id', $request -> group_id)
     ->get();
+    */
+    $questions = DB::table('exam_question_tbl')
+    ->join('book_unit_topic_tbl', 'exam_question_tbl.topic_id', '=', 'book_unit_topic_tbl.id')
+    ->join('question_type_tbl', 'exam_question_tbl.question_type', '=', 'question_type_tbl.id')
+    ->join('book_unit_tbl', 'book_unit_topic_tbl.unit_id', '=', 'book_unit_tbl.id')
+    ->join('book_tbl', 'book_unit_tbl.book_id', '=', 'book_tbl.id')
+    ->join('exam_question_board_tbl', 'exam_question_tbl.id', '=', 'exam_question_board_tbl.question_id')
+    ->leftJoinSub(
+        DB::table('exam_question_options_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'eo',
+        'exam_question_tbl.id',
+        '=',
+        'eo.question_id'
+    )
+    ->leftJoinSub(
+        DB::table('exam_answer_tbl')
+            ->select('question_id')
+            ->distinct(),
+        'ea',
+        'exam_question_tbl.id',
+        '=',
+        'ea.question_id'
+    )
+    ->select(
+        'exam_question_tbl.id', 
+        'exam_question_tbl.question', 
+        'book_unit_topic_tbl.topic_name', 
+        'question_type_tbl.type_name', 
+        'exam_question_tbl.activate', 
+        'exam_question_tbl.topic_id',
+        DB::raw("
+             CASE
+            WHEN exam_question_tbl.question_type = 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_question_options_tbl eo1 
+                    WHERE eo1.question_id = exam_question_tbl.id 
+                    AND eo1.is_answer = 1
+                ) THEN 0
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea1 
+                    WHERE ea1.question_id = exam_question_tbl.id 
+                    AND ea1.answer IS NOT NULL 
+                    AND ea1.answer != ''
+                    AND (ea1.answer_um IS NULL
+                    OR ea1.answer_um = '')
+                ) THEN 1
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea2 
+                    WHERE ea2.question_id = exam_question_tbl.id                     
+                    AND ea2.answer_um IS NOT NULL 
+                    AND ea2.answer_um != ''
+                    AND (ea2.answer IS NULL
+                    OR ea2.answer = '')
+                ) THEN 2
+            WHEN exam_question_tbl.question_type != 1 
+                AND EXISTS (
+                    SELECT 1 
+                    FROM exam_answer_tbl ea3 
+                    WHERE ea3.question_id = exam_question_tbl.id 
+                    AND ea3.answer IS NOT NULL 
+                    AND ea3.answer != '' 
+                    AND ea3.answer_um IS NOT NULL 
+                    AND ea3.answer_um != ''
+                ) THEN 3
+            ELSE 4
+        END AS color
+        ")
+    )
+    ->where('book_tbl.subject_id', $request->subject_id)
+    ->where('book_tbl.class_id', $request->class_id)
+    ->where('exam_question_board_tbl.board_id', $request->board_id)
+    ->where('exam_question_board_tbl.session_id', $request->session_id)
+    ->where('exam_question_board_tbl.year', $request->year)
+    ->where('exam_question_board_tbl.group_id', $request->group_id)
+    ->groupBy(
+        'exam_question_tbl.id', 
+        'exam_question_tbl.question', 
+        'book_unit_topic_tbl.topic_name', 
+        'question_type_tbl.type_name', 
+        'exam_question_tbl.activate', 
+        'exam_question_tbl.topic_id'
+        
+    )
+    ->get();
+
 
             return response()->json([
                 'success' => 1,
@@ -362,7 +638,7 @@ if ($existingRecord) {
             ->exists();
 
         if ($exists) {
-            return response()->json(['success' => false, 'message' => 'Duplicate record found.']);
+            return response()->json(['success' => 0, 'message' => 'Duplicate record found.']);
         }
 
             $board_question = DB::table('exam_question_board_tbl')
@@ -376,16 +652,39 @@ if ($existingRecord) {
                 'updated_at' => now(), 
             ]);
 
-            return response()->json(['success' => true, 'message' => 'Question repeated successfully.']);
+            return response()->json(['success' => 1, 'message' => 'Question repeated successfully.']);
 
 
         }
         catch(\Exception $e){
 
-            return response()->json(['success' => false, 'message' => 'Error repeating question.', 'error' => $e->getMessage()]);
+            return response()->json(['success' => 2, 'message' => 'Error repeating question.', 'error' => $e->getMessage()]);
 
 
         }
+    }
+
+    public function activateQuestion(Request $request){
+
+        try{
+            $activate = DB::table('exam_question_tbl')
+         ->where('id', '=', $request -> id)
+        ->update(['activate' => $request -> activate,
+                  'updated_at' => now()]);
+
+        if ($activate) {
+            return response()->json(['success' => 1], 200);
+        } else {
+            return response()->json(['success' => 0], 400);
+        }
+
+        }
+        catch(\Exception $e){
+            return response()->json(['success' => 2, 'message' => 'Error activating question.', 'error' => $e->getMessage()]);
+
+
+        }
+        
     }
 
     public function getTest(Request $request){
