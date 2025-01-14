@@ -95,6 +95,7 @@ Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
 Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
 Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
+Route::post('/activate_question', [QuestionsController::class, 'activateQuestion']);
 
 Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
 Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
