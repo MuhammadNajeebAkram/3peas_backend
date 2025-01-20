@@ -19,28 +19,31 @@ use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
 
+
+/*
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+*/
 
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('register', [AuthController::class, 'register']);
+Route::post('login', [AuthController::class, 'login']);
 
+Route::middleware('auth:api')->group(function () {
+    Route::post('logout', [AuthController::class, 'logout']);
+    Route::post('update-password', [AuthController::class, 'updatePassword']);
 
-Route::get('/classes', [ClassesController::class, 'getClasses']);
-Route::post('/add_class/{name}', [ClassesController::class, 'saveClass']);
-Route::post('/update_class', [ClassesController::class, 'editClass']);
-Route::post('/activate_class', [ClassesController::class, 'activateClass']);
+    Route::post('/add_class/{name}', [ClassesController::class, 'saveClass']);
+    Route::post('/update_class', [ClassesController::class, 'editClass']);
+    Route::post('/activate_class', [ClassesController::class, 'activateClass']);
 
-Route::get('/subjects/{id}', [SubjectsController::class, 'getSubjectsByClass']);
-Route::get('/get_subjects', [SubjectsController::class, 'getSubjects']);
-Route::get('/get_all_subjects', [SubjectsController::class, 'getAllSubjects']);
-Route::post('/add_subject', [SubjectsController::class, 'saveSubject']);
-Route::post('/update_subject', [SubjectsController::class, 'editSubject']);
-Route::post('/activate_subject', [SubjectsController::class, 'activateSubject']);
+    Route::get('/get_subjects', [SubjectsController::class, 'getSubjects']);
+    Route::get('/get_all_subjects', [SubjectsController::class, 'getAllSubjects']);
+    Route::post('/add_subject', [SubjectsController::class, 'saveSubject']);
+    Route::post('/update_subject', [SubjectsController::class, 'editSubject']);
+    Route::post('/activate_subject', [SubjectsController::class, 'activateSubject']);
 
-
-Route::get('/boards/{id}/{subject_id}', [BoardsController::class, 'getBoardsByClass_Subjects']);
-Route::get('/get_boards', [BoardsController::class, 'getBoards']);
+    Route::get('/get_boards', [BoardsController::class, 'getBoards']);
 Route::get('/get_all_boards', [BoardsController::class, 'getAllBoards']);
 Route::post('/add_board', [BoardsController::class, 'saveBoard']);
 Route::post('/update_board', [BoardsController::class, 'editBoard']);
@@ -52,9 +55,6 @@ Route::post('/add_exam_session', [ExamSessionController::class, 'saveSession']);
 Route::post('/update_exam_session', [ExamSessionController::class, 'editSession']);
 Route::post('/activate_exam_session', [ExamSessionController::class, 'activateSession']);
 
-Route::get('/years/{id}/{subject_id}/{board_id}', [YearsController::class, 'getYearsByBoards_Class_Subjects']);
-
-Route::get('/papers/{id}/{subject_id}/{board_id}/{year}', [PapersController::class, 'getPapersByYears_Boards_Class_Subjects']);
 Route::get('/get_papers', [PapersController::class, 'getPastPapers']);
 Route::post('/add_papers', [PapersController::class, 'savePastPapers']);
 Route::post('/update_papers', [PapersController::class, 'updatePastPapers']);
@@ -97,11 +97,7 @@ Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
 Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/activate_question', [QuestionsController::class, 'activateQuestion']);
 
-Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
-Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
-Route::get('/get_top_active_news_title', [NewsController::class, 'getActiveTopNewsTitle']);
-Route::get('/get_news_content/{id}', [NewsController::class, 'getNewsContentById']);
-Route::get('/get_news_content_by_slug/{slug}', [NewsController::class, 'getNewsContentBySlug']);
+
 Route::post('/add_news', [NewsController::class, 'saveNews']);
 Route::post('/update_news', [NewsController::class, 'editNews']);
 Route::post('/activate_news', [NewsController::class, 'activateNews']);
@@ -113,9 +109,7 @@ Route::post('/update_news_categories', [NewsCategoryController::class, 'editCate
 Route::post('/activate_news_category', [NewsCategoryController::class, 'activateCategory']);
 Route::get('/get_news_categories', [NewsCategoryController::class, 'getActiveNewsCategory']);
 
-Route::get('/get_all_blogs', [BlogsController::class, 'getAllBlogs']);
-Route::get('/get_top_active_blog_title', [BlogsController::class, 'getActiveTopBlogTitle']);
-Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlogsContentBySlug']);
+
 Route::post('/add_blogs', [BlogsController::class, 'saveBlogs']);
 Route::post('/update_blogs', [BlogsController::class, 'editBlogs']);
 Route::post('/activate_blogs', [BlogsController::class, 'activateBlogs']);
@@ -126,6 +120,35 @@ Route::post('/add_blogs_categories', [BlogsCategoryController::class, 'saveCateg
 Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCategory']);
 Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
 Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
+    
+});
+
+Route::get('/classes', [ClassesController::class, 'getClasses']);
+
+
+Route::get('/subjects/{id}', [SubjectsController::class, 'getSubjectsByClass']);
+
+
+
+Route::get('/boards/{id}/{subject_id}', [BoardsController::class, 'getBoardsByClass_Subjects']);
+
+
+
+
+Route::get('/years/{id}/{subject_id}/{board_id}', [YearsController::class, 'getYearsByBoards_Class_Subjects']);
+
+Route::get('/papers/{id}/{subject_id}/{board_id}/{year}', [PapersController::class, 'getPapersByYears_Boards_Class_Subjects']);
+
+
+Route::get('/get_all_news', [NewsController::class, 'getAllNews']);
+Route::get('/get_all_active_news_title', [NewsController::class, 'getActiveNewsTitle']);
+Route::get('/get_top_active_news_title', [NewsController::class, 'getActiveTopNewsTitle']);
+Route::get('/get_news_content/{id}', [NewsController::class, 'getNewsContentById']);
+Route::get('/get_news_content_by_slug/{slug}', [NewsController::class, 'getNewsContentBySlug']);
+
+Route::get('/get_all_blogs', [BlogsController::class, 'getAllBlogs']);
+Route::get('/get_top_active_blog_title', [BlogsController::class, 'getActiveTopBlogTitle']);
+Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlogsContentBySlug']);
 
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);
