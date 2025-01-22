@@ -18,6 +18,8 @@ use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
+use App\Http\Middleware\RefreshAuthTokenMiddleware;
+
 
 
 /*
@@ -26,12 +28,13 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 */
 
-Route::post('register', [AuthController::class, 'register']);
+
 Route::post('login', [AuthController::class, 'login']);
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
     Route::post('update-password', [AuthController::class, 'updatePassword']);
+    Route::post('register', [AuthController::class, 'register']);
 
     Route::post('/add_class/{name}', [ClassesController::class, 'saveClass']);
     Route::post('/update_class', [ClassesController::class, 'editClass']);

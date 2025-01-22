@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\HandleCors;
+use App\Http\Middleware\RefreshAuthTokenMiddleware;
 
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -16,6 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         //
         $middleware->append(HandleCors::class);
+        //$middleware->append(RefreshAuthTokenMiddleware::class);
+        $middleware->alias(['token.refresh' => RefreshAuthTokenMiddleware::class,            
+    ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
