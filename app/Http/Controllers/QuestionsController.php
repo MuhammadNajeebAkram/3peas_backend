@@ -687,6 +687,75 @@ if ($existingRecord) {
         
     }
 
+    public function getBoardQuestionsByQuestion(Request $request){
+        try{
+            $question = DB::table('exam_question_board_view')
+            ->where('question_id', '=', $request -> question_id)
+            ->get();
+            return response()->json([
+                'success' => 1,
+                'questions' => $question,
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'message' => 'Error activating question.', 
+                'error' => $e->getMessage()]);
+
+
+        }
+    }
+
+    public function activateBoardQuestion(Request $request){
+
+        try{
+            $activate = DB::table('exam_question_board_tbl')
+         ->where('id', '=', $request -> id)
+        ->update(['activate' => $request -> activate,
+                  'updated_at' => now()]);
+
+        if ($activate) {
+            return response()->json(['success' => 1], 200);
+        } else {
+            return response()->json(['success' => 0], 400);
+        }
+
+        }
+        catch(\Exception $e){
+            return response()->json(['success' => 2, 'message' => 'Error activating question.', 'error' => $e->getMessage()]);
+
+
+        }
+        
+    }
+    public function updateBoardQuestion(Request $request){
+        try{
+            $question = DB::table('exam_question_board_tbl')
+            ->where('id', '=', $request -> id)
+            ->update([
+                'board_id' => $request -> board_id,
+                'year' => $request -> year,
+                'session_id' => $request -> session_id,
+                'group_id' => $request -> group_id,
+                'updated_at' => now(),
+            ]);
+
+            if ($question) {
+                return response()->json(['success' => 1], 200);
+            } else {
+                return response()->json(['success' => 0], 400);
+            }
+
+
+        }
+        catch(\Exception $e){
+            return response()->json(['success' => 2, 'message' => 'Error updating board question.', 'error' => $e->getMessage()]);
+
+        }
+    }
+
     public function getTest(Request $request){
         try{
 

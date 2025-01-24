@@ -99,6 +99,9 @@ Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestio
 Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
 Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/activate_question', [QuestionsController::class, 'activateQuestion']);
+Route::post('/get_board_questions_by_id', [QuestionsController::class, 'getBoardQuestionsByQuestion']);
+Route::post('/activate_board_question', [QuestionsController::class, 'activateBoardQuestion']);
+Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion']);
 
 
 Route::post('/add_news', [NewsController::class, 'saveNews']);
