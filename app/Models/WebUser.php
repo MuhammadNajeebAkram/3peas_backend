@@ -6,9 +6,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable; // Correct import for Au
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Tymon\JWTAuth\Contracts\JWTSubject;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 
-
-class User extends Authenticatable implements JWTSubject
+class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
 {
     use HasFactory, Notifiable;
 
@@ -28,11 +28,17 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'role',
+        'email_verified_at',
     ];
 
     // Hide sensitive data
     protected $hidden = [
         'password',
         'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime', // Cast verification date
     ];
 }

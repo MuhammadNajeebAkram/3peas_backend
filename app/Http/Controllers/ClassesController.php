@@ -7,16 +7,32 @@ use Illuminate\Support\Facades\DB;
 
 class ClassesController extends Controller
 {
-    public function getClasses(){
+    public function getClasses(Request $request){
+        
         try {
-            $classes = DB::table('class_tbl')
-                        ->select(['id', 'class_name', 'activate'])
-                        ->get();
+            if(!$request){
+                $classes = DB::table('class_tbl')
+                ->select(['id', 'class_name', 'activate'])
+                ->get();
 
-            return response()->json([
-                'success' => 1,
-                'classes' => $classes
-            ]);
+    return response()->json([
+        'success' => 1,
+        'classes' => $classes
+    ]);
+
+            }
+            else{
+                $classes = DB::table('class_tbl')
+                ->where('activate', '=', $request -> status)
+                ->select(['id', 'class_name as name'])
+                ->get();
+
+    return response()->json([
+        'success' => 1,
+        'classes' => $classes
+    ]);
+            }
+           
 
             
         } catch (\Exception $e) {
@@ -103,4 +119,6 @@ class ClassesController extends Controller
             return response()->json(['success' => 0], 400);
         }
     }
+
+    
 }

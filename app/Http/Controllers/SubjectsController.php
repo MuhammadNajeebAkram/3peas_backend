@@ -154,4 +154,28 @@ class SubjectsController extends Controller
             return response()->json(['success' => 0], 400);
         }
     }
+
+    public function getSubjectsByUser(Request $request)
+{
+    $user = $request->user();
+
+    try {
+        $subjects = DB::table('user_selected_subject_tbl as usst')
+            ->join('subject_tbl as st', 'usst.subject_id', '=', 'st.id')
+            ->where('usst.user_id', $user->id)
+            ->select('usst.subject_id as id', 'st.subject_name')
+            ->get();
+
+        return response()->json([
+            'success' => 1,
+            'subjects' => $subjects,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(), // Changed key from 'subjects' to 'error' for clarity
+        ], 500);
+    }
+}
+
 }

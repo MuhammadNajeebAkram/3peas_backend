@@ -19,6 +19,18 @@ use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
+use App\Http\Controllers\EmailVerificationController;
+use App\Http\Controllers\CityController;
+use App\Http\Controllers\InstituteController;
+use App\Http\Controllers\CurriculumBoardController;
+use App\Http\Controllers\HeardAboutController;
+use App\Http\Controllers\StudyPlanController;
+use App\Http\Controllers\StudyGroupController;
+use App\Http\Controllers\UserPaymentSlipController;
+use App\Http\Controllers\CompleteBookQuestionsController;
+use App\Http\Controllers\BoardQuestionsController;
+use App\Http\Controllers\ChapterQuestionsController;
+use App\Http\Controllers\ExamTestController;
 
 
 
@@ -31,9 +43,21 @@ Route::get('/user', function (Request $request) {
 
 Route::post('login', [AuthController::class, 'login']);
 
-Route::middleware(['auth:api'])->group(function () {
+// Email Verification Routes for JWT
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+->name('verification.verify');
+
+
+Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
+    ->middleware(['auth:api', 'throttle:6,1'])
+    ->name('verification.resend');
+
+    Route::get('/check-email-verification/{email}', [EmailVerificationController::class, 'checkEmailVerification']);
+
+Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(function () {
 
    
+
     Route::post('logout', [AuthController::class, 'logout']);
     Route::post('update-password', [AuthController::class, 'updatePassword']);
     Route::post('register', [AuthController::class, 'register']);
@@ -77,6 +101,7 @@ Route::POST('/get_units_by_book', [UnitsController::class, 'getUnitsByBook']);
 Route::post('/add_units', [UnitsController::class, 'saveUnit']);
 Route::post('/update_units', [UnitsController::class, 'editUnit']);
 Route::post('/activate_unit', [UnitsController::class, 'activateUnit']);
+Route::post('/get_units_by_user_selected_book', [UnitsController::class, 'getUnitsByUserSelectedBook']);
 
 Route::get('/get_all_topics', [TopicsController::class, 'getAllTopics']);
 Route::POST('/get_topics_by_unit', [TopicsController::class, 'getTopicsByUnit']);
@@ -128,10 +153,28 @@ Route::post('/add_blogs_categories', [BlogsCategoryController::class, 'saveCateg
 Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCategory']);
 Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
 Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
+
+Route::post('/get_subjects_by_user', [SubjectsController::class, 'getSubjectsByUser']);
+
+Route::post('/get_top_mcqs', [CompleteBookQuestionsController::class, 'getTopMCQsQuestions']);
+Route::post('/get_random_mcqs', [CompleteBookQuestionsController::class, 'getRandomMCQsQuestions']);
+Route::post('/get_top_sqs', [CompleteBookQuestionsController::class, 'getTopSQsQuestions']);
+Route::post('/get_random_sqs', [CompleteBookQuestionsController::class, 'getRandomSQsQuestions']);
+
+Route::post('/get_mcqs_of_board', [BoardQuestionsController::class, 'getMCQsQuestions']);
+Route::post('/get_exam_questions_of_board', [BoardQuestionsController::class, 'getExamQuestions']);
+Route::post('/get_top_mcqs_of_units', [ChapterQuestionsController::class, 'getTopMCQsQuestions']);
+Route::post('/get_top_sqs_of_units', [ChapterQuestionsController::class, 'getTopSQsQuestions']);
+
+//Exam Test
+Route::post('/get_practice_test_mcqs_by_units', [ExamTestController::class, 'getPracticeMCQsTestOfUnits']);
+
+
     
 });
 
 Route::get('/classes', [ClassesController::class, 'getClasses']);
+Route::post('/classes', [ClassesController::class, 'getClasses']);
 
 
 Route::get('/subjects/{id}', [SubjectsController::class, 'getSubjectsByClass']);
@@ -157,6 +200,22 @@ Route::get('/get_news_content_by_slug/{slug}', [NewsController::class, 'getNewsC
 Route::get('/get_all_blogs', [BlogsController::class, 'getAllBlogs']);
 Route::get('/get_top_active_blog_title', [BlogsController::class, 'getActiveTopBlogTitle']);
 Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlogsContentBySlug']);
+
+Route::post('/get_cities', [CityController::class, 'getCities']);
+Route::post('/get_institutes', [InstituteController::class, 'getInstitutes']);
+
+Route::post('/register_user', [AuthController::class, 'registerWebUser']);
+
+Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculumBoard']);
+
+Route::post('/get_heard_about', [HeardAboutController::class, 'getHeardAbout']);
+
+Route::post('/get_study_plans', [StudyPlanController::class, 'getStudyPlans']);
+
+Route::post('/get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
+Route::post('/get_study_subjects', [StudyGroupController::class, 'getStudySubjects']);
+
+Route::post('/upload_deposit_slip', [UserPaymentSlipController::class, 'uploadPaymentSlip']);
 
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);

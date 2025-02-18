@@ -169,4 +169,32 @@ class UnitsController extends Controller
             return response()->json(['success' => 0], 400);
         }
     }
+    public function getUnitsByUserSelectedBook(Request $request){
+        try{
+            $info = DB::table('user_profile_tbl')
+            ->where('user_id', $request->user()->id)
+            ->select('class_id', 'curriculum_board_id')
+            ->first();
+
+            $units = DB::table('book_unit_tbl as but')
+            ->join('book_tbl as bt', 'but.book_id', '=', 'bt.id')
+            ->where('bt.class_id', $info->class_id)
+            ->where('bt.subject_id', $request->subject_id)
+            ->select('but.id', 'but.unit_name')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'units' => $units,
+            ]);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0, // error
+                'message' => $e->getMessage(),
+            ]);
+
+        }
+    }
 }

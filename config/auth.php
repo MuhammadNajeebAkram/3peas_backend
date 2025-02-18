@@ -14,8 +14,8 @@ return [
     */
 
    'defaults' => [
-    'guard' => env('AUTH_GUARD', 'api'), // Set default guard to 'api'
-    'passwords' => env('AUTH_PASSWORD_BROKER', 'users'), // Set default passwords broker
+    'guard' => env('AUTH_GUARD', 'web_api'), // Set default guard to 'api'
+    'passwords' => env('AUTH_PASSWORD_BROKER', 'web_users'), // Set default passwords broker
 ],
 
     /*
@@ -44,6 +44,10 @@ return [
             'driver' => 'jwt',
             'provider' => 'users',
         ],
+        'web_api' => [
+            'driver' => 'jwt',
+            'provider' => 'web_users',
+        ],
     ],
 
     /*
@@ -67,6 +71,10 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+        ],
+        'web_users' => [
+            'driver' => 'eloquent',
+            'model' => env('AUTH_MODEL', App\Models\WebUser::class),
         ],
 
         // 'users' => [
@@ -98,6 +106,12 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+        'web_users' => [
+            'provider' => 'web_users',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'web_users_password_reset_tokens'),
             'expire' => 60,
             'throttle' => 60,
         ],
