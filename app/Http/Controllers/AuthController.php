@@ -41,7 +41,7 @@ class AuthController extends Controller
 
 public function registerWebUser(Request $request)
 {
-    $debug = 'start';
+    
     try {
         // Validate incoming request
         $validatedData = $request->validate([
@@ -62,7 +62,7 @@ public function registerWebUser(Request $request)
             'designation' => 'nullable|string',
             'heard_about_id' => 'nullable|integer',
         ]);
-        $debug = 'validation';
+        
 
         // Start transaction to ensure atomicity
         DB::beginTransaction();
@@ -75,7 +75,7 @@ public function registerWebUser(Request $request)
             'role' => $validatedData['role'],
             'study_session_id' => 0,
         ]);
-        $debug = 'After user';
+        
 
         // Create User Profile
         WebUserProfile::create([
