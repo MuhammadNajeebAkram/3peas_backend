@@ -19,9 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['https://pakistanpastpapers.com'],
+    'allowed_origins' => ['*'],
 
-    'allowed_origins_patterns' => [`/^https:\/\/.*\.pakistanpastpapers\.com$/`],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 
