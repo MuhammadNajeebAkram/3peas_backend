@@ -24,9 +24,18 @@ class ExamTestController extends Controller
             // Call the stored procedure
             $questions = DB::select("CALL GetPracticeTestMCQsExamQuestionsOfUnitsWithBoard(?, ?, ?)", [$unitIds, $batchSize, $offset]);
 
+            $has_more = false;
+
+            if (count($questions) > $batchSize) {
+                array_pop($questions); // Remove the extra question
+                $has_more = true;
+            }
+                
+
             return response()->json([
                 'success' => 1,
                 'questions' => $questions,
+                'has_more' => $has_more,
             ]);
 
         

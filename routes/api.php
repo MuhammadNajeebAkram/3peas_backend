@@ -19,6 +19,9 @@ use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
+use App\Http\Controllers\CurriculumBoardController;
+use App\Http\Controllers\StudyGroupController;
+use App\Http\Controllers\UserProfileController;
 
 
 
@@ -128,11 +131,28 @@ Route::post('/add_blogs_categories', [BlogsCategoryController::class, 'saveCateg
 Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCategory']);
 Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
 Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
+
+Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculumBoard']);
+
+Route::post('/get_all_study_subjects', [StudyGroupController::class, 'getAllStudySubjects']);
+
+Route::post('/save_offered_subjects', [StudyGroupController::class, 'saveOfferedSubjects']);
+Route::post('/save_offered_subjects_group', [StudyGroupController::class, 'saveOfferedGroups']);
+
+Route::post('/search_offered_subjects', [StudyGroupController::class, 'getSelectedOfferedSubjects']);
+Route::post('/search_offered_groups', [StudyGroupController::class, 'getSelectedOfferedGroups']);
+
+Route::post('/get_offered_subjects_by_class_curriculum', [StudyGroupController::class, 'getOfferedStudySubjectsByClassAndCurriculum']);
+
+Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculumBoard']);
+
+Route::post('/get-awaited-web-users', [UserProfileController::class, 'getAwaitedUsers']);
+Route::post('/activate-awaited-web-users', [UserProfileController::class, 'activateAwaitedUser']);
     
 });
 
 Route::get('/classes', [ClassesController::class, 'getClasses']);
-
+Route::post('/classes', [ClassesController::class, 'getClasses']);
 
 Route::get('/subjects/{id}', [SubjectsController::class, 'getSubjectsByClass']);
 

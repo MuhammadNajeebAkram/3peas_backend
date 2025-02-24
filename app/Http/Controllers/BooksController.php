@@ -97,6 +97,7 @@ class BooksController extends Controller
                 'book_name' => $request -> book_name,
                 'class_id' => $request -> class_id,
                 'subject_id' => $request -> subject_id,
+                'curriculum_board_id' => $request->curriculum_board_id,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -136,6 +137,7 @@ class BooksController extends Controller
         ->update(['book_name' => $request -> book_name,
                   'class_id' => $request -> class_id,
                   'subject_id' => $request -> subject_id,
+                  'curriculum_board_id' => $request->curriculum_board_id,
                   'updated_at' => now()]);
 
                   if ($book) {

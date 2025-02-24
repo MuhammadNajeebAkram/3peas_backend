@@ -15,10 +15,10 @@ class CompleteBookQuestionsController extends Controller
             // Retrieve class_id safely
             $classData = DB::table('user_profile_tbl')
                 ->where('user_id', $user_id)
-                ->select('class_id')
+                ->select('class_id', 'curriculum_board_id')
                 ->first();
     
-            if (!$classData || !$classData->class_id) {
+            if (!$classData || !$classData->class_id || !$classData->curriculum_board_id) {
                 return response()->json([
                     'success' => 0,
                     'error' => 'User class ID not found.',
@@ -26,12 +26,14 @@ class CompleteBookQuestionsController extends Controller
             }
     
             $class_id = $classData->class_id; // Extract integer value
+            $curriculum_board_id = $classData->curriculum_board_id;
     
             // Call stored procedure safely
-            $questions = DB::select('CALL GetTopMCQsExamQuestionsWithBoard(?, ?, ?)', [
+            $questions = DB::select('CALL GetTopMCQsExamQuestionsWithBoard(?, ?, ?, ?)', [
                 $class_id, 
                 $request->subject_id, 
-                $request->limit
+                $request->limit,
+                $curriculum_board_id,
             ]);
     
             return response()->json([
@@ -54,10 +56,10 @@ class CompleteBookQuestionsController extends Controller
             // Retrieve class_id safely
             $classData = DB::table('user_profile_tbl')
                 ->where('user_id', $user_id)
-                ->select('class_id')
+                ->select('class_id', 'curriculum_board_id')
                 ->first();
     
-            if (!$classData || !$classData->class_id) {
+            if (!$classData || !$classData->class_id || !$classData->curriculum_board_id) {
                 return response()->json([
                     'success' => 0,
                     'error' => 'User class ID not found.',
@@ -65,12 +67,26 @@ class CompleteBookQuestionsController extends Controller
             }
     
             $class_id = $classData->class_id; // Extract integer value
+            $curriculum_board_id = $classData->curriculum_board_id;
+            $subject_id = $request->subject_id;
+
+            if($subject_id === 0){
+                $id = DB::table('user_selected_subject_tbl')
+                ->where('user_id', $user_id)
+                ->select('subject_id')
+                ->inRandomOrder()
+                ->first();
+                if($id){
+                    $subject_id = $id->subject_id;
+                }
+            }
     
             // Call stored procedure safely
-            $questions = DB::select('CALL GetRandomMCQsExamQuestionsWithBoard(?, ?, ?)', [
+            $questions = DB::select('CALL GetRandomMCQsExamQuestionsWithBoard(?, ?, ?, ?)', [
                 $class_id, 
-                $request->subject_id, 
-                $request->limit
+                $subject_id, 
+                $request->limit,
+                $curriculum_board_id
             ]);
     
             return response()->json([
@@ -93,10 +109,10 @@ class CompleteBookQuestionsController extends Controller
             // Retrieve class_id safely
             $classData = DB::table('user_profile_tbl')
                 ->where('user_id', $user_id)
-                ->select('class_id')
+                ->select('class_id', 'curriculum_board_id')
                 ->first();
     
-            if (!$classData || !$classData->class_id) {
+            if (!$classData || !$classData->class_id || !$classData->curriculum_board_id) {
                 return response()->json([
                     'success' => 0,
                     'error' => 'User class ID not found.',
@@ -104,13 +120,15 @@ class CompleteBookQuestionsController extends Controller
             }
     
             $class_id = $classData->class_id; // Extract integer value
+            $curriculum_board_id = $classData->curriculum_board_id;
     
             // Call stored procedure safely
-            $questions = DB::select('CALL GetTopSQsExamQuestionsWithBoard(?, ?, ?, ?)', [
+            $questions = DB::select('CALL GetTopSQsExamQuestionsWithBoard(?, ?, ?, ?, ?)', [
                 $class_id, 
                 $request->subject_id, 
                 $request->limit,
                 $request->qtype,
+                $curriculum_board_id
             ]);
     
             return response()->json([
@@ -133,10 +151,10 @@ class CompleteBookQuestionsController extends Controller
             // Retrieve class_id safely
             $classData = DB::table('user_profile_tbl')
                 ->where('user_id', $user_id)
-                ->select('class_id')
+                ->select('class_id', 'curriculum_board_id')
                 ->first();
     
-            if (!$classData || !$classData->class_id) {
+            if (!$classData || !$classData->class_id || !$classData->curriculum_board_id) {
                 return response()->json([
                     'success' => 0,
                     'error' => 'User class ID not found.',
@@ -144,13 +162,15 @@ class CompleteBookQuestionsController extends Controller
             }
     
             $class_id = $classData->class_id; // Extract integer value
+            $curriculum_board_id = $classData->curriculum_board_id;
     
             // Call stored procedure safely
-            $questions = DB::select('CALL GetRandomSQsExamQuestionsWithBoard(?, ?, ?, ?)', [
+            $questions = DB::select('CALL GetRandomSQsExamQuestionsWithBoard(?, ?, ?, ?, ?)', [
                 $class_id, 
                 $request->subject_id, 
                 $request->limit,
                 $request->qtype,
+                $curriculum_board_id
             ]);
     
             return response()->json([

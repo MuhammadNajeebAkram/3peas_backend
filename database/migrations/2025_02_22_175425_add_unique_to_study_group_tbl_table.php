@@ -11,14 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('study_group_tbl', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->integer('class_id');
-            $table->integer('curriculum_board_id');
-            $table->boolean('activate');
-            $table->timestamps();
-
+        Schema::table('study_group_tbl', function (Blueprint $table) {
+            //
             $table->unique(['name', 'class_id', 'curriculum_board_id'], 'unique_name_class_curriculum');
         });
     }
@@ -28,6 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('study_group_tbl');
+        Schema::table('study_group_tbl', function (Blueprint $table) {
+            //
+            $table->dropUnique('unique_name_class_curriculum');
+        });
     }
 };

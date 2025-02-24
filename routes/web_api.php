@@ -60,7 +60,10 @@ Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(functi
 
     Route::post('logout', [AuthController::class, 'logout']);
     Route::post('update-password', [AuthController::class, 'updatePassword']);
-    Route::post('register', [AuthController::class, 'register']);
+    Route::post('register', [AuthController::class, 'registerWebUser']);
+
+    Route::post('user_profile_data', [AuthController::class, 'getUserProfile']);
+    Route::post('update-user-profile', [AuthController::class, 'updateUserProfile']);
 
     Route::post('/add_class/{name}', [ClassesController::class, 'saveClass']);
     Route::post('/update_class', [ClassesController::class, 'editClass']);

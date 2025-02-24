@@ -41,18 +41,19 @@ class AuthController extends Controller
 
 public function registerWebUser(Request $request)
 {
+    $debug = 'start';
     try {
         // Validate incoming request
         $validatedData = $request->validate([
             'name' => 'required|string',
-            'email' => 'required|email|unique:users',
+            'email' => 'required|email|unique:web_users',
             'password' => 'required|min:8|confirmed',
             'role' => 'required|string', // Ensure 'role' is validated
             'address' => 'nullable|string',
             'city_id' => 'nullable|integer',
             'phone' => 'nullable|string',
-            'class_id' => 'nullable|integer',
-            'curriculum_board_id' => 'nullable|integer',
+            //'class_id' => 'nullable|integer',
+            //'curriculum_board_id' => 'nullable|integer',
             'institute_id' => 'nullable|integer', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
@@ -61,17 +62,20 @@ public function registerWebUser(Request $request)
             'designation' => 'nullable|string',
             'heard_about_id' => 'nullable|integer',
         ]);
+        $debug = 'validation';
 
         // Start transaction to ensure atomicity
         DB::beginTransaction();
-
+        
         // Create User
         $user = WebUser::create([
             'name' => $validatedData['name'],
             'email' => $validatedData['email'],
             'password' => Hash::make($validatedData['password']),
             'role' => $validatedData['role'],
+            'study_session_id' => 0,
         ]);
+        $debug = 'After user';
 
         // Create User Profile
         WebUserProfile::create([
@@ -79,8 +83,8 @@ public function registerWebUser(Request $request)
             'address' => $validatedData['address'] ?? null,
             'city_id' => $validatedData['city_id'] ?? null,
             'phone' => $validatedData['phone'] ?? null,
-            'class_id' => $validatedData['class_id'] ?? null,
-            'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? null,
+            'class_id' => $validatedData['class_id'] ?? 0,
+            'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
             'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
             'incharge_name' => $validatedData['incharge_name'] ?? null,
             'incharge_phone' => $validatedData['incharge_phone'] ?? null,
@@ -105,7 +109,8 @@ public function registerWebUser(Request $request)
     } catch (\Illuminate\Validation\ValidationException $e) {
         return response()->json([
             'errors' => $e->errors(),
-            'success' => 0,
+            'success' => -1,
+            'debug' => $debug,
         ], 422);
     } catch (\Exception $e) {
         // Rollback transaction in case of an error
@@ -136,7 +141,9 @@ public function registerWebUser(Request $request)
                 'error' => 'Unauthorized'], 401);
         }
 
-        $user = Auth::user();
+        $user = Auth::guard($guard)->user();
+
+        //web_api
         if($guard == 'web_api'){
 
              // Check if email is verified
@@ -170,7 +177,23 @@ public function registerWebUser(Request $request)
 
         }
 
-        }      
+        // 🔹 Invalidate previous token if it exists
+        if ($user->last_token) {
+            try {
+                Auth::guard($guard)->setToken($user->last_token)->invalidate();
+            } catch (\Exception $e) {
+                // Log the error but continue (might be invalid or already expired)
+                \Log::error("Token invalidation failed: " . $e->getMessage());
+            }
+        }
+
+        // 🔹 Save the new token to the database
+        $user->update(['last_token' => $token]);
+
+        }  
+        // end web_api
+        
+        
 
         return response()->json([
             'success' => 1,
@@ -178,7 +201,6 @@ public function registerWebUser(Request $request)
             'token' => $token,
             'expires_in' => $expiration,
             'user' => [
-                'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,                
             ],
@@ -186,6 +208,7 @@ public function registerWebUser(Request $request)
     }
     catch(\Exception $e){
         return response()->json([
+            'success' => -1,
             'message' => $e->getMessage(),
         ], 500);
     }
@@ -198,13 +221,20 @@ public function registerWebUser(Request $request)
     public function updatePassword(Request $request)
 {
     try{
+
+        $guard = Auth::guard('api')->check() ? 'api' : (Auth::guard('web_api')->check() ? 'web_api' : null);
+        
+        if (!$guard) {
+            return response()->json(['success' => 0, 'error' => 'Unauthorized'], 401);
+        }
+
  // Validate the input
  $request->validate([
     'current_password' => 'required',
     'new_password' => 'required|min:8',
 ]);
 
-$user = auth()->user();
+$user = Auth::guard($guard)->user();
 
 // Check if the current password matches
 if (!Hash::check($request->current_password, $user->password)) {
@@ -221,5 +251,101 @@ return response()->json(['success' => 1, 'message' => 'Password updated successf
         return response()->json(['errors' => $e->errors(), 'success' => 2], 422);
     }
    
+}
+
+public function getUserProfile(Request $request){
+    try{
+
+        $guard = Auth::guard('api')->check() ? 'api' : (Auth::guard('web_api')->check() ? 'web_api' : null);
+        
+        if (!$guard) {
+            return response()->json(['success' => 0, 'error' => 'Unauthorized'], 401);
+        }
+
+        $user_id = $request->user()->id;
+        $user_name = $request->user()->name;
+        $user_email = $request->user()->email;
+
+        $userData = DB::table('user_profile_tbl as upt')
+        ->join('class_tbl as ct', 'upt.class_id', '=', 'ct.id')
+        ->join('curriculum_board_tbl as cbt', 'upt.curriculum_board_id', '=', 'cbt.id')
+        ->where('upt.user_id', $user_id)
+        ->select('upt.address', 'upt.city_id', 'upt.phone', 'ct.class_name', 'upt.institute_id', 'upt.incharge_name', 'upt.incharge_phone', 
+        'upt.gender_id', 'upt.dob', 'upt.designation', 'cbt.name as curriculum_board')
+        ->first();
+
+        return response()->json([
+            'success' => 1,
+            'userName' => $user_name,
+            'userEmail' => $user_email,
+            'userProfile' => $userData,]);
+
+
+
+    }
+    catch(\Exception $e){
+
+        return response()->json([
+            'successs' => 0,
+            'error' => $e->getMessage()]);
+
+    }
+}
+
+public function updateUserProfile(Request $request){
+    try{
+        $validatedData = $request->validate([
+            'name' => 'required|string',  
+            'address' => 'nullable|string',
+            'city_id' => 'nullable|integer',
+            'phone' => 'nullable|string',
+            'institute_id' => 'nullable|integer', // Fixed typo
+            'incharge_name' => 'nullable|string',
+            'incharge_phone' => 'nullable|string',
+            'gender_id' => 'nullable|integer',
+            'dob' => 'nullable|date',
+            
+        ]);
+
+        $guard = Auth::guard('api')->check() ? 'api' : (Auth::guard('web_api')->check() ? 'web_api' : null);
+        
+        if (!$guard) {
+            return response()->json(['success' => 0, 'error' => 'Unauthorized'], 401);
+        }
+        $user = Auth::guard($guard)->user();
+
+
+        $user_id = $user->id;
+
+        DB::beginTransaction();
+
+        $user->update(['name' => $validatedData['name']]);
+
+        $updateProfile = DB::table('user_profile_tbl')
+        ->where('user_id', $user_id)
+        ->update([
+            'address' => $validatedData['address'] ?? null,
+            'city_id' => $validatedData['city_id'] ?? null,
+            'phone' => $validatedData['phone'] ?? null,
+            'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
+            'incharge_name' => $validatedData['incharge_name'] ?? null,
+            'incharge_phone' => $validatedData['incharge_phone'] ?? null,
+            'gender_id' => $validatedData['gender_id'] ?? null,
+            'dob' => $validatedData['dob'] ?? null,
+
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => 1,
+        ]);
+    }
+    catch(\Exception $e){
+        DB::rollBack();
+        return response()->json([
+            'successs' => 0,
+            'error' => $e->getMessage()]);
+    }
 }
 }

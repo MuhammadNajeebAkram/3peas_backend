@@ -38,6 +38,14 @@ class UserPaymentSlipController extends Controller
             'updated_at' => now(),
         ]);
 
+        DB::table('user_profile_tbl')
+        ->where('user_id', $user->id)
+        ->update([
+            'class_id' => $request->class_id,
+            'curriculum_board_id' => $request->curriculum_board_id,
+            'study_plan_id' => $request->study_plan,
+        ]);
+
         // Determine quantity
         $qty = empty($request->study_group) ? count($request->study_subjects ?? []) : 1;
 

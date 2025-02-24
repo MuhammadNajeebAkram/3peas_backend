@@ -180,6 +180,8 @@ class UnitsController extends Controller
             ->join('book_tbl as bt', 'but.book_id', '=', 'bt.id')
             ->where('bt.class_id', $info->class_id)
             ->where('bt.subject_id', $request->subject_id)
+            ->where('bt.curriculum_board_id', $info->curriculum_board_id)
+            ->where('bt.activate', 1)
             ->select('but.id', 'but.unit_name')
             ->get();
 
