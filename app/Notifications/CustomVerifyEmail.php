@@ -34,6 +34,7 @@ class CustomVerifyEmail extends Notification
      */
     public function toMail(object $notifiable): MailMessage
     {
+        $verificationUrl = $this->verificationUrl($notifiable);
         return (new MailMessage)
         ->subject('Verify Your Email - ' . config('app.name')) // Website Name
         ->greeting('Welcome to ' . config('app.name') . '!')
