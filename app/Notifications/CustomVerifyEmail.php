@@ -6,6 +6,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 
 class CustomVerifyEmail extends Notification
 {
@@ -35,6 +38,7 @@ class CustomVerifyEmail extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $verificationUrl = $this->verificationUrl($notifiable);
+
         return (new MailMessage)
         ->subject('Verify Your Email - ' . config('app.name')) // Website Name
         ->greeting('Welcome to ' . config('app.name') . '!')
