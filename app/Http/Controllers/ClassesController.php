@@ -10,7 +10,7 @@ class ClassesController extends Controller
     public function getClasses(Request $request){
         
         try {
-            if(!$request){
+            if(!$request->status){
                 $classes = DB::table('class_tbl')
                 ->select(['id', 'class_name', 'activate'])
                 ->get();
