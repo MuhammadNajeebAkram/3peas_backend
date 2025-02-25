@@ -31,6 +31,29 @@ class StudyGroupController extends Controller
 
         }
     }
+
+    public function getAllStudyGroups(Request $request){
+        try{
+            $groups=DB::table('study_group_tbl as sgt')
+            ->join('class_tbl as ct', 'sgt.class_id', '=', 'ct.id') 
+            ->join('curriculum_board_tbl as cbt', 'sgt.curriculum_board_id', '=', 'cbt.id')           
+            ->select('sgt.id', 'sgt.name', 'ct.class_name', 'cbt.name', 'sgt.activate', 'sgt.class_id', 'sgt.curriculum_board_id')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'groups' => $groups,
+            ]);
+
+        }catch(\Exception $e){
+
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ]);
+
+        }
+    }
     public function getStudySubjects(Request $request){
         try{
             $subjects = DB::table('study_subjects_tbl')

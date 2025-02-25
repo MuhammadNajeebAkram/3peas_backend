@@ -110,7 +110,7 @@ public function registerWebUser(Request $request)
         return response()->json([
             'errors' => $e->errors(),
             'success' => -1,
-            'debug' => $debug,
+            
         ], 422);
     } catch (\Exception $e) {
         // Rollback transaction in case of an error

@@ -21,6 +21,7 @@ use App\Http\Controllers\BlogsCategoryController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\StudyGroupController;
+use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\UserProfileController;
 
 
@@ -142,12 +143,18 @@ Route::post('/save_offered_subjects_group', [StudyGroupController::class, 'saveO
 Route::post('/search_offered_subjects', [StudyGroupController::class, 'getSelectedOfferedSubjects']);
 Route::post('/search_offered_groups', [StudyGroupController::class, 'getSelectedOfferedGroups']);
 
+Route::post('/get-all-study-groups', [StudyGroupController::class, 'getAllStudyGroups']);
+
 Route::post('/get_offered_subjects_by_class_curriculum', [StudyGroupController::class, 'getOfferedStudySubjectsByClassAndCurriculum']);
 
 Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculumBoard']);
 
 Route::post('/get-awaited-web-users', [UserProfileController::class, 'getAwaitedUsers']);
 Route::post('/activate-awaited-web-users', [UserProfileController::class, 'activateAwaitedUser']);
+
+Route::get('/get-all-study-plans', [StudyPlanController::class, 'getAllStudyPlans']);
+Route::post('/save-study-plan', [StudyPlanController::class, 'saveStudyPlan']);
+Route::post('/update-study-plan', [StudyPlanController::class, 'updateStudyPlan']);
     
 });
 
