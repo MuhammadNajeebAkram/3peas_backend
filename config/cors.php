@@ -19,7 +19,11 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'https://pakistanpastpapers.com',
+        'https://admin.pakistanpastpapers.com',
+        'https://lms.pakistanpastpapers.com',
+    ],
 
     'allowed_origins_patterns' => [],
 
