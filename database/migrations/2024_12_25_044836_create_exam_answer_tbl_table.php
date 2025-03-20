@@ -16,6 +16,8 @@ return new class extends Migration
             $table -> integer('question_id');
             $table -> Text('answer');
             $table -> Text('answer_um');
+            $table -> boolean('answer_lang')->default(0);       // 0 mean english
+            $table -> boolean('answer_um_lang')->default(1);    // 1 mean urdu
             $table->timestamps();
         });
     }

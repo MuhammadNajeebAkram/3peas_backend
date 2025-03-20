@@ -488,6 +488,8 @@ class QuestionsController extends Controller
                 'question_type' => $request -> question_type,
                 'exercise_question' => $request -> exercise_question,
                 'marks' => $request -> marks,
+                'question_lang' => $request->question_lang,
+                'question_um_lang' => $request->question_um_lang,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
@@ -499,7 +501,9 @@ class QuestionsController extends Controller
                 ->insert([
                     'question_id' => $question,
                     'answer' => $request -> answer,
-                    'answer_um' => $request -> answer_um,
+                    'answer_um' => $request -> answer_um,                    
+                    'answer_lang' => $request->answer_lang,
+                    'answer_um_lang' => $request->answer_um_lang,
                     'created_at' => now(),
                     'updated_at' => now(), 
                 ]);
@@ -525,6 +529,7 @@ class QuestionsController extends Controller
                         'option' => $option['text'], // Assuming 'text' is a key in each option array
                         'option_um' => $option['text_um'],
                         'is_answer' => $option['is_correct'], // Assuming 'is_correct' is a boolean key in each option array
+                        'option_lang' => $request->option_lang,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -563,6 +568,8 @@ class QuestionsController extends Controller
                     'question_type' => $request->question_type,
                     'exercise_question' => $request->exercise_question,
                     'marks' => $request -> marks,
+                    'question_lang' => $request->question_lang,
+                    'question_um_lang' => $request->question_um_lang,
                     'updated_at' => now(),
                 ]);
 
@@ -577,7 +584,9 @@ if ($existingRecord) {
         ->where('question_id', $request->id)
         ->update([
             'answer' => $request->answer,
-            'answer_um' => $request->answer_um,
+            'answer_um' => $request->answer_um,           
+            'answer_lang' => $request->answer_lang,
+            'answer_um_lang' => $request->answer_um_lang,
             'updated_at' => now(),
         ]);
 } else {
@@ -586,7 +595,9 @@ if ($existingRecord) {
         ->insert([
             'question_id' => $request->id,
             'answer' => $request->answer,
-            'answer_um' => $request->answer_um,
+            'answer_um' => $request->answer_um,            
+            'answer_lang' => $request->answer_lang,
+            'answer_um_lang' => $request->answer_um_lang,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -603,6 +614,7 @@ if ($existingRecord) {
                             'option' => $option['text'], // Assuming 'text' is a key in each option array
                             'option_um' => $option['text_um'],
                             'is_answer' => $option['is_correct'], // Assuming 'is_correct' is a boolean key in each option array
+                            'option_lang' => $request->option_lang,
                             'updated_at' => now(),
                         ]);
                 }

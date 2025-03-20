@@ -16,6 +16,7 @@ return new class extends Migration
             $table->integer('test_id');
             $table->integer('question_id');
             $table->boolean('is_correct');
+            $table->boolean('is_attempted');
             
         });
     }

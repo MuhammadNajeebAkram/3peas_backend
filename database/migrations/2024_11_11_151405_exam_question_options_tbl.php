@@ -16,7 +16,9 @@ return new class extends Migration
             $table -> id();
             $table -> integer('question_id');
             $table -> string('option');
-            $table -> boolean('is_answer') -> default(false);            
+            $table -> boolean('is_answer') -> default(false);  
+            $table -> boolean('option_lang') -> default(false);         
+            $table -> boolean('option_um_lang') -> default(true);         
             $table -> timestamps();
         });
     }

@@ -18,6 +18,8 @@ return new class extends Migration
             $table -> integer('topic_id');            
             $table -> integer('question_type');     // MCQ, Short Question, Long Question
             $table -> boolean('exercise_question') -> default(false);
+            $table -> boolean('question_lang') -> default(0);
+            $table -> boolean('question_um_lang') -> default(0);
             $table -> boolean('activate') -> default(true);
             $table -> timestamps();
         });
