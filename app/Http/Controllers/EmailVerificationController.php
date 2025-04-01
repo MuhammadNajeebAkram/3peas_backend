@@ -36,6 +36,7 @@ class EmailVerificationController extends Controller
         ], 200);*/
 
         return redirect()->away("https://login.pakistanpastpapers.com/payment?user_id={$user->id}");
+       // return redirect()->away("http://localhost:3000/payment?user_id={$user->id}");
     }
 
     public function resend(Request $request)

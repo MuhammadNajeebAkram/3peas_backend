@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Auth\Events\Registered;
 use App\Models\WebUserProfile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
+use Tymon\JWTAuth\Exceptions\JWTException;
+
+
+
 
 class AuthController extends Controller
 {
@@ -124,99 +132,132 @@ public function registerWebUser(Request $request)
     }
 }
 
-    public function login(Request $request)
-    {
-        
-        try{
 
-        
+public function login(Request $request)
+{
+    try {
         $credentials = $request->only('email', 'password');
 
+        // Determine the guard (though with JWT, you might only need one guard)
         $guard = $request->is('api/*') ? 'api' : 'web_api';
-        
-        $expiration = Auth::factory()->getTTL() * 60; // TTL in seconds
+
+         // Set the authentication guard
+         Auth::shouldUse($guard);
+
+        // Attempt to authenticate and generate a JWT token
         if (!$token = Auth::guard($guard)->attempt($credentials)) {
             return response()->json([
                 'success' => 0,
-                'error' => 'Unauthorized'], 401);
+                'error' => 'Unauthorized'
+            ], 401);
         }
 
+       
+
+        // Get the authenticated user
         $user = Auth::guard($guard)->user();
+        $expiration = config('jwt.ttl') * 60; // TTL in seconds from JWT config
 
-        //web_api
-        if($guard == 'web_api'){
-
-             // Check if email is verified
-         if (!$user->email_verified_at) {
-            return response()->json([
-                'success' => 2,
-                'error' => 'First verify your email'], 403);
-        }
-         // Check if study session active or payment verified
-         $session_id = $user->study_session_id;
-         if ($session_id === 0) {
-            return response()->json([
-                'success' => 3,
-                'error' => 'Your session has been expired',
-            'token' => $token,
-            ], 404);
-        }
-        $sessionTbl = DB::table('study_session_tbl')
-        ->where('start_date', '<=', now())
-        ->where('end_date', '>=', now())
-        ->where('id', '=', $session_id)
-        ->first();
-
-        if(!$sessionTbl){
-
-            return response()->json([
-                'success' => 4,
-                'error' => 'Your study session has expired or is invalid',
-            'token' => $token,
-            ], 404);
-
-        }
-
-        // 🔹 Invalidate previous token if it exists
-        if ($user->last_token) {
-            try {
-                Auth::guard($guard)->setToken($user->last_token)->invalidate();
-            } catch (\Exception $e) {
-                // Log the error but continue (might be invalid or already expired)
-                \Log::error("Token invalidation failed: " . $e->getMessage());
+        // Web_api specific checks
+        if ($guard === 'web_api') {
+            // Check if email is verified
+            if (!$user->email_verified_at) {
+                return response()->json([
+                    'success' => 2,
+                    'error' => 'First verify your email'
+                ], 403);
             }
+
+            // Check if study session is active
+            $session_id = $user->study_session_id;
+            if ($session_id === 0) {
+                return response()->json([
+                    'success' => 3,
+                    'error' => 'Your session has been expired',
+                    'token' => $token
+                ], 404);
+            }
+
+            $sessionTbl = DB::table('study_session_tbl')
+                ->where('start_date', '<=', now())
+                ->where('end_date', '>=', now())
+                ->where('id', $session_id)
+                ->first();
+
+            if (!$sessionTbl) {
+                return response()->json([
+                    'success' => 4,
+                    'error' => 'Your study session has expired or is invalid',
+                    'token' => $token
+                ], 404);
+            }
+
+            // Invalidate previous token (logout from other devices)
+            if (!empty($user->last_token)) {
+                Log::info("Trying to invalidate previous token: " . $user->last_token);
+            
+                try {
+                    JWTAuth::setToken($user->last_token); // Set the token before invalidation
+                    JWTAuth::invalidate(true);
+                    Log::info("Previous token invalidated successfully.");
+                } catch (JWTException $e) {
+                    Log::error("Token invalidation failed: " . $e->getMessage());
+                }
+            } else {
+                Log::warning("User last_token is empty, nothing to invalidate.");
+            }
+
+            // Save the new token
+            $user->last_token = $token;
+$user->save();
         }
-
-        // 🔹 Save the new token to the database
-        $user->update(['last_token' => $token]);
-
-        }  
-        // end web_api
-        
-        
 
         return response()->json([
             'success' => 1,
             'message' => 'Login successful',
             'token' => $token,
             'expires_in' => $expiration,
+            'guard' => $guard,
             'user' => [
                 'name' => $user->name,
-                'email' => $user->email,                
+                'email' => $user->email,
             ],
         ]);
-    }
-    catch(\Exception $e){
+    } catch (JWTException $e) {
         return response()->json([
             'success' => -1,
-            'message' => $e->getMessage(),
+            'error' => 'Could not create token',
+            'message' => $e->getMessage()
+        ], 500);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => -1,
+            'error' => 'Something went wrong',
+            'message' => $e->getMessage()
         ], 500);
     }
-    }
+}
+
+
     public function logout()
     {
-        Auth::logout();
-        return response()->json(['message' => 'Successfully logged out']);
+        try {
+            $token = JWTAuth::getToken(); // Get the token from the request
+    
+            if (!$token) {
+                return response()->json(['error' => 'Token not provided'], 400);
+            }
+            Log::info('logout and invalidate token'. $token);
+            JWTAuth::invalidate(true); // Invalidate the token
+    
+            return response()->json(['message' => 'Successfully logged out']);
+        } catch (TokenExpiredException $e) {
+            return response()->json(['error' => 'Token already expired'], 401);
+        } catch (TokenInvalidException $e) {
+            return response()->json(['error' => 'Invalid token'], 401);
+        } catch (JWTException $e) {
+            return response()->json(['error' => 'Token not found'], 500);
+        }
     }
     public function updatePassword(Request $request)
 {

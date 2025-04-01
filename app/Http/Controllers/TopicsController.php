@@ -94,6 +94,8 @@ class TopicsController extends Controller
         }
     }
 
+    
+
     public function editTopic(Request $request){
         try{
 
@@ -146,4 +148,117 @@ class TopicsController extends Controller
             return response()->json(['success' => 0], 400);
         }
     }
+//-------------------------- New Topic ------------------
+    public function saveNewTopic(Request $request){
+        try{
+            DB::beginTransaction();
+
+            $topic = DB::table('book_unit_topic_tbl')
+            ->insertGetId([
+                'topic_name' => $request -> topic_name,
+                'topic_name_um' => $request -> topic_name_um,
+                'topic_no' => $request -> topic_no,
+                'unit_id' => $request -> unit_id,               
+                'activate' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach($request->contents as $content){
+                DB::table('topic_content_structure_tbl')
+                ->insert([
+                    'topic_id' => $topic,
+                    'topic_content_type_id' => $content,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+            ]);
+
+
+        }
+        catch(\Exception $e){
+
+            DB::rollBack();
+            return response()->json([
+                'success' => 0,  // Error occurred
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function updateNewTopic(Request $request){
+        try{
+            DB::beginTransaction();
+
+            DB::table('book_unit_topic_tbl')
+            ->where('id', $request->topic_id)
+            ->update([
+                'topic_name' => $request -> topic_name,
+                'topic_name_um' => $request -> topic_name_um,
+                'topic_no' => $request -> topic_no,
+                'unit_id' => $request -> unit_id,
+                'updated_at' => now(),
+            ]);
+
+            DB::table('topic_content_structure_tbl')
+            ->where('topic_id', $request->topic_id)
+            ->delete();
+
+            foreach($request->contents as $content){
+                DB::table('topic_content_structure_tbl')
+                ->insert([
+                    'topic_id' => $request->topic_id,
+                    'topic_content_type_id' => $content,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+            ]);
+
+
+        }
+        catch(\Exception $e){
+
+            DB::rollBack();
+            return response()->json([
+                'success' => 0,  // Error occurred
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function getNewTopicsByUnit($unit_id){
+        try{
+            $topics = DB::table('book_unit_topic_tbl')
+            ->where('unit_id', $unit_id)
+            ->select('id', 'topic_name', 'topic_name_um', 'topic_no', 'activate')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'topics' => $topics,
+            ], 200);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,  // Error occurred
+                'error' => $e->getMessage(),
+            ], 500);
+
+        }
+    }
+
+
 }

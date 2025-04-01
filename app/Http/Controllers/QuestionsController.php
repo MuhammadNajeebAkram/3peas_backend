@@ -490,6 +490,8 @@ class QuestionsController extends Controller
                 'marks' => $request -> marks,
                 'question_lang' => $request->question_lang,
                 'question_um_lang' => $request->question_um_lang,
+                'cognitive_domain' => $request->cognitive_domain || 1,
+                'topic_content' => $request -> topic_content || 1,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
@@ -508,17 +510,20 @@ class QuestionsController extends Controller
                     'updated_at' => now(), 
                 ]);
             }
+if($request->board_id){
+    $board_question = DB::table('exam_question_board_tbl')
+    ->insert([
+        'question_id' => $question,
+        'board_id' => $request -> board_id,
+        'session_id' => $request -> session_id,
+        'group_id' => $request -> group_id,
+        'year' => $request -> year,
+        'created_at' => now(),
+        'updated_at' => now(), 
+    ]);
 
-            $board_question = DB::table('exam_question_board_tbl')
-            ->insert([
-                'question_id' => $question,
-                'board_id' => $request -> board_id,
-                'session_id' => $request -> session_id,
-                'group_id' => $request -> group_id,
-                'year' => $request -> year,
-                'created_at' => now(),
-                'updated_at' => now(), 
-            ]);
+}
+           
 
             $options = $request -> options;
 
@@ -810,6 +815,29 @@ if ($existingRecord) {
         }
         catch(\Exception $e){
             return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
+
+        }
+    }
+
+    public function getSLOQuestionsByTopic(Request $request){
+        try{
+            $questions = DB::select('call GetSLOQuestions(?, ?, ?, ?)', [
+                $request -> topic_id,
+                $request -> content_id,
+                $request -> cognitive_domain,
+                $request -> is_mcq
+            ]);
+
+            return response()->json([
+                'success' => 1,
+                'questions' => $questions,
+            ]);
+
+        }catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ]);
 
         }
     }

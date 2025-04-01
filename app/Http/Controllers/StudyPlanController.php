@@ -9,8 +9,9 @@ class StudyPlanController extends Controller
 {
     //
     public function getStudyPlans(Request $request){
+        $user = $request->user();
         try{
-            $user = $request->user();
+            
             $designation = DB::table('user_profile_tbl')
             ->where('user_id', $user->id)
             ->select('designation')
@@ -26,6 +27,7 @@ class StudyPlanController extends Controller
                 'success' => 1,
                 'plans' => $plans,
                 
+                
             ]);
 
 
@@ -34,6 +36,7 @@ class StudyPlanController extends Controller
             return response()->json([
                 'success' => 0,
                 'error' => $e->getMessage(),
+                'user' => $user,
             ]);
 
         }
@@ -60,8 +63,9 @@ class StudyPlanController extends Controller
 
         }catch(\Exception $e){
             return response()->json([
-                'success' => 0,
+                'success' => -1,
                 'error' => $e->getMessage(),
+                
             ]);
         }
     }

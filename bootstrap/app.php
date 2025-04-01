@@ -8,7 +8,7 @@ use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureEmailsVerified;
 use App\Http\Middleware\EnsurePaymentVerified;
-
+use App\Http\Middleware\VerifyUserSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ]);
         $middleware->alias(['verified' => EnsureEmailsVerified::class,]);
         $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
+        
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

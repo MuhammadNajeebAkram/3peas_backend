@@ -15,7 +15,8 @@ return new class extends Migration
         Schema::create('book_unit_topic_tbl', function(Blueprint $table){
             $table -> id();
             $table -> string('topic_name');
-            $table -> integer('topic_no');
+            $table -> string('topic_name_um')->nullable();
+            $table -> integer('topic_no')->nullable();
             $table -> integer('unit_id');
             $table -> boolean('activate')->default(true);
             $table -> timestamps();

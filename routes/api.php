@@ -18,11 +18,14 @@ use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
+use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\UserProfileController;
+use App\Http\Controllers\TopicContentController;
+
 
 
 
@@ -87,6 +90,10 @@ Route::POST('/get_topics_by_unit', [TopicsController::class, 'getTopicsByUnit'])
 Route::post('/add_topics', [TopicsController::class, 'saveTopic']);
 Route::post('/update_topics', [TopicsController::class, 'editTopic']);
 Route::post('/activate_topic', [TopicsController::class, 'activateTopic']);
+
+Route::post('/save-new-topic', [TopicsController::class, 'saveNewTopic']);
+Route::get('/get-new-topics-by-unit/{unit_id}', [TopicsController::class, 'getNewTopicsByUnit']);
+Route::post('/update-new-topic', [TopicsController::class, 'updateNewTopic']);
 
 Route::get('/get_all_question_types', [QuestionTypesController::class, 'getAllTypes']);
 Route::get('/get_activate_question_types', [QuestionTypesController::class, 'getActivateQuestionTypes']);
@@ -155,6 +162,12 @@ Route::post('/activate-awaited-web-users', [UserProfileController::class, 'activ
 Route::get('/get-all-study-plans', [StudyPlanController::class, 'getAllStudyPlans']);
 Route::post('/save-study-plan', [StudyPlanController::class, 'saveStudyPlan']);
 Route::post('/update-study-plan', [StudyPlanController::class, 'updateStudyPlan']);
+
+Route::post('/save-topic-content', [TopicContentController::class, 'saveContent']);
+Route::get('/get-all-topic-contents', [TopicContentController::class, 'getAllContents']);
+Route::get('/get-topic-contents-by-topic/{topic_id}', [TopicContentController::class, 'getContentsByTopic']);
+
+Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomain']);
     
 });
 

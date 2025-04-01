@@ -20,6 +20,8 @@ return new class extends Migration
             $table -> boolean('exercise_question') -> default(false);
             $table -> boolean('question_lang') -> default(0);
             $table -> boolean('question_um_lang') -> default(0);
+            $table -> tinyInteger('cognitive_domain') -> default(1);    // 1 = Knowledge, 2 = Understanding, 3 = Application
+            $table -> tinyInteger('is_mcq') -> default(1);
             $table -> boolean('activate') -> default(true);
             $table -> timestamps();
         });

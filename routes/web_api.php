@@ -32,6 +32,8 @@ use App\Http\Controllers\BoardQuestionsController;
 use App\Http\Controllers\ChapterQuestionsController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\DashboardItemController;
+use App\Http\Controllers\TopicContentController;
+use App\Http\Controllers\CognitiveDomainController;
 
 
 
@@ -141,6 +143,8 @@ Route::post('/get_board_questions_by_id', [QuestionsController::class, 'getBoard
 Route::post('/activate_board_question', [QuestionsController::class, 'activateBoardQuestion']);
 Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion']);
 
+Route::post('/get-slo-topic-content-questions', [QuestionsController::class, 'getSLOQuestionsByTopic']);
+
 
 Route::post('/add_news', [NewsController::class, 'saveNews']);
 Route::post('/update_news', [NewsController::class, 'editNews']);
@@ -181,6 +185,10 @@ Route::post('/get_top_sqs_of_units', [ChapterQuestionsController::class, 'getTop
 Route::post('/get_practice_test_mcqs_by_units', [ExamTestController::class, 'getPracticeMCQsTestOfUnits']);
 Route::post('/get_random_test_mcqs_by_units', [ExamTestController::class, 'getRandomMCQsTestOfUnits']);
 Route::post('/save-exam-test', [ExamTestController::class, 'saveTestResult']);
+
+Route::get('/get-topic-contents-by-topic/{topic_id}', [TopicContentController::class, 'getContentsByTopic']);
+
+Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomain']);
 
 
     
