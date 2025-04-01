@@ -17,7 +17,7 @@ class VerifyUserSession
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = Auth::guard('web_api')->user();
+        $user = Auth::user();
 
         // ✅ Check if email is verified
         if (!$user->email_verified_at) {

@@ -17,6 +17,7 @@ class TopicContentController extends Controller
             ->insert([
                 'name' => $request->name,
                 'name_um' => $request->name_um,
+                'is_mcq' => $request->is_mcq || 0,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
