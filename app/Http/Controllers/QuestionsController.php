@@ -511,7 +511,7 @@ class QuestionsController extends Controller
                 ]);
             }
 if($request->board_id){
-    $board_question = DB::table('exam_question_board_tbl')
+    DB::table('exam_question_board_tbl')
     ->insert([
         'question_id' => $question,
         'board_id' => $request -> board_id,
@@ -575,6 +575,8 @@ if($request->board_id){
                     'marks' => $request -> marks,
                     'question_lang' => $request->question_lang,
                     'question_um_lang' => $request->question_um_lang,
+                    'cognitive_domain' => $request->cognitive_domain || 1,
+                    'topic_content' => $request -> topic_content || 1,
                     'updated_at' => now(),
                 ]);
 
