@@ -490,8 +490,8 @@ class QuestionsController extends Controller
                 'marks' => $request -> marks,
                 'question_lang' => $request->question_lang,
                 'question_um_lang' => $request->question_um_lang,
-                'cognitive_domain' => $request->cognitive_domain || 1,
-                'topic_content' => $request -> topic_content || 1,
+                'cognitive_domain' => $request->cognitive_domain,
+                'topic_content' => $request -> topic_content,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
@@ -575,8 +575,8 @@ if($request->board_id){
                     'marks' => $request -> marks,
                     'question_lang' => $request->question_lang,
                     'question_um_lang' => $request->question_um_lang,
-                    'cognitive_domain' => $request->cognitive_domain || 1,
-                    'topic_content' => $request -> topic_content || 1,
+                    'cognitive_domain' => $request->cognitive_domain,
+                    'topic_content' => $request -> topic_content,
                     'updated_at' => now(),
                 ]);
 
