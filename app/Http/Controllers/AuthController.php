@@ -250,7 +250,7 @@ $user->save();
             Log::info('logout and invalidate token'. $token);
             JWTAuth::invalidate(true); // Invalidate the token
     
-            return response()->json(['message' => 'Successfully logged out']);
+            return response()->json(['success' => 1, 'message' => 'Successfully logged out']);
         } catch (TokenExpiredException $e) {
             return response()->json(['error' => 'Token already expired'], 401);
         } catch (TokenInvalidException $e) {

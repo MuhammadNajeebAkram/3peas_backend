@@ -78,6 +78,7 @@ Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(functi
     Route::post('/add_class/{name}', [ClassesController::class, 'saveClass']);
     Route::post('/update_class', [ClassesController::class, 'editClass']);
     Route::post('/activate_class', [ClassesController::class, 'activateClass']);
+    Route::get('/get-class-of-user', [ClassesController::class, 'getClassOfUser']);
 
     Route::get('/get_subjects', [SubjectsController::class, 'getSubjects']);
     Route::get('/get_all_subjects', [SubjectsController::class, 'getAllSubjects']);

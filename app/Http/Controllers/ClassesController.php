@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth as FacadesAuth;
 use Illuminate\Support\Facades\DB;
+use Tymon\JWTAuth\Contracts\Providers\Auth;
 
 class ClassesController extends Controller
 {
@@ -117,6 +119,30 @@ class ClassesController extends Controller
             return response()->json(['success' => 1], 200);
         } else {
             return response()->json(['success' => 0], 400);
+        }
+    }
+
+    public function getClassOfUser(Request $request){
+        try{
+
+            $user = $request->user();
+            $class = DB::table('user_profile_tbl')
+            ->where('user_id', $user->id)
+            ->select('class_id')
+            ->first();
+
+            return response()->json([
+                'success' => 1,
+                'classId' => $class,
+            ]);
+
+        }catch(\Exception $e){
+
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage()
+            ]);
+
         }
     }
 
