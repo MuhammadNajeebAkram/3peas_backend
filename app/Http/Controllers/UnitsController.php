@@ -77,7 +77,7 @@ class UnitsController extends Controller
     public function saveUnit(Request $request){
         try{
 
-            // Check for duplicate subject name
+            
         $checkDuplicate = DB::table('book_unit_tbl')
         ->where('unit_name', '=', $request->unit_name)
         ->where('book_id', '=', $request -> book_id)
@@ -141,7 +141,7 @@ class UnitsController extends Controller
                   'book_id' => $request -> book_id,                  
                   'updated_at' => now()]);
 
-                  if ($book) {
+                  if ($unit) {
                     return response()->json(['success' => 1], 200);
                 } else {
                     return response()->json(['success' => 3, 'message' => 'Bad Request'], 400);
