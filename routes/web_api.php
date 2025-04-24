@@ -1,4 +1,6 @@
 <?php
+
+use App\Http\Controllers\AnswerRatingController;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +11,7 @@ use App\Http\Controllers\YearsController;
 use App\Http\Controllers\PapersController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\BooksController;
 use App\Http\Controllers\UnitsController;
 use App\Http\Controllers\TopicsController;
@@ -191,6 +194,8 @@ Route::get('/get-topic-contents-by-topic/{topic_id}', [TopicContentController::c
 
 Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomain']);
 
+Route::post('/save-answer-rating', [AnswerRatingController::class, 'saveRating']);
+
 
     
 });
@@ -232,7 +237,10 @@ Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculum
 
 Route::post('/get_heard_about', [HeardAboutController::class, 'getHeardAbout']);
 
-Route::post('/get_study_plans', [StudyPlanController::class, 'getStudyPlans']);
+//Route::post('/get_study_plans', [StudyPlanController::class, 'getStudyPlans']);
+Route::post('/get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
+
+Route::post('/get_bank_accounts', [BankAccountController::class, 'getBankAccounts']);
 
 Route::post('/get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
 Route::post('/get_study_subjects', [StudyGroupController::class, 'getStudySubjects']);

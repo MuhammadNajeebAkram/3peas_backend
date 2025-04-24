@@ -23,6 +23,7 @@ use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
+use App\Http\Controllers\StudySessionController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
 
@@ -162,6 +163,9 @@ Route::post('/activate-awaited-web-users', [UserProfileController::class, 'activ
 Route::get('/get-all-study-plans', [StudyPlanController::class, 'getAllStudyPlans']);
 Route::post('/save-study-plan', [StudyPlanController::class, 'saveStudyPlan']);
 Route::post('/update-study-plan', [StudyPlanController::class, 'updateStudyPlan']);
+
+Route::post('/save-study-session', [StudySessionController::class, 'saveSession']);
+Route::get('/get-study-sessions-by-class-board/{class_id}/{curriculum_id}', [StudySessionController::class, 'getSessionsByClassAndBoard']);
 
 Route::post('/save-topic-content', [TopicContentController::class, 'saveContent']);
 Route::get('/get-all-topic-contents', [TopicContentController::class, 'getAllContents']);

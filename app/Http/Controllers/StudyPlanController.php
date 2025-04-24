@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class StudyPlanController extends Controller
 {
     //
     public function getStudyPlans(Request $request){
-        $user = $request->user();
+       // $user = $request->user();
+       $user = auth('web_api')->user();
         try{
             
             $designation = DB::table('user_profile_tbl')
@@ -51,6 +53,8 @@ class StudyPlanController extends Controller
                 'name',
                 'plan_for',
                 'price',
+                'class_id',
+                'curriculum_board_id',
                 DB::raw("CASE WHEN is_full_course = 0 THEN 'No' ELSE 'Yes' END as is_full_course"),
                 'activate',
             )
@@ -69,6 +73,30 @@ class StudyPlanController extends Controller
             ]);
         }
     }
+    public function getStudyPlansByClass(Request $request){
+        try{
+            $plans = DB::table('study_plan_tbl')
+            ->where('class_id', $request->class_id)
+            ->where('curriculum_board_id', $request->curriculum_id)
+            ->where('plan_for', 'Student')
+            ->where('activate', 1)
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'plans' => $plans,
+            ]);
+
+        }catch(\Exception $e){
+            return response()->json([
+                'success' => -1,
+                'error' => $e->getMessage(),
+                
+            ]);
+
+        }
+
+    }
 
     public function saveStudyPlan(Request $request){
         try{
@@ -78,6 +106,9 @@ class StudyPlanController extends Controller
                 'price' => $request -> price,
                 'plan_for' => $request -> plan_for,
                 'is_full_course' => $request ->is_full_course,
+                'class_id' => $request->class_id,
+                'curriculum_board_id' => $request->curriculum_id,
+                'is_trial' => $request->is_trial,
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),

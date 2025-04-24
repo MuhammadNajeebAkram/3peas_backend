@@ -13,6 +13,8 @@ class EmailVerificationController extends Controller
     {
         $user = WebUser::findOrFail($id);
 
+       
+
         // Check if hash matches the user's email
         if (!hash_equals(sha1($user->getEmailForVerification()), $hash)) {
             return response()->json(['message' => 'Invalid verification link'], 400);
@@ -20,7 +22,9 @@ class EmailVerificationController extends Controller
 
         // If already verified
         if ($user->hasVerifiedEmail()) {
-            return response()->json(['message' => 'Email already verified.'], 200);
+            //return redirect()->away("http://localhost:3000");
+            return redirect()->away("https://lms.al-faraabi.com");
+            //return response()->json(['message' => 'Email already verified.'], 200);
         }
 
         // Mark as verified
@@ -34,17 +38,25 @@ class EmailVerificationController extends Controller
             'message' => 'Email verified successfully.',
             'token' => $token
         ], 200);*/
-
-        return redirect()->away("https://login.pakistanpastpapers.com/payment?user_id={$user->id}");
-       // return redirect()->away("http://localhost:3000/payment?user_id={$user->id}");
+        
+        //return redirect()->away("http://localhost:3000");
+        return redirect()->away("https://lms.al-faraabi.com");
+        //return redirect()->away("https://login.pakistanpastpapers.com/payment?user_id={$user->id}");
+        //return redirect()->away("http://localhost:3000/payment?user_id={$user->id}");
     }
 
     public function resend(Request $request)
     {
-        $user = auth()->user();
+        $user = JWTAuth::parseToken()->authenticate();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
 
         if ($user->hasVerifiedEmail()) {
-            return response()->json(['message' => 'Email already verified.'], 400);
+             //return redirect()->away("http://localhost:3000");
+        return redirect()->away("https://lms.al-faraabi.com");
+            //return response()->json(['message' => 'Email already verified.'], 400);
         }
 
         $user->sendEmailVerificationNotification();

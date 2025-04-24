@@ -11,13 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('study_plan_tbl', function (Blueprint $table) {
+        Schema::create('exam_answer_rating_tbl', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->integer('price');
-            $table->integer('class_id');
-            $table->unsignedBigInteger('curriculum_board_id');
-            $table->boolean('activate')->default(true);
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('question_id');
+            $table->unsignedBigInteger('answer_id');
+            $table->tinyInteger('rating')->unsigned()->checkBetween(1, 3);
             $table->timestamps();
         });
     }
@@ -27,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('study_plan_tbl');
+        Schema::dropIfExists('exam_answer_rating_tbl');
     }
 };

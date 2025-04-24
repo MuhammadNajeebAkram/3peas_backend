@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('study_plan_tbl', function (Blueprint $table) {
+        Schema::create('bank_accounts_tbl', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->integer('price');
-            $table->integer('class_id');
-            $table->unsignedBigInteger('curriculum_board_id');
+            $table->string('bank_name');
+            $table->string('account_name');
+            $table->string('account_no');
             $table->boolean('activate')->default(true);
             $table->timestamps();
         });
@@ -27,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('study_plan_tbl');
+        Schema::dropIfExists('bank_accounts_tbl');
     }
 };

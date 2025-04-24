@@ -122,29 +122,37 @@ class ClassesController extends Controller
         }
     }
 
-    public function getClassOfUser(Request $request){
-        try{
+    public function getClassOfUser(Request $request)
+{
+    try {
+        $user = $request->user();
 
-            $user = $request->user();
-            $class = DB::table('user_profile_tbl')
-            ->where('user_id', $user->id)
-            ->select('class_id')
+        $class = DB::table('user_profile_tbl as upt')
+            ->join('class_tbl as ct', 'upt.class_id', '=', 'ct.id')
+            ->where('upt.user_id', $user->id)
+            ->select('upt.class_id', 'ct.class_name')
             ->first();
 
-            return response()->json([
-                'success' => 1,
-                'classId' => $class,
-            ]);
-
-        }catch(\Exception $e){
-
+        if (!$class) {
             return response()->json([
                 'success' => 0,
-                'error' => $e->getMessage()
+                'message' => 'Class not found for user.',
             ]);
-
         }
+
+        return response()->json([
+            'success' => 1,
+            'class' => $class,
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
     }
+}
+
 
     
 }

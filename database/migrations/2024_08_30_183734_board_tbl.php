@@ -15,6 +15,7 @@ return new class extends Migration
             $table -> id();
             $table -> string('board_name');
             $table -> string('icon_name');
+            $table-> string('short_name')->nullable();
             $table -> timestamps();
         });
         //

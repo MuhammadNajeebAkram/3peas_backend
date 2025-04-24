@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Tymon\JWTAuth\Exceptions\JWTException;
-
+use Carbon\Carbon;
 
 
 
@@ -179,16 +179,18 @@ public function login(Request $request)
             }
 
             $sessionTbl = DB::table('study_session_tbl')
-                ->where('start_date', '<=', now())
-                ->where('end_date', '>=', now())
-                ->where('id', $session_id)
+            ->where('id', $session_id)
+                ->whereDate('start_date', '<=',  Carbon::today())
+                ->whereDate('end_date', '>=',  Carbon::today())               
                 ->first();
 
             if (!$sessionTbl) {
                 return response()->json([
                     'success' => 4,
                     'error' => 'Your study session has expired or is invalid',
-                    'token' => $token
+                    'token' => $token,
+                    'session' => $session_id,
+                    'today' =>  Carbon::today(),
                 ], 404);
             }
 
