@@ -108,10 +108,13 @@ public function registerWebUser(Request $request)
         event(new Registered($user));
         DB::commit();
 
+        $token = JWTAuth::fromUser($user);
+
         return response()->json([
             'message' => 'User registered successfully',
             'user' => $user,
             'success' => 1,
+            'token' => $token,
         ]);
 
     } catch (\Illuminate\Validation\ValidationException $e) {

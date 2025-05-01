@@ -37,8 +37,8 @@ use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\DashboardItemController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\CognitiveDomainController;
-
-
+use App\Http\Controllers\PasswordResetController;
+use Illuminate\Auth\Events\PasswordReset;
 
 /*
 Route::get('/user', function (Request $request) {
@@ -49,20 +49,27 @@ Route::get('/user', function (Request $request) {
 
 Route::post('login', [AuthController::class, 'login']);
 
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
+Route::post('/reset-password', [PasswordResetController::class, 'reset']);
+
+
 // Email Verification Routes for JWT
 Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
 ->name('verification.verify');
 
 
+
+
 Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
-    ->middleware(['auth:api', 'throttle:6,1'])
+    ->middleware(['auth:web_api', 'throttle:6,1'])
     ->name('verification.resend');
 
     Route::get('/check-email-verification/{email}', [EmailVerificationController::class, 'checkEmailVerification']);
 
 Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(function () {
 
-   
+    
+
 
     Route::post('logout', [AuthController::class, 'logout']);
     Route::post('update-password', [AuthController::class, 'updatePassword']);

@@ -61,7 +61,9 @@ class EmailVerificationController extends Controller
 
         $user->sendEmailVerificationNotification();
 
-        return response()->json(['message' => 'Verification email resent.'], 200);
+        return response()->json([
+            'success' => 1,
+            'message' => 'Verification email resent.'], 200);
     }
 
     public function checkEmailVerification($email)
