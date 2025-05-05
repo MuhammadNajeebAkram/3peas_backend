@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class UserPaymentSlipController extends Controller
 {
@@ -11,10 +12,11 @@ class UserPaymentSlipController extends Controller
 
     public function uploadPaymentSlip(Request $request)
     {
+        $user = Auth::guard('web_api')->user();
         try {
             DB::beginTransaction();
     
-            $user = $request->user();
+           
     
             // Check if payment slip already exists
             $exist = DB::table('user_payment_slip_tbl')
@@ -100,6 +102,7 @@ class UserPaymentSlipController extends Controller
             return response()->json([
                 'success' => -1,
                 'error' => $e->getMessage(),
+                'user' => $user,
             ], 500);
         }
     }

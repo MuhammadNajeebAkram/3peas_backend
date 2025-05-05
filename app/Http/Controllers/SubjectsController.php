@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class SubjectsController extends Controller
 {
@@ -157,7 +158,7 @@ class SubjectsController extends Controller
 
     public function getSubjectsByUser(Request $request)
 {
-    $user = $request->user();
+    $user = Auth::guard('web_api')->user();
 
     try {
         $subjects = DB::table('user_selected_subject_tbl as usst')

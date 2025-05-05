@@ -37,6 +37,7 @@ use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\DashboardItemController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\CognitiveDomainController;
+use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\PasswordResetController;
 use Illuminate\Auth\Events\PasswordReset;
 
@@ -65,6 +66,8 @@ Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
     ->name('verification.resend');
 
     Route::get('/check-email-verification/{email}', [EmailVerificationController::class, 'checkEmailVerification']);
+
+    Route::post('/upload_deposit_slip', [UserPaymentSlipController::class, 'uploadPaymentSlip'])->middleware('auth:web_api');
 
 Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(function () {
 
@@ -203,6 +206,8 @@ Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomai
 
 Route::post('/save-answer-rating', [AnswerRatingController::class, 'saveRating']);
 
+Route::post('save_feedback', [FeedbackController::class, 'saveFeedback']);
+
 
     
 });
@@ -252,7 +257,7 @@ Route::post('/get_bank_accounts', [BankAccountController::class, 'getBankAccount
 Route::post('/get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
 Route::post('/get_study_subjects', [StudyGroupController::class, 'getStudySubjects']);
 
-Route::post('/upload_deposit_slip', [UserPaymentSlipController::class, 'uploadPaymentSlip']);
+
 
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);
