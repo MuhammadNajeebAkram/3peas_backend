@@ -18,9 +18,14 @@ use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
+use App\Http\Controllers\CityController;
 use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Controllers\CurriculumBoardController;
+use App\Http\Controllers\DistrictController;
+use App\Http\Controllers\DivisionController;
+use App\Http\Controllers\InstituteController;
+use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\StudySessionController;
@@ -172,6 +177,28 @@ Route::get('/get-all-topic-contents', [TopicContentController::class, 'getAllCon
 Route::get('/get-topic-contents-by-topic/{topic_id}', [TopicContentController::class, 'getContentsByTopic']);
 
 Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomain']);
+
+Route::post('save-province', [ProvinceController::class, 'saveProvince']);
+Route::get('get-provinces', [ProvinceController::class, 'getProvinces']);
+
+Route::post('save-division', [DivisionController::class, 'saveDivision']);
+Route::get('get-divisions/{id}', [DivisionController::class, 'getDivisions']);
+
+Route::post('save-district', [DistrictController::class, 'saveDistrict']);
+Route::get('get-districts/{id}', [DistrictController::class, 'getDistricts']);
+
+Route::post('save-city', [CityController::class, 'saveCity']);
+Route::get('get-cities-by-district/{id}', [CityController::class, 'getCitiesByDistrict']);
+Route::get('get-cities', [CityController::class, 'getAllCities']);
+
+Route::post('save-institute', [InstituteController::class, 'saveInstitute']);
+Route::post('update-institute', [InstituteController::class, 'updateInstitute']);
+Route::get('get-institutes-by-city/{id}', [InstituteController::class, 'getInstitutesByCity']);
+
+Route::post('create-web-user', [AuthController::class, 'createWebUser']);
+
+Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
+Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
     
 });
 

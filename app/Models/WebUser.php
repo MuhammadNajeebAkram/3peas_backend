@@ -40,7 +40,7 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
         'password',
         'role',
         'study_session_id',
-       // 'email_verified_at',
+        'email_verified_at',
     ];
 
     // Hide sensitive data

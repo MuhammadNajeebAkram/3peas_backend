@@ -57,18 +57,18 @@ public function registerWebUser(Request $request)
             'email' => 'required|email|unique:web_users',
             'password' => 'required|min:8|confirmed',
             'role' => 'required|string', // Ensure 'role' is validated
-            'address' => 'nullable|string',
+            'address' => 'required|string',
             'city_id' => 'nullable|integer',
-            'phone' => 'nullable|string',
+            'phone' => 'required|string',
             //'class_id' => 'nullable|integer',
             //'curriculum_board_id' => 'nullable|integer',
             'institute_id' => 'nullable|integer', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
             'gender_id' => 'nullable|integer',
-            'dob' => 'nullable|date',
+            'dob' => 'required|date',
             'designation' => 'nullable|string',
-            'heard_about_id' => 'nullable|integer',
+            'heard_about_id' => 'required|integer',
         ]);
         
 
@@ -192,8 +192,8 @@ public function login(Request $request)
                     'success' => 4,
                     'error' => 'Your study session has expired or is invalid',
                     'token' => $token,
-                    'session' => $session_id,
-                    'today' =>  Carbon::today(),
+                   
+                   
                 ], 404);
             }
 
@@ -221,8 +221,7 @@ $user->save();
             'success' => 1,
             'message' => 'Login successful',
             'token' => $token,
-            'expires_in' => $expiration,
-            'guard' => $guard,
+            'expires_in' => $expiration,           
             'user' => [
                 'name' => $user->name,
                 'email' => $user->email,
@@ -392,6 +391,97 @@ public function updateUserProfile(Request $request){
         return response()->json([
             'successs' => 0,
             'error' => $e->getMessage()]);
+    }
+}
+
+public function createWebUser(Request $request){
+    DB::beginTransaction();
+    try{
+
+        $validated = $request->validate([
+            'name' => 'required|string',
+            'email' => 'required|email|unique:web_users',
+            'password' => 'required|min:8|confirmed',
+            'role' => 'required|string', // Ensure 'role' is validated
+            'address' => 'required|string',
+            'city_id' => 'nullable|integer',
+            'phone' => 'required|string',
+            //'class_id' => 'nullable|integer',
+            //'curriculum_board_id' => 'nullable|integer',
+            'institute_id' => 'nullable|integer', // Fixed typo
+            'incharge_name' => 'nullable|string',
+            'incharge_phone' => 'nullable|string',
+            'gender_id' => 'required|integer',
+            'dob' => 'required|date',
+            'designation' => 'nullable|string',
+            'heard_about_id' => 'required|integer',
+            'class_id' => 'required|integer|exists:class_tbl,id',
+            'curriculum_board_id' => 'required|integer|exists:curriculum_board_tbl,id',
+            'study_plan_id' => 'required|integer|exists:study_plan_tbl,id',            
+
+        ]);
+
+       
+       
+        $session = DB::table('study_plan_tbl')
+        ->where('id', $request->study_plan_id)
+        ->value('session_id'); // Use value() instead of select()->first()
+
+        $validated['study_session_id'] = $session;
+
+        $webUserData = [
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'email_verified_at' => now(),
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'study_session_id' => $session,
+        ];
+        
+        $user = WebUser::create($webUserData);
+
+       
+        $validated['user_id'] = $user->id;
+
+        WebUserProfile::create($validated);
+
+         // Insert study plan mapping
+         DB::table('user_study_plan_tbl')->insert([
+            'user_id' => $user->id,
+            'study_plan_id' => $request->study_plan_id,
+            'qty' => 1,
+            'price' => 0,
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        // Assign subjects
+        $subjects = DB::table('study_group_detail_tbl')
+            ->where('study_group_id', $request->study_group_id)
+            ->pluck('subject_id');
+
+        foreach ($subjects as $subjectId) {
+            DB::table('user_selected_subject_tbl')->insert([
+                'user_id' => $user->id,
+                'subject_id' => $subjectId,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => 1,
+            ], 200);
+
+
+    }catch(\Exception $e){
+        DB::rollBack();
+        return response()->json([
+            'success' => -1,
+            'error' => $e->getMessage()], 500);
+
     }
 }
 }
