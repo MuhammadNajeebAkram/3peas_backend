@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -94,6 +95,8 @@ class ExamTestController extends Controller
 
     public function saveTestResult(Request $request){
         try{
+            $testStartTime = Carbon::parse($request->start_time);
+            $testEndTime = Carbon::parse($request->end_time);
 
             DB::beginTransaction();
             $test = DB::table('student_test_tbl')
@@ -102,8 +105,8 @@ class ExamTestController extends Controller
                 'test_type' => $request->test_type,
                 'created_at' => now(),
                 'updated_at' => now(),
-                'test_start_at' => Date('Y-m-d H:i:s', $request->start_time),
-                'test_end_at' => Date('Y-m-d H:i:s', $request->end_time),
+                'test_start_at' => $testStartTime,
+                'test_end_at' => $testEndTime,
             ]);
 
            $questions = $request -> questions;
@@ -131,6 +134,7 @@ class ExamTestController extends Controller
 
                     return response()->json([
                         'success' => 1,
+                        
                     ]);
 
            
@@ -141,7 +145,7 @@ class ExamTestController extends Controller
             return response()->json([
                 'success' => 0,
                 'error' => $e->getMessage(),
-            ]);
+            ], 404);
 
         }
     }

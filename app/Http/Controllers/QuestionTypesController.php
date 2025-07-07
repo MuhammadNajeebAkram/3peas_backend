@@ -45,13 +45,13 @@ class QuestionTypesController extends Controller
             return response()->json([
                 'success' => 1,
                 'types' => $types
-            ]);
+            ], 200);
 
         }
         catch(\Exception $e){
             return response()->json([
                 'success' => 0,
-                'types' => 'Failed to retrieve types'], 500);
+                'message' => $e->getMessage()], 500);
 
         }
     }
@@ -140,7 +140,7 @@ class QuestionTypesController extends Controller
         ->update(['activate' => $request -> activate,
                   'updated_at' => now()]);
 
-        if ($editClass) {
+        if ($editType) {
             return response()->json(['success' => 1], 200);
         } else {
             return response()->json(['success' => 0], 400);

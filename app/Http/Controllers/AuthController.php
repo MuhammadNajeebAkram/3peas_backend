@@ -167,6 +167,7 @@ public function login(Request $request)
             if (!$user->email_verified_at) {
                 return response()->json([
                     'success' => 2,
+                    'user' => $user->name,
                     'error' => 'First verify your email'
                 ], 403);
             }

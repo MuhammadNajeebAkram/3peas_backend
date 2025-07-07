@@ -830,9 +830,13 @@ if ($existingRecord) {
                 $request -> is_mcq
             ]);
 
+            
+
             return response()->json([
                 'success' => 1,
                 'questions' => $questions,
+                'topic_id' => $request->topic_id,
+                'is_mcq' => $request->is_mcq,
             ]);
 
         }catch(\Exception $e){
