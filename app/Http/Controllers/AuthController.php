@@ -178,7 +178,8 @@ public function login(Request $request)
                 return response()->json([
                     'success' => 3,
                     'error' => 'Your session has been expired',
-                    'token' => $token
+                    'token' => $token,
+                    'user' => $user->name,
                 ], 404);
             }
 
