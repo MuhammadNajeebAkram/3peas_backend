@@ -69,6 +69,8 @@ Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
 
     Route::post('/upload_deposit_slip', [UserPaymentSlipController::class, 'uploadPaymentSlip'])->middleware('auth:web_api');
 
+    Route::post('/upload-image-to-s3', [UserPaymentSlipController::class, 'uploadDepositSlipImage'])->middleware('auth:web_api');
+
 Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(function () {
 
     
@@ -183,7 +185,7 @@ Route::post('/update_blogs_categories', [BlogsCategoryController::class, 'editCa
 Route::post('/activate_blogs_category', [BlogsCategoryController::class, 'activateCategory']);
 Route::get('/get_blogs_categories', [BlogsCategoryController::class, 'getActiveBlogsCategory']);
 
-Route::post('/get_subjects_by_user', [SubjectsController::class, 'getSubjectsByUser']);
+Route::post('/get_subjects_by_user', [SubjectsController::class, 'getSubjectsByUser']); 
 
 Route::post('/get_top_mcqs', [CompleteBookQuestionsController::class, 'getTopMCQsQuestions']);
 Route::post('/get_random_mcqs', [CompleteBookQuestionsController::class, 'getRandomMCQsQuestions']);
