@@ -219,6 +219,11 @@ public function login(Request $request)
 $user->save();
         }
 
+        $classInfo = app(ClassesController::class)->getClassOfUser($request);
+        $classData = $classInfo->getData();
+
+      
+
         return response()->json([
             'success' => 1,
             'message' => 'Login successful',
@@ -228,6 +233,8 @@ $user->save();
                 'name' => $user->name,
                 'email' => $user->email,
             ],
+            'classInfo' => $classData,
+            
         ]);
     } catch (JWTException $e) {
         return response()->json([
