@@ -70,76 +70,78 @@ public function registerWebUser(Request $request)
             'designation' => 'nullable|string',
             'heard_about_id' => 'required|integer',
         ]);
-        
 
-        // Start transaction to ensure atomicity
-        DB::beginTransaction();
-        
-        // Create User
-        $user = WebUser::create([
-            'name' => $validatedData['name'],
-            'email' => $validatedData['email'],
-            'password' => Hash::make($validatedData['password']),
-            'role' => $validatedData['role'],
-            'study_session_id' => 0,
-        ]);
-        
+                // Start transaction to ensure atomicity
+                DB::beginTransaction();
 
-        // Create User Profile
-        WebUserProfile::create([
-            'user_id' => $user->id,
-            'address' => $validatedData['address'] ?? null,
-            'city_id' => $validatedData['city_id'] ?? null,
-            'phone' => $validatedData['phone'] ?? null,
-            'class_id' => $validatedData['class_id'] ?? 0,
-            'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
-            'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
-            'incharge_name' => $validatedData['incharge_name'] ?? null,
-            'incharge_phone' => $validatedData['incharge_phone'] ?? null,
-            'gender_id' => $validatedData['gender_id'] ?? null,
-            'dob' => $validatedData['dob'] ?? null,
-            'designation' => $validatedData['designation'] ?? null,
-            'heard_about_id' => $validatedData['heard_about_id'] ?? null,
-            'study_plan_id' => 0,
-            'activate' => 0,
-        ]);
+                // Create User
+                $user = WebUser::create([
+                    'name' => $validatedData['name'],
+                    'email' => $validatedData['email'],
+                    'password' => Hash::make($validatedData['password']),
+                    'role' => $validatedData['role'],
+                    'study_session_id' => 0,
+                ]);
 
-        // Commit transaction
-        event(new Registered($user));
-        DB::commit();
+                // Create User Profile
+                WebUserProfile::create([
+                    'user_id' => $user->id,
+                    'address' => $validatedData['address'] ?? null,
+                    'city_id' => $validatedData['city_id'] ?? null,
+                    'phone' => $validatedData['phone'] ?? null,
+                    'class_id' => $validatedData['class_id'] ?? 0,
+                    'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
+                    'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
+                    'incharge_name' => $validatedData['incharge_name'] ?? null,
+                    'incharge_phone' => $validatedData['incharge_phone'] ?? null,
+                    'gender_id' => $validatedData['gender_id'] ?? null,
+                    'dob' => $validatedData['dob'] ?? null,
+                    'designation' => $validatedData['designation'] ?? null,
+                    'heard_about_id' => $validatedData['heard_about_id'] ?? null,
+                    'study_plan_id' => 0,
+                    'activate' => 0,
+                ]);
 
-        $token = JWTAuth::fromUser($user);
+                // Commit transaction
+                event(new Registered($user));
+                DB::commit();
 
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user,
-            'success' => 1,
-            'token' => $token,
-        ]);
+                $token = JWTAuth::fromUser($user);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'errors' => $e->errors(),
-            'success' => -1,
-            
-        ], 422);
-    } catch (\Exception $e) {
-        // Rollback transaction in case of an error
-        DB::rollBack();
+                return response()->json([
+                    'message' => 'User registered successfully',
+                    'user' => $user,
+                    'success' => 1,
+                    'token' => $token,
+                ]);
 
-        return response()->json([
-            'message' => 'An error occurred during registration.',
-            'error' => $e->getMessage(),
-            'success' => 0,
-        ], 500);
-    }
-}
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $errors = $e->errors();
+                if (isset($errors['email'])) {
+                    foreach ($errors['email'] as $msg) {
+                        if (strpos($msg, 'unique') !== false || strpos(strtolower($msg), 'already exists') !== false) {
+                            return response()->json([
+                                'message' => 'Duplicate user error: Email already exists.',
+                                'errors' => $errors,
+                                'success' => -2,
+                            ], 409);
+                        }
+                    }
+                }
+                return response()->json([
+                    'errors' => $errors,
+                    'success' => -1,
+                ], 422);
+            } catch (\Exception $e) {
+                // Rollback transaction in case of an error
+                DB::rollBack();
 
-
-public function login(Request $request)
-{
-    try {
-        $credentials = $request->only('email', 'password');
+                return response()->json([
+                    'message' => 'An error occurred during registration.',
+                    'error' => $e->getMessage(),
+                    'success' => 0,
+                ], 500);
+            }
 
         // Determine the guard (though with JWT, you might only need one guard)
         $guard = $request->is('api/*') ? 'api' : 'web_api';

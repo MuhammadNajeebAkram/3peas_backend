@@ -9,7 +9,7 @@
         "illuminate/filesystem": "*",
         "illuminate/support": "*",
         "laravel/framework": "^11.9",
-        "laravel/installer": "^5.9",
+        "laravel/installer": "^5.17",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "league/flysystem-aws-s3-v3": "^3.0",
