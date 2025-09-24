@@ -49,16 +49,20 @@ class AuthController extends Controller
 
 public function registerWebUser(Request $request)
 {
+    
     try {
-        $validator = \Validator::make($request->all(), [
+        // Validate incoming request
+        $validatedData = $request->validate([
             'name' => 'required|string',
             'email' => 'required|email|unique:web_users',
             'password' => 'required|min:8|confirmed',
-            'role' => 'required|string',
+            'role' => 'required|string', // Ensure 'role' is validated
             'address' => 'required|string',
             'city_id' => 'nullable|integer',
             'phone' => 'required|string',
-            'institute_id' => 'nullable|integer',
+            //'class_id' => 'nullable|integer',
+            //'curriculum_board_id' => 'nullable|integer',
+            'institute_id' => 'nullable|integer', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
             'gender_id' => 'nullable|integer',
@@ -67,94 +71,80 @@ public function registerWebUser(Request $request)
             'heard_about_id' => 'required|integer',
         ]);
 
-        if ($validator->fails()) {
-            $errors = $validator->errors()->toArray();
-            if (isset($errors['email'])) {
-                foreach ($errors['email'] as $msg) {
-                    if (strpos($msg, 'unique') !== false || strpos(strtolower($msg), 'already exists') !== false) {
-                        return response()->json([
-                            'message' => 'Duplicate user error: Email already exists.',
-                            'errors' => $errors,
-                            'success' => -2,
-                        ], 409);
+                // Start transaction to ensure atomicity
+                DB::beginTransaction();
+
+                // Create User
+                $user = WebUser::create([
+                    'name' => $validatedData['name'],
+                    'email' => $validatedData['email'],
+                    'password' => Hash::make($validatedData['password']),
+                    'role' => $validatedData['role'],
+                    'study_session_id' => 0,
+                ]);
+
+                // Create User Profile
+                WebUserProfile::create([
+                    'user_id' => $user->id,
+                    'address' => $validatedData['address'] ?? null,
+                    'city_id' => $validatedData['city_id'] ?? null,
+                    'phone' => $validatedData['phone'] ?? null,
+                    'class_id' => $validatedData['class_id'] ?? 0,
+                    'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
+                    'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
+                    'incharge_name' => $validatedData['incharge_name'] ?? null,
+                    'incharge_phone' => $validatedData['incharge_phone'] ?? null,
+                    'gender_id' => $validatedData['gender_id'] ?? null,
+                    'dob' => $validatedData['dob'] ?? null,
+                    'designation' => $validatedData['designation'] ?? null,
+                    'heard_about_id' => $validatedData['heard_about_id'] ?? null,
+                    'study_plan_id' => 0,
+                    'activate' => 0,
+                ]);
+
+                // Commit transaction
+                event(new Registered($user));
+                DB::commit();
+
+                $token = JWTAuth::fromUser($user);
+
+                return response()->json([
+                    'message' => 'User registered successfully',
+                    'user' => $user,
+                    'success' => 1,
+                    'token' => $token,
+                ]);
+
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $errors = $e->errors();
+                if (isset($errors['email'])) {
+                    foreach ($errors['email'] as $msg) {
+                        if (strpos($msg, 'unique') !== false || strpos(strtolower($msg), 'already exists') !== false) {
+                            return response()->json([
+                                'message' => 'Duplicate user error: Email already exists.',
+                                'errors' => $errors,
+                                'success' => -2,
+                            ], 409);
+                        }
                     }
                 }
+                return response()->json([
+                    'errors' => $errors,
+                    'success' => -1,
+                ], 422);
+            } catch (\Exception $e) {
+                // Rollback transaction in case of an error
+                DB::rollBack();
+
+                return response()->json([
+                    'message' => 'An error occurred during registration.',
+                    'error' => $e->getMessage(),
+                    'success' => 0,
+                ], 500);
             }
-            return response()->json([
-                'errors' => $errors,
-                'success' => -1,
-            ], 422);
-        }
 
-        $validatedData = $validator->validated();
-
-        DB::beginTransaction();
-
-        $user = WebUser::create([
-            'name' => $validatedData['name'],
-            'email' => $validatedData['email'],
-            'password' => Hash::make($validatedData['password']),
-            'role' => $validatedData['role'],
-            'study_session_id' => 0,
-        ]);
-
-        WebUserProfile::create([
-            'user_id' => $user->id,
-            'address' => $validatedData['address'] ?? null,
-            'city_id' => $validatedData['city_id'] ?? null,
-            'phone' => $validatedData['phone'] ?? null,
-            'class_id' => $validatedData['class_id'] ?? 0,
-            'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
-            'institute_id' => $validatedData['institute_id'] ?? null,
-            'incharge_name' => $validatedData['incharge_name'] ?? null,
-            'incharge_phone' => $validatedData['incharge_phone'] ?? null,
-            'gender_id' => $validatedData['gender_id'] ?? null,
-            'dob' => $validatedData['dob'] ?? null,
-            'designation' => $validatedData['designation'] ?? null,
-            'heard_about_id' => $validatedData['heard_about_id'] ?? null,
-            'study_plan_id' => 0,
-            'activate' => 0,
-        ]);
-
-        event(new Registered($user));
-        DB::commit();
-
-        $token = JWTAuth::fromUser($user);
-
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user,
-            'success' => 1,
-            'token' => $token,
-        ]);
-    } catch (\Illuminate\Database\QueryException $e) {
-        // Check for duplicate entry error code (MySQL: 1062)
-        if ($e->errorInfo[1] == 1062) {
-            return response()->json([
-                'message' => 'Duplicate user error: Email already exists.',
-                'error' => $e->getMessage(),
-                'success' => -2,
-            ], 409);
-        }
-        DB::rollBack();
-        return response()->json([
-            'message' => 'An error occurred during registration.',
-            'error' => $e->getMessage(),
-            'success' => 0,
-        ], 500);
-    } 
-    catch (\Exception $e) {
-        DB::rollBack();
-        return response()->json([
-            'message' => 'An error occurred during registration.',
-            'error' => $e->getMessage(),
-            'success' => 0,
-        ], 500);
+       
     }
-}
-
-
-
    public function login(Request $request)
 {
     try {
