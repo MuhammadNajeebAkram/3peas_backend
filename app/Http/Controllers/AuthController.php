@@ -127,7 +127,23 @@ public function registerWebUser(Request $request)
             'success' => 1,
             'token' => $token,
         ]);
-    } catch (\Exception $e) {
+    } catch (\Illuminate\Database\QueryException $e) {
+        // Check for duplicate entry error code (MySQL: 1062)
+        if ($e->errorInfo[1] == 1062) {
+            return response()->json([
+                'message' => 'Duplicate user error: Email already exists.',
+                'error' => $e->getMessage(),
+                'success' => -2,
+            ], 409);
+        }
+        DB::rollBack();
+        return response()->json([
+            'message' => 'An error occurred during registration.',
+            'error' => $e->getMessage(),
+            'success' => 0,
+        ], 500);
+    } 
+    catch (\Exception $e) {
         DB::rollBack();
         return response()->json([
             'message' => 'An error occurred during registration.',
