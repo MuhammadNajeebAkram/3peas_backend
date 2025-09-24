@@ -113,8 +113,7 @@ class UserPaymentSlipController extends Controller
     {
         // 1. Validate the incoming file
         $validator = Validator::make($request->all(), [
-            // Ensure 'deposit_slip' matches the name used in Flutter's MultipartFile.fromBytes
-            'deposit_slip' => 'required|image|mimes:jpeg,png,jpg|max:100', // Max 100KB as per Flutter client
+            'deposit_slip' => 'required|image|mimes:jpeg,png,jpg|max:1024', // Max 1MB
         ]);
 
         if ($validator->fails()) {
@@ -122,48 +121,40 @@ class UserPaymentSlipController extends Controller
                 'success' => 0,
                 'message' => 'Validation failed for image upload.',
                 'errors' => $validator->errors(),
-            ], 422); // HTTP 422 Unprocessable Entity
+            ], 422);
         }
 
         // 2. Get the uploaded file
         $file = $request->file('deposit_slip');
 
-        // 3. Define the S3 directory (folder) where the file will be stored
-        //$s3Directory = 'test'; // Or 'test' if you prefer
-        $s3Directory = '';
+        // 3. Define the S3 directory (folder)
+        $s3Directory = 'deposit_slips';
 
         // 4. Generate a unique filename for S3
-        // Using timestamp + original extension to ensure uniqueness
         $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
 
-        // 5. Construct the full S3 key (path) that will be returned to the client
-        $s3Key = ($s3Directory ? $s3Directory . '/' : '') . $filename;
+        // 5. Construct the full S3 key (path)
+        $s3Key = $s3Directory . '/' . $filename;
 
         try {
-            // 6. Store the file on S3 disk using putFileAs
-            //    - First argument: The directory within the S3 bucket.
-            //    - Second argument: The UploadedFile instance.
-            //    - Third argument: The desired filename for the stored file.
-            //    - Fourth argument: The visibility (e.g., 'public').
+            // 6. Store the file on S3 disk
             Storage::disk('s3')->putFileAs(
-                $s3Directory, // Directory on S3
-                $file,         // The uploaded file instance
-                $filename,     // The desired name for the file in S3
-                'public'       // Visibility
-                
+                $s3Directory,
+                $file,
+                $filename,
+                'public'
             );
 
-            // 7. Return the S3 key (path) to the client
+            // 7. Return the S3 key and public URL to the client
             return response()->json([
                 'success' => 1,
                 'message' => 'Deposit slip uploaded successfully.',
-                's3_key' => $s3Key, // This is the key/filename Flutter will send in the next payload
-                //'url' => Storage::disk('s3')->url($s3Key), // Optionally return the public URL
-                'file' => $file->getSize(),
+                's3_key' => $s3Key,
+                'url' => Storage::disk('s3')->url($s3Key),
+                'file_size' => $file->getSize(),
             ]);
 
         } catch (\Exception $e) {
-            // 8. Handle any exceptions during upload
             return response()->json([
                 'success' => 0,
                 'message' => 'Failed to upload deposit slip to S3.',
@@ -172,7 +163,7 @@ class UserPaymentSlipController extends Controller
                     'line' => $e->getLine(),
                     'file' => $e->getFile(),
                 ]
-            ], 500); // HTTP 500 Internal Server Error
+            ], 500);
         }
     }
     
