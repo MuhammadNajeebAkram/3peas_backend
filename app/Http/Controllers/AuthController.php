@@ -143,11 +143,13 @@ public function registerWebUser(Request $request)
                 ], 500);
             }
 
-        // Determine the guard (though with JWT, you might only need one guard)
+       
+    }
+   public function login(Request $request)
+{
+    try {
+        $credentials = $request->only('email', 'password');
         $guard = $request->is('api/*') ? 'api' : 'web_api';
-
-         // Set the authentication guard
-         Auth::shouldUse($guard);
 
         // Attempt to authenticate and generate a JWT token
         if (!$token = Auth::guard($guard)->attempt($credentials)) {
@@ -156,8 +158,6 @@ public function registerWebUser(Request $request)
                 'error' => 'Unauthorized'
             ], 401);
         }
-
-       
 
         // Get the authenticated user
         $user = Auth::guard($guard)->user();
@@ -186,7 +186,7 @@ public function registerWebUser(Request $request)
             }
 
             $sessionTbl = DB::table('study_session_tbl')
-            ->where('id', $session_id)
+                ->where('id', $session_id)
                 ->whereDate('start_date', '<=',  Carbon::today())
                 ->whereDate('end_date', '>=',  Carbon::today())               
                 ->first();
@@ -196,15 +196,12 @@ public function registerWebUser(Request $request)
                     'success' => 4,
                     'error' => 'Your study session has expired or is invalid',
                     'token' => $token,
-                   
-                   
                 ], 404);
             }
 
             // Invalidate previous token (logout from other devices)
             if (!empty($user->last_token)) {
                 Log::info("Trying to invalidate previous token: " . $user->last_token);
-            
                 try {
                     JWTAuth::setToken($user->last_token); // Set the token before invalidation
                     JWTAuth::invalidate(true);
@@ -218,13 +215,11 @@ public function registerWebUser(Request $request)
 
             // Save the new token
             $user->last_token = $token;
-$user->save();
+            $user->save();
         }
 
         $classInfo = app(ClassesController::class)->getClassOfUser($request);
         $classData = $classInfo->getData();
-
-      
 
         return response()->json([
             'success' => 1,
@@ -236,7 +231,6 @@ $user->save();
                 'email' => $user->email,
             ],
             'classInfo' => $classData,
-            
         ]);
     } catch (JWTException $e) {
         return response()->json([
