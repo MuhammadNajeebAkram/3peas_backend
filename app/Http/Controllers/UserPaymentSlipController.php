@@ -128,7 +128,7 @@ class UserPaymentSlipController extends Controller
         $file = $request->file('deposit_slip');
 
         // 3. Define the S3 directory (folder)
-        $s3Directory = 'deposit_slips';
+        $s3Directory = 'pakistanpastpapersbankreceipts';
 
         // 4. Generate a unique filename for S3
         $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
