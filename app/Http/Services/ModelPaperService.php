@@ -125,7 +125,7 @@ public function getModelPaperNames(Request $request){
 
         }
         else{
-             $paperNames = ModelPaper::select('id', 'title')
+             $paperNames = ModelPaper::select('id', 'title', 'urdu_lang')
         ->where('activate', '=', $status)->with( $relationsToLoad)->get();
 
         }

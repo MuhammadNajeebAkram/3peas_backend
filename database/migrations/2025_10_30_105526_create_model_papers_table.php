@@ -21,6 +21,7 @@ return new class extends Migration
             $table->foreignId('subject_id')->constrained('subject_tbl')->onDelete('cascade'); 
             $table->boolean('activate')->default(1);
             $table->boolean('urdu_lang')->default(0);
+            $table->integer('total_questions')->default(1);
             $table->timestamps();
         });
     }
