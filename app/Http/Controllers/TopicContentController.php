@@ -38,7 +38,7 @@ class TopicContentController extends Controller
         public function getAllContents(){
             try{
                 $contents = DB::table('topic_content_type_tbl')
-                ->select('id', 'name', 'name_um', 'activate')
+                ->select('id', 'name', 'name_um', 'activate', 'is_mcq')
                 ->get();
 
                 return response()->json([
@@ -79,5 +79,18 @@ class TopicContentController extends Controller
 
             }
         }
+
+        public function activateTopicContent(Request $request){
+        $editClass = DB::table('topic_content_type_tbl')
+         ->where('id', '=', $request -> id)
+        ->update(['activate' => $request -> activate,
+                  'updated_at' => now()]);
+
+        if ($editClass) {
+            return response()->json(['success' => 1], 200);
+        } else {
+            return response()->json(['success' => 0], 400);
+        }
+    }
     }
 

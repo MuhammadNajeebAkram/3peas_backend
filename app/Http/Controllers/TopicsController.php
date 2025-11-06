@@ -242,7 +242,7 @@ class TopicsController extends Controller
         try{
             $topics = DB::table('book_unit_topic_tbl')
             ->where('unit_id', $unit_id)
-            ->select('id', 'topic_name', 'topic_name_um', 'topic_no', 'activate')
+            ->select('id', 'topic_name', 'topic_name_um', 'topic_no', 'activate') 
             ->get();
 
             return response()->json([
@@ -259,6 +259,8 @@ class TopicsController extends Controller
 
         }
     }
+
+    
 
 
 }

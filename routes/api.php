@@ -25,6 +25,7 @@ use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\InstituteController;
+use App\Http\Controllers\ModelPapers\ModelPaperController;
 use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
@@ -98,8 +99,9 @@ Route::post('/update_topics', [TopicsController::class, 'editTopic']);
 Route::post('/activate_topic', [TopicsController::class, 'activateTopic']);
 
 Route::post('/save-new-topic', [TopicsController::class, 'saveNewTopic']);
-Route::get('/get-new-topics-by-unit/{unit_id}', [TopicsController::class, 'getNewTopicsByUnit']);
+Route::get('/get-new-topics-by-unit/{unit_id}', [TopicsController::class, 'getNewTopicsByUnit']); 
 Route::post('/update-new-topic', [TopicsController::class, 'updateNewTopic']);
+
 
 Route::get('/get_all_question_types', [QuestionTypesController::class, 'getAllTypes']);
 Route::get('/get_activate_question_types', [QuestionTypesController::class, 'getActivateQuestionTypes']);
@@ -175,6 +177,7 @@ Route::get('/get-study-sessions-by-class-board/{class_id}/{curriculum_id}', [Stu
 Route::post('/save-topic-content', [TopicContentController::class, 'saveContent']);
 Route::get('/get-all-topic-contents', [TopicContentController::class, 'getAllContents']);
 Route::get('/get-topic-contents-by-topic/{topic_id}', [TopicContentController::class, 'getContentsByTopic']);
+Route::post('/activate_topic_content', [TopicContentController::class, 'activateTopicContent']);
 
 Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomain']);
 
@@ -199,6 +202,14 @@ Route::post('create-web-user', [AuthController::class, 'createWebUser']);
 
 Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
 Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
+
+//--------Model Paper -----------
+Route::post('save_model_paper', [ModelPaperController::class, 'saveModelPaper']);
+Route::post('get_model_paper_names', [ModelPaperController::class, 'getPaperNames']);
+Route::post('save_model_paper_question', [ModelPaperController::class, 'saveModelPaperQuestion']);
+Route::get('get_model_paper_units/{id}', [ModelPaperController::class, 'getPaperUnits']);
+Route::post('save_model_paper_question_scheme', [ModelPaperController::class, 'saveQuestionScheme']);
+
     
 });
 

@@ -38,8 +38,10 @@ use App\Http\Controllers\DashboardItemController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\ModelPapers\ModelPaperController;
 use App\Http\Controllers\PasswordResetController;
 use Illuminate\Auth\Events\PasswordReset;
+
 
 /*
 Route::get('/user', function (Request $request) {
@@ -209,6 +211,10 @@ Route::get('/get-cognitive-domain', [CognitiveDomainController::class, 'getDomai
 Route::post('/save-answer-rating', [AnswerRatingController::class, 'saveRating']);
 
 Route::post('save_feedback', [FeedbackController::class, 'saveFeedback']);
+
+//--------- Model Papers ------------------
+
+Route::post('generate-model-paper', [ModelPaperController::class, 'generateModelPaper']);
 
 
     

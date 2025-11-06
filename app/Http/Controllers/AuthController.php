@@ -145,6 +145,8 @@ public function registerWebUser(Request $request)
 
        
     }
+
+    
    public function login(Request $request)
 {
     try {
@@ -411,8 +413,8 @@ public function createWebUser(Request $request){
             'address' => 'required|string',
             'city_id' => 'nullable|integer',
             'phone' => 'required|string',
-            //'class_id' => 'nullable|integer',
-            //'curriculum_board_id' => 'nullable|integer',
+            'class_id' => 'nullable|integer',
+            'curriculum_board_id' => 'nullable|integer',
             'institute_id' => 'nullable|integer', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
