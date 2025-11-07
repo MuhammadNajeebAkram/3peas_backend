@@ -7,11 +7,21 @@ use App\Models\PaperPartSectionQuestion;
 use App\Models\PaperQuestionSection;
 use App\Models\PaperQuestionSectionSubSection;
 use App\Models\QuestionPairingScheme;
+use App\Http\Services\WebUserService;
+use App\Models\BookUnitTopic;
+use App\Models\ExamQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log; // Added for debugging
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Arr;
 
 class ModelPaperQuestionService {
+    protected $userService;
+
+    // Reverting to the standard, cleaner Constructor Injection
+    public function __construct(WebUserService $userService){
+         $this->userService = $userService;
+    }
 
     public function saveModelPaperQuestion(Request $request){
 
@@ -192,5 +202,132 @@ class ModelPaperQuestionService {
             'message' => 'An unexpected error occurred: ' . $e->getMessage()
         ], 500);
     }
+}
+
+public function getPaperQuestions(Request $request, $subject_id){
+    try{
+        $data = $this->userService->getUserClass($request);
+        $classData = $data->getData(true);
+        $class_id = $classData['data']['class_id'] ?? null;
+
+       
+
+        // --- Debug Check 1: Class ID ---
+        if (!$class_id) {
+            Log::warning('ModelPaperService: Class ID not found for user in getModelPaper.');
+            return response()->json([
+                'success' => 0,
+                'message' => 'User class information could not be retrieved.',
+                'data' => []
+            ], 400);
+        }
+
+        $questions = ModelPaper::where('subject_id', '=', $subject_id)
+        ->where('class_id', '=', $class_id)
+        ->with(['paperParts.partSections.questions', 'paperClass', 'paperSubject'])
+        ->get();
+
+        return response()->json([
+            'success' => 1,
+            'data' => $questions,
+        ]);
+
+    }catch (\Illuminate\Database\QueryException $e) {
+        Log::error('\Illuminate\Database\QueryException: ', $e);
+        return response()->json([
+            'success' => 0,
+            'message' => 'A database error occurred: ' . $e->getMessage()
+        ], 500);
+    } catch (\Exception $e) {
+        Log::error('Exception: ', $e);
+        return response()->json([
+            'success' => 0,
+            'message' => 'An unexpected error occurred: ' . $e->getMessage()
+        ], 500);
+    }
+
+
+}
+public function getPaperSubQuestions($question_id){
+    try{
+        $question = PaperPartSectionQuestion::where('id', '=', $question_id)
+        ->with('sections.subSections.pairingSchemes')->first();
+
+        if (!$question) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Question with ID ' . $question_id . ' not found.',
+                
+            ], 404);
+        }
+
+        $sections = $question['sections']?? collect();
+        $questions = [];
+        $SubSections = [];
+
+        foreach($sections as $section){
+            $subSections = $section['subSections'] ?? collect();
+            $SubSections[] = $subSections;
+            foreach($subSections as $subSection){
+                $pairingSchemes = $subSection['pairingSchemes'] ?? collect();
+                $randomUnits = (int) $subSection['no_of_random_units'];
+                $isRandom = (bool) ($subSection['is_random_units'] ?? false);
+                $questionType = $subSection['question_type_id'];
+                $totalQuestions = $subSection['total_questions'];
+                $relationToLoad = $questionType == 1 ? 'answerOptions' : 'answers';
+                
+                if ($isRandom && $randomUnits > 0 && $randomUnits < $pairingSchemes->count()) {
+                    $selectedSchemes = Arr::random($pairingSchemes->all(), $randomUnits);
+                } else {
+                    // Otherwise take all pairing schemes
+                    $selectedSchemes = $pairingSchemes;
+                }
+                
+                foreach($selectedSchemes as $scheme){
+                    $noOfSelectedQuestion = $scheme['no_of_questions'];
+                    $topicIds = BookUnitTopic::where('unit_id', $scheme['unit_id'])->pluck('id');
+
+                    $query = ExamQuestion::whereIn('topic_id', $topicIds)
+                    ->where('question_type', $questionType)->with($relationToLoad)
+                    ->inRandomOrder()->limit($noOfSelectedQuestion)->get();
+
+                    $questions[] = $query;
+
+                    
+
+                }
+
+            }
+        }
+       
+
+        return response()->json([
+            'success' => 1,
+            'data' => $questions,
+        ]);
+
+    }catch (\Illuminate\Database\QueryException $e) {
+        Log::error('\Illuminate\Database\QueryException: ', [
+            'exception' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'trace' => $e->getTraceAsString() // For full details
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'A database error occurred: ' . $e->getMessage()
+        ], 500);
+    } catch (\Exception $e) {
+        Log::error('Exception: ', [
+            'exception' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'An unexpected error occurred: ' . $e->getMessage()
+        ], 500);
+    }
+
 }
 }

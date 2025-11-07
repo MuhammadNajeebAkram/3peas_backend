@@ -4,6 +4,7 @@ namespace App\Http\Services;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WebUserService{
 
@@ -21,6 +22,7 @@ class WebUserService{
             ->first();
 
         if (!$class) {
+            Log::warning($user->id, ': the class of user not found');
             return response()->json([
                 'success' => 0,
                 'message' => 'Class not found for user.',
@@ -33,6 +35,7 @@ class WebUserService{
         ]);
 
     } catch (\Exception $e) {
+         Log::error('Exception found in WebUserService: ', $e->getMessage());
         return response()->json([
             'success' => 0,
             'error' => $e->getMessage(),

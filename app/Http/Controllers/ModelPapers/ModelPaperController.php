@@ -76,30 +76,17 @@ class ModelPaperController extends Controller
 
         
         $subject_id = $req->subject_id;
-        $modelPaper = $this->modelPaperService->getModelPaper($req, $subject_id);
-        $modelPaperData = $modelPaper->getData(true);
-        /*
-
-        $data = $this->userService->getUserClass($req);
-        $classData = $data->getData(true);
-        $class_id = $classData['data']['class_id'] ?? null;
-
-        $statement = DB::getPDO()->prepare('CALL GenerateModelPapersBySubject(?, ?)');
-        $statement->execute([$class_id, $subject_id]);
-
-        $paperParts = $statement->fetchAll(DB::getPDO()::FETCH_ASSOC);
-
-        $statement->nextRowset();
-        $dd = $statement->fetchAll(DB::getPDO()::FETCH_ASSOC);
-
-        $statement->closeCursor();
-*/
+        //$modelPaper = $this->modelPaperService->getModelPaper($req, $subject_id);
+        //$modelPaperData = $modelPaper->getData(true);
+       $questions = $this->questionService->getPaperQuestions($req, $subject_id);
+       $questionData = $questions->getData();
+        
 
        
 
         return response()->json([
             'success' => 1,
-            'data' => $modelPaperData
+            'data' => $questionData
             
             
         ], 200);
@@ -155,6 +142,40 @@ class ModelPaperController extends Controller
                 'success' => 0,
                 'message' => $unitsData->message,
             ]);
+
+        }catch (\Illuminate\Database\QueryException $e) {
+            // Catch database-specific errors (e.g., the SIGNAL you have in the procedure)
+            return response()->json([
+                'success' => false,
+                'message' => 'Database error: ' . $e->getMessage()
+            ], 500);
+        } catch (\Exception $e) {
+            // Catch other general errors
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getModelPaperSubQuestions(Request $request, $id){
+       
+        try{
+            $questions = $this->questionService->getPaperSubQuestions($id);
+            $questionsData = $questions->getData();
+
+           if($questionsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $questionsData->data
+            ]);
+           }
+
+           return response()->json([
+            'success' => -2,
+            'message' => $questionsData->message,
+           ]);
+            
 
         }catch (\Illuminate\Database\QueryException $e) {
             // Catch database-specific errors (e.g., the SIGNAL you have in the procedure)

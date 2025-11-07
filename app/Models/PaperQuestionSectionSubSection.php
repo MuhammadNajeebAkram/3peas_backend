@@ -23,7 +23,7 @@ class PaperQuestionSectionSubSection extends Model
     }
 
     public function pairingSchemes(){
-        return $this->hasMany('question_pairing_schemes', 'sub_section_id');
+        return $this->hasMany(QuestionPairingScheme::class, 'sub_section_id');
     }
 
     

@@ -215,6 +215,7 @@ Route::post('save_feedback', [FeedbackController::class, 'saveFeedback']);
 //--------- Model Papers ------------------
 
 Route::post('generate-model-paper', [ModelPaperController::class, 'generateModelPaper']);
+Route::get('generate-model-paper-questions/{id}', [ModelPaperController::class, 'getModelPaperSubQuestions']);
 
 
     

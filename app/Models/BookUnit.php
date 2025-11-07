@@ -14,4 +14,8 @@ class BookUnit extends Model
      public function book(){
         return $this->belongsTo(Book::class);
      }
+
+     public function topics(){
+      return $this->hasMany(BookUnitTopic::class, 'unit_id');
+     }
 }
