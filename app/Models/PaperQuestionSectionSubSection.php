@@ -16,6 +16,7 @@ class PaperQuestionSectionSubSection extends Model
         'is_random_units',
         'no_of_random_units',
         'activate',
+        'show_name',
     ];
 
     public function section(){

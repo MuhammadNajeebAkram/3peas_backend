@@ -78,7 +78,7 @@ class ModelPaperController extends Controller
         $subject_id = $req->subject_id;
         //$modelPaper = $this->modelPaperService->getModelPaper($req, $subject_id);
         //$modelPaperData = $modelPaper->getData(true);
-       $questions = $this->questionService->getPaperQuestions($req, $subject_id);
+       $questions = $this->questionService->getFullPaperStructure($req, $subject_id);
        $questionData = $questions->getData();
         
 

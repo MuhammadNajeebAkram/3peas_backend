@@ -76,6 +76,7 @@ class ModelPaperQuestionService {
                         'is_random_units' => $subSection['isRandomUnits'] ?? 1,
                         'no_of_random_units' => $subSection['noOfRandomUnits'] ?? 1,
                         'activate' => 1,
+                        'show_name' => $subSection['showName'] ?? 0,
 
                     ];
                     PaperQuestionSectionSubSection::create($subSectionData);
@@ -282,6 +283,8 @@ public function getPaperSubQuestions($question_id){
                     // Otherwise take all pairing schemes
                     $selectedSchemes = $pairingSchemes;
                 }
+
+                $allSubSectionQuestions = collect();
                 
                 foreach($selectedSchemes as $scheme){
                     $noOfSelectedQuestion = $scheme['no_of_questions'];
@@ -291,11 +294,18 @@ public function getPaperSubQuestions($question_id){
                     ->where('question_type', $questionType)->with($relationToLoad)
                     ->inRandomOrder()->limit($noOfSelectedQuestion)->get();
 
-                    $questions[] = $query;
+                    $allSubSectionQuestions = $allSubSectionQuestions->merge($query);
 
                     
 
                 }
+
+                $structuredData[] = [
+                    'sub_section_id' => $subSection['id'],
+                    'sub_section_name' => $subSection['sub_section_name'] ?? 'Unnamed Subsection',
+                    'question_type_id' => $questionType,
+                    'questions' => $allSubSectionQuestions,
+                ];
 
             }
         }
@@ -329,5 +339,135 @@ public function getPaperSubQuestions($question_id){
         ], 500);
     }
 
+}
+
+public function getFullPaperStructure(Request $request, $subject_id)
+{
+    try {
+        // --- Get user class info ---
+        $data = $this->userService->getUserClass($request);
+        $classData = $data->getData(true);
+        $class_id = $classData['data']['class_id'] ?? null;
+
+        if (!$class_id) {
+            Log::warning('Class ID not found for user.');
+            return response()->json([
+                'success' => 0,
+                'message' => 'User class information could not be retrieved.',
+                'data' => []
+            ], 400);
+        }
+
+        // --- Get Model Paper ---
+        $modelPapers = ModelPaper::where('subject_id', $subject_id)
+            ->where('class_id', $class_id)
+            ->with([
+                'paperParts.partSections.questions.sections.subSections.pairingSchemes',
+                'paperClass',
+                'paperSubject'
+            ])
+            ->get();
+
+        if ($modelPapers->isEmpty()) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'No model paper found for this subject/class.',
+            ], 404);
+        }
+        
+
+        // --- Build complete hierarchy including random questions ---
+        foreach ($modelPapers as $paper) {
+            foreach ($paper->paperParts as $part) {
+                foreach ($part->partSections as $section) {
+                    foreach ($section->questions as $question) {
+                       
+                       // Log::info('Checking statement flag', ['value' => $question->is_get_statement]);
+
+                        
+                        foreach ($question->sections as $subSectionGroup) {
+
+                            foreach ($subSectionGroup->subSections as $subSection) {
+                                $pairingSchemes = $subSection['pairingSchemes'] ?? collect();
+                                $randomUnits = (int) $subSection['no_of_random_units'];
+                                $isRandom = (bool) ($subSection['is_random_units'] ?? false);
+                                $questionType = $subSection['question_type_id'];
+                                $relationToLoad = $questionType == 1 ? 'answerOptions' : 'answers';
+
+                                // Select pairing schemes (random or all)
+                                if ($isRandom && $randomUnits > 0 && $randomUnits < $pairingSchemes->count()) {
+                                    $selectedSchemes = Arr::random($pairingSchemes->all(), $randomUnits);
+                                } else {
+                                    $selectedSchemes = $pairingSchemes;
+                                }
+
+                                $allSubSectionQuestions = collect();
+
+                                foreach ($selectedSchemes as $scheme) {
+                                    $noOfSelectedQuestion = $scheme['no_of_questions'];
+                                    $topicIds = BookUnitTopic::where('unit_id', $scheme['unit_id'])->pluck('id');
+
+                                    $query = ExamQuestion::whereIn('topic_id', $topicIds)
+                                        ->where('question_type', $questionType)
+                                        ->with($relationToLoad)
+                                        ->inRandomOrder()
+                                        ->limit($noOfSelectedQuestion)
+                                        ->get();
+                                        
+                                       
+
+                                    $allSubSectionQuestions = $allSubSectionQuestions->merge($query);
+                                    //Log::info('Checking statement flag', ['value' => $question->is_get_statement, 'id' => $question->id]);
+                                    
+
+                                    if($question->is_get_statement == 1 && $query->isNotEmpty()){
+                                        
+                                        $statements = $query->pluck('question')->filter()->toArray();
+                                        if($question->question_lang == 1){
+                                            $question->question_statement = implode('&nbsp;&nbsp;&nbsp; یا<br> ', $statements);
+
+                                        }
+                                        else
+                                            $question->question_statement = implode('&nbsp;&nbsp;&nbsp; or <br>', $statements);
+                                        
+                                        
+                                    }
+                                }
+
+                                // Attach generated questions to subSection dynamically
+                                $subSection->allSubSectionQuestions = $allSubSectionQuestions;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => 1,
+            'data' => $modelPapers,
+           
+        ]);
+
+    } catch (\Illuminate\Database\QueryException $e) {
+        Log::error('Database error in getFullPaperStructure', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'Database error: ' . $e->getMessage(),
+        ], 500);
+
+    } catch (\Exception $e) {
+        Log::error('General exception in getFullPaperStructure', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'Unexpected error: ' . $e->getMessage(),
+        ], 500);
+    }
 }
 }
