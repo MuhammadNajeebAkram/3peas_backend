@@ -12,6 +12,7 @@ class PaperQuestionSection extends Model
          'question_id',
         'section_name',
         'no_of_sub_sections',
+        'is_random_question_type',
         'activate',
 
     ];

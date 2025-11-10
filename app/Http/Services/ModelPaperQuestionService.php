@@ -55,6 +55,7 @@ class ModelPaperQuestionService {
                     'question_id' => $questionId,
                     'section_name' => $section['sectionName'] ?? null,
                     'no_of_sub_sections' => $section['noOfSubSections'] ?? null,
+                    'is_random_question_type' => $section['isRandomQuestionType'],
                     'activate' => 1,
                 ];
 
@@ -182,7 +183,8 @@ class ModelPaperQuestionService {
         $results = BookUnit::whereHas('book', function ($query) use ($classId, $subjectId, $board_id) {
             $query->where('class_id', $classId)
                   ->where('subject_id', $subjectId)
-                  ->where('curriculum_board_id', $board_id);
+                  ->where('curriculum_board_id', $board_id)
+                  ->where('activate', 1);
         })->get(); // <-- The syntax error was here (missing closing parenthesis for subject_id where clause)
 
         // 3. Success Response
@@ -360,13 +362,20 @@ public function getFullPaperStructure(Request $request, $subject_id)
 
         // --- Get Model Paper ---
         $modelPapers = ModelPaper::where('subject_id', $subject_id)
-            ->where('class_id', $class_id)
-            ->with([
-                'paperParts.partSections.questions.sections.subSections.pairingSchemes',
-                'paperClass',
-                'paperSubject'
-            ])
-            ->get();
+    ->where('class_id', $class_id)
+    ->with([
+        'paperParts.partSections' => function ($query) {
+            $query->with([
+                'questions' => function ($q) {
+                    $q->orderBy('sequence', 'asc');
+                },
+                'questions.sections.subSections.pairingSchemes',
+            ]);
+        },
+        'paperClass',
+        'paperSubject'
+    ])
+    ->get();
 
         if ($modelPapers->isEmpty()) {
             return response()->json([
@@ -375,7 +384,7 @@ public function getFullPaperStructure(Request $request, $subject_id)
             ], 404);
         }
         
-
+$randomQTypes = [];
         // --- Build complete hierarchy including random questions ---
         foreach ($modelPapers as $paper) {
             foreach ($paper->paperParts as $part) {
@@ -383,15 +392,32 @@ public function getFullPaperStructure(Request $request, $subject_id)
                     foreach ($section->questions as $question) {
                        
                        // Log::info('Checking statement flag', ['value' => $question->is_get_statement]);
+                        $allStatements = [];
+                         
 
                         
                         foreach ($question->sections as $subSectionGroup) {
+                             $randomQuestionType = $subSectionGroup->is_random_question_type;
+                            if($randomQuestionType){
+                                 $randomQTypes = PaperQuestionSectionSubSection::where('section_id', $subSectionGroup->id)
+                                ->pluck('question_type_id')
+                                ->unique()
+                                ->toArray();
+
+                                shuffle($randomQTypes);
+                            }
+                            $i = 0;
+                           
+                            
 
                             foreach ($subSectionGroup->subSections as $subSection) {
                                 $pairingSchemes = $subSection['pairingSchemes'] ?? collect();
                                 $randomUnits = (int) $subSection['no_of_random_units'];
                                 $isRandom = (bool) ($subSection['is_random_units'] ?? false);
-                                $questionType = $subSection['question_type_id'];
+                                $questionType = $randomQuestionType
+    ? ($randomQTypes[$i % count($randomQTypes)] ?? $subSection['question_type_id'])
+    : $subSection['question_type_id'];
+                                $i++;
                                 $relationToLoad = $questionType == 1 ? 'answerOptions' : 'answers';
 
                                 // Select pairing schemes (random or all)
@@ -420,19 +446,20 @@ public function getFullPaperStructure(Request $request, $subject_id)
                                     //Log::info('Checking statement flag', ['value' => $question->is_get_statement, 'id' => $question->id]);
                                     
 
-                                    if($question->is_get_statement == 1 && $query->isNotEmpty()){
-                                        
-                                        $statements = $query->pluck('question')->filter()->toArray();
-                                        if($question->question_lang == 1){
-                                            $question->question_statement = implode('&nbsp;&nbsp;&nbsp; یا<br> ', $statements);
-
-                                        }
-                                        else
-                                            $question->question_statement = implode('&nbsp;&nbsp;&nbsp; or <br>', $statements);
-                                        
-                                        
-                                    }
+                                    if ($question->is_get_statement == 1 && $query->isNotEmpty()) {
+        $statements = $query->pluck('question')->filter()->toArray();
+        $allStatements = array_merge($allStatements, $statements);
+    }
                                 }
+                                if ($question->is_get_statement == 1 && !empty($allStatements)) {
+    if ($question->urdu_lang == 1) {
+        // Urdu version
+        $question->question_statement = implode(' یا<br>', $allStatements);
+    } else {
+        // English version
+        $question->question_statement = implode(' or<br>', $allStatements);
+    }
+}
 
                                 // Attach generated questions to subSection dynamically
                                 $subSection->allSubSectionQuestions = $allSubSectionQuestions;
