@@ -14,6 +14,7 @@ class QuestionTypesController extends Controller
             ->select([
                 'id',
                 'type_name',
+                'is_mcq',
                 'activate',
             ])
             ->get();
