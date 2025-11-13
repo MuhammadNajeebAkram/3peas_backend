@@ -26,12 +26,14 @@ use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\InstituteController;
 use App\Http\Controllers\ModelPapers\ModelPaperController;
+use App\Http\Controllers\ModelPapers\ModelPaperQuestionController;
 use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\StudySessionController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
+
 
 
 
@@ -209,6 +211,10 @@ Route::post('get_model_paper_names', [ModelPaperController::class, 'getPaperName
 Route::post('save_model_paper_question', [ModelPaperController::class, 'saveModelPaperQuestion']);
 Route::get('get_model_paper_units/{id}', [ModelPaperController::class, 'getPaperUnits']);
 Route::post('save_model_paper_question_scheme', [ModelPaperController::class, 'saveQuestionScheme']);
+Route::get('get_questions_for_update/{id}', [ModelPaperController::class, 'getQuestionsForUpdate']);
+
+Route::post('activate_model_paper_question', [ModelPaperQuestionController::class, 'activateModelPaperQuestion']);
+Route::post('update_model_paper_question', [ModelPaperQuestionController::class, 'updateModelPaperQuestion']);
 
     
 });

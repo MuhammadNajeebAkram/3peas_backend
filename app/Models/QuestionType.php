@@ -8,4 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 class QuestionType extends Model
 {
     use HasFactory;
+    protected $table = 'question_type_tbl';
+
 }

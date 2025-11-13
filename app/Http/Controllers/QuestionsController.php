@@ -493,6 +493,7 @@ class QuestionsController extends Controller
                 'cognitive_domain' => $request->cognitive_domain,
                 'topic_content' => $request -> topic_content,
                 'activate' => 1,
+                'is_mcq' => $request -> is_mcq,
                 'created_at' => now(),
                 'updated_at' => now(), 
 
@@ -577,6 +578,7 @@ if($request->board_id){
                     'question_um_lang' => $request->question_um_lang,
                     'cognitive_domain' => $request->cognitive_domain,
                     'topic_content' => $request -> topic_content,
+                    'is_mcq' => $request -> is_mcq,
                     'updated_at' => now(),
                 ]);
 

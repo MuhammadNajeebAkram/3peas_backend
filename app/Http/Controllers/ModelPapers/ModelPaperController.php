@@ -191,4 +191,23 @@ class ModelPaperController extends Controller
             ], 500);
         }
     }
+
+    public function getQuestionsForUpdate(Request $request, $id){
+
+        $questions = $this->questionService->getQuestionsForUpdate($id);
+        $questionsData = $questions->getData();
+
+        if($questionsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $questionsData->data,
+            ]);
+        }
+
+        return response()->json([
+            'success' => 0,
+            'message' => $questionsData->message,
+        ]);
+    }
+    
 }

@@ -77,7 +77,8 @@ class QuestionTypesController extends Controller
 
             $units = DB::table('question_type_tbl')
             ->insert([
-                'type_name' => $request -> type_name,                            
+                'type_name' => $request -> type_name, 
+                'is_mcq' => $request->isMCQ,                           
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -115,7 +116,8 @@ class QuestionTypesController extends Controller
 
             $qtype = DB::table('question_type_tbl')
          ->where('id', '=', $request -> id)
-        ->update(['type_name' => $request -> type_name,                               
+        ->update(['type_name' => $request -> type_name,  
+        'is_mcq' => $request->isMCQ,                               
                   'updated_at' => now()]);
 
                   if ($qtype) {

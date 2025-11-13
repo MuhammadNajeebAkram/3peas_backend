@@ -10,6 +10,7 @@ use App\Models\QuestionPairingScheme;
 use App\Http\Services\WebUserService;
 use App\Models\BookUnitTopic;
 use App\Models\ExamQuestion;
+use App\Models\QuestionType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log; // Added for debugging
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,107 @@ class ModelPaperQuestionService {
         ], 500);
     }
     }
+
+    public function updateModelPaperQuestion(Request $request)
+{
+    DB::beginTransaction();
+
+    try {
+        $questionId = $request->id;
+
+        $question = PaperPartSectionQuestion::find($questionId);
+        if (!$question) {
+            throw new \Exception('Question not found.');
+        }
+
+        $questionData = [
+            'question_statement' => $request->questionStatement,
+            'question_no' => $request->questionNo,
+            'marks' => $request->marks,
+            'section_id' => $request->partSection,
+            'urdu_lang' => $request->urduLanguage,
+            'sequence' => $request->sequence,
+            'is_get_statement' => $request->getStatement,
+        ];
+
+        $question->update($questionData);
+
+        $sectionsData = $request->sections ?? [];
+
+        foreach ($sectionsData as $section) {
+            $sectionId = $section['id'] ?? 0;
+
+            $sectionData = [
+                'question_id' => $questionId,
+                'section_name' => $section['sectionName'] ?? null,
+                'no_of_sub_sections' => $section['noOfSubSections'] ?? null,
+                'is_random_question_type' => $section['isRandomQuestionType'] ?? 0,
+                'activate' => 1,
+            ];
+
+            if ($sectionId == 0) {
+                $savedSection = PaperQuestionSection::create($sectionData);
+                $sectionId = $savedSection->id;
+            } else {
+                $updatedSection = PaperQuestionSection::find($sectionId);
+                if (!$updatedSection) {
+                    throw new \Exception("Section with ID {$sectionId} not found.");
+                }
+                $updatedSection->update($sectionData);
+            }
+
+            // --- Sub-sections ---
+            foreach ($section['subSections'] ?? [] as $subSection) {
+                $subSectionId = $subSection['id'] ?? 0;
+
+                $subSectionData = [
+                    'section_id' => $sectionId,
+                    'sub_section_name' => $subSection['subSectionName'] ?? null,
+                    'total_questions' => $subSection['noOfQuestions'] ?? null,
+                    'question_type_id' => $subSection['selectedQuestionType'] ?? null,
+                    'is_random_units' => $subSection['isRandomUnits'] ?? 1,
+                    'no_of_random_units' => $subSection['noOfRandomUnits'] ?? 1,
+                    'activate' => 1,
+                    'show_name' => $subSection['showName'] ?? 0,
+                ];
+
+                if ($subSectionId == 0) {
+                    PaperQuestionSectionSubSection::create($subSectionData);
+                } else {
+                    $existingSub = PaperQuestionSectionSubSection::find($subSectionId);
+                    if (!$existingSub) {
+                        throw new \Exception("Sub-section with ID {$subSectionId} not found.");
+                    }
+                    $existingSub->update($subSectionData);
+                }
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Question updated successfully.',
+        ], 200);
+
+    } catch (\Illuminate\Database\QueryException $e) {
+        DB::rollBack();
+        Log::error('Database error in updateModelPaperQuestion', ['error' => $e->getMessage()]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'A database error occurred while saving: ' . $e->getMessage()
+        ], 500);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('General exception in updateModelPaperQuestion', ['error' => $e->getMessage()]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'An unexpected error occurred: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 
     public function saveQuestionPairingScheme(Request $request){
         DB::beginTransaction();
@@ -217,7 +319,7 @@ public function getPaperQuestions(Request $request, $subject_id){
 
         // --- Debug Check 1: Class ID ---
         if (!$class_id) {
-            Log::warning('ModelPaperService: Class ID not found for user in getModelPaper.');
+            Log::warning('ModelPaperQuestionService: Class ID not found for user in getModelPaper.');
             return response()->json([
                 'success' => 0,
                 'message' => 'User class information could not be retrieved.',
@@ -367,6 +469,7 @@ public function getFullPaperStructure(Request $request, $subject_id)
         'paperParts.partSections' => function ($query) {
             $query->with([
                 'questions' => function ($q) {
+                    $q->where('activate', 1);
                     $q->orderBy('sequence', 'asc');
                 },
                 'questions.sections.subSections.pairingSchemes',
@@ -418,7 +521,8 @@ $randomQTypes = [];
     ? ($randomQTypes[$i % count($randomQTypes)] ?? $subSection['question_type_id'])
     : $subSection['question_type_id'];
                                 $i++;
-                                $relationToLoad = $questionType == 1 ? 'answerOptions' : 'answers';
+                                $qTypeIsMCQ = QuestionType::where('id', $questionType)->first();
+                                $relationToLoad = $qTypeIsMCQ->is_mcq == 1 ? 'answerOptions' : 'answers';
 
                                 // Select pairing schemes (random or all)
                                 if ($isRandom && $randomUnits > 0 && $randomUnits < $pairingSchemes->count()) {
@@ -497,4 +601,84 @@ $randomQTypes = [];
         ], 500);
     }
 }
+
+public function getQuestionsForUpdate($partSectionId){
+    try{
+        $questions = PaperPartSectionQuestion::where('section_id', '=', $partSectionId)
+        ->with('sections.subSections')
+        ->get();
+
+        return response()->json([
+            'success' => 1,
+            'data' => $questions,
+        ]);
+
+    }catch (\Illuminate\Database\QueryException $e) {
+        Log::error('Database error in getQuestionsForUpdate', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'Database error: ' . $e->getMessage(),
+        ], 500);
+
+    } catch (\Exception $e) {
+        Log::error('General exception in getQuestionsForUpdate', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'success' => 0,
+            'message' => 'Unexpected error: ' . $e->getMessage(),
+        ], 500);
+    }
+
+}
+
+public function activateModelPaperQuestion($id, $status)
+{
+    try {
+        $question = PaperPartSectionQuestion::find($id);
+
+        if (!$question) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Question not found.',
+            ], 404);
+        }
+
+        // ✅ Corrected syntax: key => value
+        $question->update(['activate' => $status]);
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Question activation status updated successfully.',
+            'data' => $question,
+        ], 200);
+
+    } catch (\Illuminate\Database\QueryException $e) {
+        Log::error('Database error in activateModelPaperQuestion', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'success' => 0,
+            'message' => 'Database error: ' . $e->getMessage(),
+        ], 500);
+
+    } catch (\Exception $e) {
+        Log::error('General exception in activateModelPaperQuestion', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'success' => 0,
+            'message' => 'Unexpected error: ' . $e->getMessage(),
+        ], 500);
+    }
+}
+
 }

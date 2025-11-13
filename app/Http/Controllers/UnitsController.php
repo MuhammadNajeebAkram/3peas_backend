@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BookUnit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -176,14 +177,23 @@ class UnitsController extends Controller
             ->select('class_id', 'curriculum_board_id')
             ->first();
 
-            $units = DB::table('book_unit_tbl as but')
+           /* $units = DB::table('book_unit_tbl as but')
             ->join('book_tbl as bt', 'but.book_id', '=', 'bt.id')
             ->where('bt.class_id', $info->class_id)
             ->where('bt.subject_id', $request->subject_id)
             ->where('bt.curriculum_board_id', $info->curriculum_board_id)
             ->where('bt.activate', 1)
             ->select('but.id', 'but.unit_name')
-            ->get();
+            ->get();*/
+
+            $units = BookUnit::whereHas('book', function ($query) use($info, $request){
+                $query->where('class_id', $info->class_id)
+                ->where('curriculum_board_id', $info->curriculum_board_id)
+                ->where('subject_id', $request->subject_id)
+              ->where('activate', 1);
+            })
+            ->orderBy('book_id', 'asc')
+            ->select('id', 'unit_name')->get();
 
             return response()->json([
                 'success' => 1,
