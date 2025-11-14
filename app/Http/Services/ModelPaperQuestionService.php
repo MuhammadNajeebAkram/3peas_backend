@@ -79,6 +79,7 @@ class ModelPaperQuestionService {
                         'no_of_random_units' => $subSection['noOfRandomUnits'] ?? 1,
                         'activate' => 1,
                         'show_name' => $subSection['showName'] ?? 0,
+                        'show_question_statement' => $subSection['showQuestionStatement'] ?? 1,
 
                     ];
                     PaperQuestionSectionSubSection::create($subSectionData);
