@@ -38,6 +38,7 @@ class ModelPaperQuestionService {
                 'sequence' => $request->sequence,
                 'activate' => 1,
                 'is_get_statement' => $request->getStatement,
+                'has_parts' => $request -> hasParts ?? 0,
 
             ];
 
@@ -497,7 +498,8 @@ $randomQTypes = [];
                        
                        // Log::info('Checking statement flag', ['value' => $question->is_get_statement]);
                         $allStatements = [];
-                         
+                         $hasParts = $question->has_parts;
+                        
 
                         
                         foreach ($question->sections as $subSectionGroup) {
@@ -540,6 +542,7 @@ $randomQTypes = [];
 
                                     $query = ExamQuestion::whereIn('topic_id', $topicIds)
                                         ->where('question_type', $questionType)
+                                        ->where('is_alp_question', 1)
                                         ->with($relationToLoad)
                                         ->inRandomOrder()
                                         ->limit($noOfSelectedQuestion)
@@ -556,7 +559,7 @@ $randomQTypes = [];
         $allStatements = array_merge($allStatements, $statements);
     }
                                 }
-                                if ($question->is_get_statement == 1 && !empty($allStatements)) {
+                                if ($question->is_get_statement == 1 && !$hasParts && !empty($allStatements)) {
     if ($question->urdu_lang == 1) {
         // Urdu version
         $question->question_statement = implode(' یا<br>', $allStatements);

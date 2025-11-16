@@ -16,7 +16,8 @@ class PaperPartSectionQuestion extends Model
         'urdu_lang',
         'sequence',
         'activate',
-        'is_get_statement',        
+        'is_get_statement',
+        'has_parts',        
 
     ] ;
 

@@ -494,6 +494,7 @@ class QuestionsController extends Controller
                 'topic_content' => $request -> topic_content,
                 'activate' => 1,
                 'is_mcq' => $request -> is_mcq,
+                'is_alp_question' => $request->is_alp_question,
                 'created_at' => now(),
                 'updated_at' => now(), 
 
@@ -580,6 +581,7 @@ if($request->board_id){
                     'topic_content' => $request -> topic_content,
                     'is_mcq' => $request -> is_mcq,
                     'updated_at' => now(),
+                    'is_alp_question' => $request->is_alp_question,
                 ]);
 
                
