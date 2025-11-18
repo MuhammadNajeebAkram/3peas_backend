@@ -192,7 +192,9 @@ class UnitsController extends Controller
                 ->where('subject_id', $request->subject_id)
               ->where('activate', 1);
             })
+            ->where('activate', 1)
             ->orderBy('book_id', 'asc')
+            ->orderBy('unit_no')
             ->select('id', 'unit_name')->get();
 
             return response()->json([

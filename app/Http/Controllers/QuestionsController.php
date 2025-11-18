@@ -442,7 +442,7 @@ class QuestionsController extends Controller
 
             $options = [];
 
-            if ($question -> question_type == 1){
+            if ($question -> question_type == 1 || $question -> is_mcq == 1){
 
                 $options = DB::table('exam_question_options_tbl')
                 ->where('question_id', '=', $question -> id)
