@@ -3,11 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\BookUnit;
+use App\Http\Services\BookService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class UnitsController extends Controller
 {
+    private BookService $bookService;
+    public function __construct(BookService $bookService)
+    {
+        $this->bookService = $bookService;
+    }
+   
     //
     public function getAllUnits(Request $request){
         try{
@@ -76,7 +83,28 @@ class UnitsController extends Controller
     }
 
     public function saveUnit(Request $request){
+        $units = $this->bookService->saveUnit($request);
+        $unitsData = $units->getData();
+
+        if($unitsData->success == 1){
+            return response()->json([
+                'success' => 1, // Successfully inserted
+                'message' => 'Unit saved successfully.'
+            ]);
+        }
+        else {
+            return response()->json([
+                'success' => $unitsData->success, // Duplicate entry or error
+                'message' => $unitsData->message
+            ]);
+        }
+       
+
+
+       /*
         try{
+
+            
 
             
         $checkDuplicate = DB::table('book_unit_tbl')
@@ -115,11 +143,26 @@ class UnitsController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-        }
+        }*/
     }
 
     public function editUnit(Request $request){
-        try{
+        $units = $this->bookService->updateUnit($request, $request->id);
+        $unitsData = $units->getData();
+
+        if($unitsData->success == 1){
+            return response()->json([
+                'success' => 1, // Successfully updated
+                'message' => 'Unit updated successfully.'
+            ]);
+        }
+        else {
+            return response()->json([
+                'success' => $unitsData->success, // Duplicate entry or error
+                'message' => $unitsData->message
+            ]);
+        }
+       /* try{
 
             if($request -> unit_name != $request -> oldUnitName){
                 $checkDuplicate = DB::table('book_unit_tbl')
@@ -156,7 +199,7 @@ class UnitsController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-        }
+        }*/
     }
     public function activateUnit(Request $request){
         $editClass = DB::table('book_unit_tbl')
@@ -171,7 +214,24 @@ class UnitsController extends Controller
         }
     }
     public function getUnitsByUserSelectedBook(Request $request){
-        try{
+        $units = $this->bookService->getUnitsOfUserSelectedBook($request);
+        $unitsData = $units->getData();
+
+        if($unitsData->success == 1){
+             return response()->json([
+            'success' => $unitsData->success,
+            'units' => $unitsData->units,
+        ]);
+           
+        }
+        else{
+             return response()->json([
+                'success' => 0,
+                'message' => $unitsData->message,
+            ]);
+        }
+       
+       /* try{
             $info = DB::table('user_profile_tbl')
             ->where('user_id', $request->user()->id)
             ->select('class_id', 'curriculum_board_id')
@@ -184,7 +244,7 @@ class UnitsController extends Controller
             ->where('bt.curriculum_board_id', $info->curriculum_board_id)
             ->where('bt.activate', 1)
             ->select('but.id', 'but.unit_name')
-            ->get();*/
+            ->get();
 
             $units = BookUnit::whereHas('book', function ($query) use($info, $request){
                 $query->where('class_id', $info->class_id)
@@ -209,6 +269,6 @@ class UnitsController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-        }
+        }*/
     }
 }

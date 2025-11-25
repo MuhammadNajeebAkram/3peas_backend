@@ -826,12 +826,15 @@ if ($existingRecord) {
     }
 
     public function getSLOQuestionsByTopic(Request $request){
+        $is_alp = $request->input('is_alp') ?? 2;
+        
         try{
-            $questions = DB::select('call GetSLOQuestions(?, ?, ?, ?)', [
+            $questions = DB::select('call GetSLOQuestions(?, ?, ?, ?, ?)', [
                 $request -> topic_id,
                 $request -> content_id,
                 $request -> cognitive_domain,
-                $request -> is_mcq
+                $request -> is_mcq,
+                $is_alp
             ]);
 
             

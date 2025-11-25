@@ -18,7 +18,7 @@ class WebUserService{
         $class = DB::table('user_profile_tbl as upt')
             ->join('class_tbl as ct', 'upt.class_id', '=', 'ct.id')
             ->where('upt.user_id', $user->id)
-            ->select('upt.class_id', 'ct.class_name')
+            ->select('upt.class_id', 'ct.class_name', 'upt.curriculum_board_id')
             ->first();
 
         if (!$class) {

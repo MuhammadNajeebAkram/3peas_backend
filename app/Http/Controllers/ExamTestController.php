@@ -64,10 +64,11 @@ class ExamTestController extends Controller
 
             $unitIds = implode(',', $request->unit_ids);
             $limit = $request->limit;
+            $is_alp = $request->input('is_alp') ?? 2;
            
 
             // Call the stored procedure
-            $questions = DB::select("CALL GetRandomTestMCQsExamQuestionsOfUnits(?, ?)", [$unitIds, $limit]);
+            $questions = DB::select("CALL GetRandomTestMCQsExamQuestionsOfUnits(?, ?, ?)", [$unitIds, $limit, $is_alp]);
 
            
                 

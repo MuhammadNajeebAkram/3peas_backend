@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Services\BookService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TopicsController extends Controller
 {
     //
+    private BookService $bookService;
+    public function __construct(BookService $bookService)
+    {
+        $this->bookService = $bookService;
+    }   
+    
     public function getAllTopics(Request $request){
         try{
             $topics = DB::table('book_unit_topic_view')->get();
@@ -27,6 +34,27 @@ class TopicsController extends Controller
     }
 
     public function getTopicsByUnit(Request $request){
+        $unit_id = $request -> unit_id;
+
+         $is_alp = $request->input('is_alp') ?? 2;
+        $activate = $request->input('activate') ?? 2;
+
+        $topics = $this->bookService->getTopicsOfUnit($unit_id, $is_alp, $activate);
+        $topicsData = $topics->getData();
+       
+        if($topicsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'topics' => $topicsData->topics
+            ]);
+        } else {
+            return response()->json([
+                'success' => 0,
+                'message' => $topicsData->message
+            ], 500);
+        }
+       
+        /*
         try{
             $topics = DB::table('book_unit_topic_tbl')
             ->where('activate', '=', 1)
@@ -48,11 +76,26 @@ class TopicsController extends Controller
                 'success' => 0,
                 'topics' => 'Failed to retrieve topics'], 500);
 
-        }
+        }*/
     }
 
     public function saveTopic(Request $request){
-        try{
+
+        $topic = $this->bookService->saveTopic($request);
+        $topic = $topic->getData();
+        if($topic->success == 1){
+            return response()->json([
+                'success' => 1,
+                'message' => $topic->message
+            ]);
+        } else {
+            return response()->json([
+                'success' => 0,
+                'error' => $topic->error
+            ], 500);
+        }
+
+       /* try{
 
             // Check for duplicate subject name
         $checkDuplicate = DB::table('book_unit_topic_tbl')
@@ -91,13 +134,30 @@ class TopicsController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-        }
+        }*/
     }
 
     
 
     public function editTopic(Request $request){
-        try{
+        $topics = $this->bookService->updateTopic($request, $request->id);
+        $topicsData = $topics->getData();
+
+        if ($topicsData->success == 1) {
+            return response()->json([
+                'success' => 1,
+                'message' => $topicsData->message
+            ]);
+        }
+        else{
+            return response()->json([
+                'success' => $topicsData->success, // Duplicate entry or error
+                'message' => $topicsData->message
+            ]);
+
+        }
+
+       /* try{
 
             if($request -> topic_name != $request -> oldTopicName){
                 $checkDuplicate = DB::table('book_unit_topic_tbl')
@@ -134,7 +194,7 @@ class TopicsController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-        }
+        }*/
     }
     public function activateTopic(Request $request){
         $editClass = DB::table('book_unit_topic_tbl')
@@ -150,6 +210,20 @@ class TopicsController extends Controller
     }
 //-------------------------- New Topic ------------------
     public function saveNewTopic(Request $request){
+        $topic = $this->bookService->saveTopic($request);
+        $topic = $topic->getData();
+        if($topic->success == 1){
+            return response()->json([
+                'success' => 1,
+                'message' => $topic->message
+            ]);
+        } else {
+            return response()->json([
+                'success' => 0,
+                'message' => $topic->message
+            ], 500);
+        }
+        /*
         try{
             DB::beginTransaction();
 
@@ -189,10 +263,24 @@ class TopicsController extends Controller
                 'success' => 0,  // Error occurred
                 'error' => $e->getMessage(),
             ]);
-        }
+        }*/
     }
 
     public function updateNewTopic(Request $request){
+        $topic = $this->bookService->updateTopic($request, $request->topic_id);
+        $topic = $topic->getData();
+        if($topic->success == 1){
+            return response()->json([
+                'success' => 1,
+                'message' => $topic->message
+            ]);
+        } else {
+            return response()->json([
+                'success' => 0,
+                'message' => $topic->message
+            ], 500);
+        }
+        /*
         try{
             DB::beginTransaction();
 
@@ -235,10 +323,29 @@ class TopicsController extends Controller
                 'success' => 0,  // Error occurred
                 'error' => $e->getMessage(),
             ]);
-        }
+        }*/
     }
 
-    public function getNewTopicsByUnit($unit_id){
+    public function getNewTopicsByUnit(Request $request, $unit_id){
+         
+        $is_alp = $request->input('is_alp') ?? 2;
+        $activate = $request->input('activate') ?? 2;
+
+        $topics = $this->bookService->getTopicsOfUnit($unit_id, $is_alp, $activate);
+        $topicsData = $topics->getData();
+       
+        if($topicsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'topics' => $topicsData->topics
+            ]);
+        } else {
+            return response()->json([
+                'success' => 0,
+                'message' => $topicsData->message
+            ], 500);
+        }
+        /*
         try{
             $topics = DB::table('book_unit_topic_tbl')
             ->where('unit_id', $unit_id)
@@ -257,7 +364,7 @@ class TopicsController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
 
-        }
+        }*/
     }
 
     
