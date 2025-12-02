@@ -2,11 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Services\PastPaperService;
+use App\Models\PastPaper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PapersController extends Controller
 {
+    protected PastPaperService $pastPaperService;
+    public function __construct()
+    {
+        $this->pastPaperService = new PastPaperService();
+    }
     //
     public function getPapersByYears_Boards_Class_Subjects($id, $subject_id, $board_id, $year){
         try {
@@ -85,5 +93,43 @@ class PapersController extends Controller
         } else {
             return response()->json(['success' => 0], 400);
         }
+    }
+
+    public function getPastPaperBySlug(Request $request){
+        $slug = $request->input('slug');
+        $paper = $this->pastPaperService->getPastPaperBySlug($slug);
+        $paperData = $paper->getData();
+
+        if($paperData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $paperData->data
+            ]);
+        }
+        else{
+             return response()->json([
+                'success' => 0,
+                'message' => $paperData->message
+            ]);
+        }
+    }
+
+    public function getAllSlugs(){
+        $slugs = $this->pastPaperService->getAllSlugs();
+        $slugsData = $slugs->getData();
+
+        if($slugsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $slugsData->data,
+            ]);
+        }
+        else{
+             return response()->json([
+                'success' => 0,
+                'message' => $slugsData->message,
+            ]);
+        }
+        
     }
 }

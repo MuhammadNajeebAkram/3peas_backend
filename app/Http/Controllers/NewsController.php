@@ -4,9 +4,15 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class NewsController extends Controller
 {
+    protected $newsService;
+    public function __construct()
+    {
+        $this->newsService = new \App\Http\Services\NewsService();
+    }
     //
     public function getAllNews(Request $request){
         try{
@@ -81,7 +87,7 @@ class NewsController extends Controller
 
             return response()->json([
                 'success' => 0,
-                'error' => $e.getMessage(),               
+                'error' => $e->getMessage(),               
                 
                 
             ]);
@@ -346,5 +352,66 @@ class NewsController extends Controller
         } else {
             return response()->json(['success' => 0], 400);
         }
+    }
+
+    //---------------- New News Module -----------------//
+    public function getPaginatedNewsTitles(Request $request){
+        try{
+            $perPage = $request->input('per_page', 3); // Default to 3 if not provided
+            
+            $news = $this->newsService->getLatestNewsPaginatedTitles($perPage);
+            
+
+            return response()->json([
+                'success' => 1,
+                'data' => $news
+            ]);
+
+        }
+        catch(\Exception $e){
+            Log::error('Exception in NewsController@getPaginatedNewsTitles: ', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => 0,
+                'news' => 'Failed to retrieve news'], 500);
+
+        }
+    }   
+    public function getNewsDetailBySlug($slug){
+        try{
+            $newsItem = $this->newsService->getNewsBySlug($slug);
+            
+
+            return response()->json([
+                'success' => 1,
+                'data' => $newsItem
+            ]);
+
+        }
+        catch(\Exception $e){
+            Log::error('Exception in NewsController@getNewsDetailsBySlug: ', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => 0,
+                'news' => 'Failed to retrieve news'], 500);
+
+        }
+    }
+
+    public function getAllSlugs(){
+        $slugs = $this->newsService->getAllSlugs();
+        $slugsData = $slugs->getData();
+
+        if($slugsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $slugsData->data,
+            ]);
+        }
+        else{
+             return response()->json([
+                'success' => 0,
+                'message' => $slugsData->message,
+            ]);
+        }
+        
     }
 }

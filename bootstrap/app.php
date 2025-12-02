@@ -1,12 +1,13 @@
 <?php
 
+use App\Http\Middleware\CheckFrontendApiKey;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\HandleCors;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use Illuminate\Support\Facades\Route;
-use App\Http\Middleware\EnsureEmailsVerified;
+use App\Http\Middleware\EnsureEmaillsVerified;
 use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\VerifyUserSession;
 
@@ -29,8 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
         //$middleware->append(RefreshAuthTokenMiddleware::class);
         $middleware->alias(['token.refresh' => RefreshAuthTokenMiddleware::class,            
     ]);
-        $middleware->alias(['verified' => EnsureEmailsVerified::class,]);
+        $middleware->alias(['verified' => EnsureEmaillsVerified::class]);
         $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
+        $middleware->alias(['verifyFrontendApiKey' => CheckFrontendApiKey::class,]);
         
     })
     ->withExceptions(function (Exceptions $exceptions) {

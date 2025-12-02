@@ -2,11 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Services\PastPaperService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BoardsController extends Controller
 {
+    protected   PastPaperService $pastPaperService;
+    public function __construct()
+    {
+        $this->pastPaperService = new PastPaperService();
+        
+    }
     //
     public function getBoardsByClass_Subjects($id, $subject_id){
         try {
@@ -150,6 +157,45 @@ class BoardsController extends Controller
             return response()->json(['success' => 1], 200);
         } else {
             return response()->json(['success' => 0], 400);
+        }
+    }
+
+    public function getBoardData(){
+
+        $boards = $this->pastPaperService->getBoardData();
+        $boardsData = $boards->getData();
+
+        if($boardsData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $boardsData->data
+            ]);
+        }
+        else{
+           return response()->json([
+            'success' => $boardsData->success,
+            'message' => $boardsData->message,
+           ]);
+        }
+
+    }
+
+    public function searchResult(Request $request){
+        $result = $this->pastPaperService->searchResult($request);
+        $resultData = $result->getData();
+
+        if($resultData->success == 1){
+            return response()->json([
+                'success' => 1,
+                'data' => $resultData->data,
+            ]);
+        }
+        else{
+             return response()->json([
+                'success' => $resultData->success,
+                'message' => $resultData->message,
+            ]);
+
         }
     }
 }
