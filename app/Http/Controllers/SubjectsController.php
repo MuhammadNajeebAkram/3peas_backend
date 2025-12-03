@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class SubjectsController extends Controller
 {
@@ -24,6 +25,10 @@ class SubjectsController extends Controller
 
             
         } catch (\Exception $e) {
+            Log::error('Database error in subjects by user', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
             // Handle the exception, e.g., log it or return an error response
             return response()->json([
                 'success' => 0,

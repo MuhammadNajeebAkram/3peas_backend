@@ -32,7 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ]);
         $middleware->alias(['verified' => EnsureEmaillsVerified::class]);
         $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
-        $middleware->alias(['verifyFrontendApiKey' => CheckFrontendApiKey::class,]);
+        //$middleware->alias(['verifyFrontendApiKey' => CheckFrontendApiKey::class,]);
         
     })
     ->withExceptions(function (Exceptions $exceptions) {

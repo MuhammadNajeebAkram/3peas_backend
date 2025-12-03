@@ -235,6 +235,17 @@ Route::middleware(['verifyFrontendApiKey'])->group(function () {
 
     //
 });
+
+Route::get('/get_all_active_news_title', [NewsController::class, 'getPaginatedNewsTitles']);
+    Route::get('/get_detail_news_by_slug/{slug}', [NewsController::class, 'getNewsDetailBySlug']);
+    Route::get('/get_board_data', [BoardsController::class, 'getBoardData']);
+    Route::get('/get_past_papers_search_result', [BoardsController::class, 'searchResult']);
+    Route::get('/get_past_paper_by_slug', [PapersController::class, 'getPastPaperBySlug']);
+
+
+    Route::get('/get_all_unique_past_papers_slugs', [PapersController::class, 'getAllSlugs']);
+    Route::get('/get_all_unique_news_slugs', [NewsController::class, 'getAllSlugs']);
+    
  
  //Route::get('/get_all_active_news_title', [NewsController::class, 'getPaginatedNewsTitles']);
 
