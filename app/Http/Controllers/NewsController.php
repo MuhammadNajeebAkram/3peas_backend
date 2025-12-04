@@ -360,12 +360,24 @@ class NewsController extends Controller
             $perPage = $request->input('per_page', 3); // Default to 3 if not provided
             
             $news = $this->newsService->getLatestNewsPaginatedTitles($perPage);
+            $newsData = $news->getData();
+
+            if($newsData->success == 1){
+                return response()->json([
+                'success' => 1,
+                'news' => $newsData->data
+            ]);
+            }
+            else
+            {
+                 return response()->json([
+                'success' => 0,
+                'message' => $newsData->message,
+            ]);
+            }
             
 
-            return response()->json([
-                'success' => 1,
-                'data' => $news
-            ]);
+           
 
         }
         catch(\Exception $e){

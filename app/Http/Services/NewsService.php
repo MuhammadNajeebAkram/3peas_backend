@@ -11,19 +11,22 @@ class NewsService
         // Initialization code can go here
     }
 
-    public function getLatestNewsPaginatedTitles($perPage = 3)
+    public function getLatestNewsPaginatedTitles($request, $perPage = 3)
     {
         try{
 
         
         $news = News::where('activate', 1)
         ->where('published_at', '<=', now())        
-        ->select('id', 'title', 'slug', 'description', 'published_at', 'has_attachment', 'language')
+        ->select(['id', 'title', 'slug', 'description', 'published_at', 'has_attachment', 'language'])
         ->with('attachments')
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
-        return $news;
+        return response()->json([
+            'success' => 1,
+            'data' => $news,
+        ]);
         }
         catch (\Illuminate\Database\QueryException $e) {
         Log::error('Database error in getLatestNewsPaginatedTitles', [
