@@ -201,6 +201,7 @@ Route::post('create-web-user', [AuthController::class, 'createWebUser']);
 
 Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
 Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
+Route::post('/activate-study-plan', [StudyPlanController::class, 'activateStudyPlan']);
 
 //--------Model Paper -----------
 Route::post('save_model_paper', [ModelPaperController::class, 'saveModelPaper']);

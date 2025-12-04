@@ -28,8 +28,8 @@ class EnsurePaymentVerified
 
         if(!$sessionTbl){
             return response()->json([
-                'paymentVerified' => 0, 
-            ]);
+                'paymentVerified' => 0,                 
+            ], 403);
 
         }
 

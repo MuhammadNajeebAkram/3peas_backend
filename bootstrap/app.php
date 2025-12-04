@@ -7,8 +7,9 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\HandleCors;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use Illuminate\Support\Facades\Route;
-use App\Http\Middleware\EnsureEmaillsVerified;
+use App\Http\Middleware\EnsureEmailsVerified;
 use App\Http\Middleware\EnsurePaymentVerified;
+use App\Http\Middleware\EnsureStudySessionVerified;
 use App\Http\Middleware\VerifyUserSession;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -28,11 +29,12 @@ return Application::configure(basePath: dirname(__DIR__))
         //
         $middleware->append(HandleCors::class);
         //$middleware->append(RefreshAuthTokenMiddleware::class);
-        $middleware->alias(['token.refresh' => RefreshAuthTokenMiddleware::class,            
-    ]);
-     
-        $middleware->alias(['verified' => EnsureEmaillsVerified::class]);
+        $middleware->alias(['token.refresh' => RefreshAuthTokenMiddleware::class,
+    ]);     
+        $middleware->alias(['verified' => EnsureEmailsVerified::class]);
         $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
+        $middleware->alias(['studySessionVerified' => EnsureStudySessionVerified::class]);
+
        
         
     })

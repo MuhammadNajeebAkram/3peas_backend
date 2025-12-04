@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StudyPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -57,6 +58,7 @@ class StudyPlanController extends Controller
                 'curriculum_board_id',
                 DB::raw("CASE WHEN is_full_course = 0 THEN 'No' ELSE 'Yes' END as is_full_course"),
                 'activate',
+                'session_id',
             )
             ->get();
 
@@ -100,7 +102,22 @@ class StudyPlanController extends Controller
 
     public function saveStudyPlan(Request $request){
         try{
-            DB::table('study_plan_tbl')
+
+            $planData = [
+                'name' => $request -> name,
+                'price' => $request -> price,
+                'plan_for' => $request -> plan_for,
+                'is_full_course' => $request ->is_full_course,
+                'class_id' => $request->class_id,
+                'curriculum_board_id' => $request->curriculum_id,
+                'session_id' => $request->session_id,
+                'is_trial' => $request->is_trial,
+                'activate' => 1,
+
+            ];
+            StudyPlan::create($planData);
+
+            /*DB::table('study_plan_tbl')
             ->insert([
                 'name' => $request -> name,
                 'price' => $request -> price,
@@ -112,7 +129,7 @@ class StudyPlanController extends Controller
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ]);*/
 
             return response()->json([
                 'success' => 1,
@@ -129,6 +146,24 @@ class StudyPlanController extends Controller
 
     public function updateStudyPlan(Request $request){
         try{
+            $planId = $request->id;
+
+            $plan = StudyPlan::find($planId);
+            if(!$plan){
+                return response()->json([
+                    'success' => 0
+                ]);
+            }
+
+            $planData = [
+                'name' => $request -> name,
+                'price' => $request -> price,
+                'plan_for' => $request -> plan_for,
+                'is_full_course' => $request ->is_full_course,
+
+            ];
+            $plan->update($planData);
+            /*
             DB::table('study_plan_tbl')
             ->where('id', $request->id)
             ->update([
@@ -137,7 +172,7 @@ class StudyPlanController extends Controller
                 'plan_for' => $request -> plan_for,
                 'is_full_course' => $request ->is_full_course,
                 'updated_at' => now(),
-            ]);
+            ]);*/
 
             return response()->json([
                 'success' => 1,
@@ -150,5 +185,26 @@ class StudyPlanController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    public function activateStudyPlan(Request $request){
+
+        $plan_id = $request->id;
+        $plan_status = $request->status ?? 1;
+        $plan = StudyPlan::find($plan_id);
+
+        if(!$plan){
+             return response()->json([
+            'success' => 0,
+            'message' => 'Plan is not valid'
+        ], 404);
+        }
+        $plan->update(['activate' => $plan_status]);
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Plan activated successfully'
+        ]);
+
     }
 }

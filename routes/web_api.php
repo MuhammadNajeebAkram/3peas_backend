@@ -11,6 +11,7 @@ use App\Http\Controllers\YearsController;
 use App\Http\Controllers\PapersController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Authentication\WebUserAuthController;
 use App\Http\Controllers\BankAccountController;
 use App\Http\Controllers\BooksController;
 use App\Http\Controllers\UnitsController;
@@ -40,6 +41,7 @@ use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ModelPapers\ModelPaperController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Middleware\EnsurePaymentVerified;
 use Illuminate\Auth\Events\PasswordReset;
 
 
@@ -51,6 +53,7 @@ Route::get('/user', function (Request $request) {
 
 
 Route::post('login', [AuthController::class, 'login']);
+Route::post('web-login', [WebUserAuthController::class, 'login']);
 
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
@@ -73,7 +76,9 @@ Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
 
     Route::post('/upload-image-to-s3', [UserPaymentSlipController::class, 'uploadDepositSlipImage'])->middleware('auth:web_api');
 
-Route::middleware(['auth:web_api', 'verified', 'paymentVerified'])->group(function () {
+Route::middleware(['auth:web_api', 'verified', EnsurePaymentVerified::class, 'studySessionVerified'])->group(function () {
+
+    route::post('/check_status', [App\Http\Controllers\Authentication\WebUserAuthController::class, 'getStatus']);
 
     
 
