@@ -30,7 +30,7 @@ class EnsureStudySessionVerified
              return response()->json([
                  'success' => 0,
                  'message' => 'Access denied: No active session assigned.'
-             ], 403); // 403 Forbidden
+             ], 402); // 403 Forbidden
         }
 
         // 2. Check 2: Session Existence
@@ -39,7 +39,7 @@ class EnsureStudySessionVerified
             return response()->json([
                 'success' => 0,
                 'message' => 'Access denied: The assigned session could not be found.'
-            ], 403); // 403 Forbidden
+            ], 402); // 403 Forbidden
         }
 
         // 3. Check 3: Activation Status (0 means inactive/expired by status flag)
@@ -47,7 +47,7 @@ class EnsureStudySessionVerified
             return response()->json([
                 'success' => -1,
                 'message' => 'Access denied: Your study session has been manually revoked.'
-            ], 410); // 410 Gone
+            ], 402); // 410 Gone
         }
 
         // 4. Check 4: Time Window Status

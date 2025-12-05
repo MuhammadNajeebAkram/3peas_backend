@@ -31,7 +31,29 @@ class WebUserProfile extends Model
         'designation',
         'class_id',
         'heard_about_id',
+        'incharge_name',
+        'incharge_phone',
+        'study_plan_id',
+        'study_group_id',
+        'activate',
     ];
+
+    public function user(){
+        return $this->belongsTo(WebUser::class, 'user_id');
+    }
+    public function userClass(){
+        return $this->belongsTo(UserClass::class, 'class_id');
+    }
+    public function userBoard(){
+        return $this->belongsTo(CurriculumBoard::class, 'curriculum_board_id');
+    }
+    public function userInstitute(){
+        return $this->belongsTo(Institute::class, 'institute_id');
+    }
+     public function userCity(){
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
 
     
 }

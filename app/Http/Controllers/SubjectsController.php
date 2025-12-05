@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-
+use App\Http\Services\WebUserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\Log;
 
 class SubjectsController extends Controller
 {
+    protected WebUserService $webUserService;
+    public function __construct()
+    {
+        $this->webUserService = new WebUserService();
+        
+    }
     //
     public function getSubjectsByClass($id){
         try {
@@ -166,16 +172,34 @@ class SubjectsController extends Controller
     $user = Auth::guard('web_api')->user();
 
     try {
+        $subjects = $this->webUserService->getSubjectsByUser($user->id);
+        $subjectsData = $subjects->getData();
+
+        if($subjectsData->success == 1){
+             return response()->json([
+            'success' => 1,
+            'subjects' => $subjectsData->data,
+        ]);
+        }
+        return response()->json([
+            'success' => 0,
+            'message' => $subjectsData->message,
+        ]);
+
+    /*    
         $subjects = DB::table('user_selected_subject_tbl as usst')
             ->join('subject_tbl as st', 'usst.subject_id', '=', 'st.id')
             ->where('usst.user_id', $user->id)
             ->select('usst.subject_id as id', 'st.subject_name')
             ->get();
 
+            
+
         return response()->json([
             'success' => 1,
             'subjects' => $subjects,
-        ]);
+        ]);*/
+        
     } catch (\Exception $e) {
         return response()->json([
             'success' => 0,

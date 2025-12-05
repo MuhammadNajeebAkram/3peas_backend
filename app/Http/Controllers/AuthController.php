@@ -58,17 +58,17 @@ public function registerWebUser(Request $request)
             'password' => 'required|min:8|confirmed',
             'role' => 'required|string', // Ensure 'role' is validated
             'address' => 'required|string',
-            'city_id' => 'nullable|integer',
+            'city_id' => 'required|integer|exists:city_tbl,id',
             'phone' => 'required|string',
             //'class_id' => 'nullable|integer',
             //'curriculum_board_id' => 'nullable|integer',
-            'institute_id' => 'nullable|integer', // Fixed typo
+            'institute_id' => 'nullable|integer|exists:institute_tbl,id', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
             'gender_id' => 'nullable|integer',
             'dob' => 'required|date',
             'designation' => 'nullable|string',
-            'heard_about_id' => 'required|integer',
+            'heard_about_id' => 'required|integer|exists:heard_about_tbl,id',
         ]);
 
                 // Start transaction to ensure atomicity
@@ -152,7 +152,7 @@ public function registerWebUser(Request $request)
     try {
         $credentials = $request->only('email', 'password');
         $guard = $request->is('api/*') ? 'api' : 'web_api';
-
+ 
         // Attempt to authenticate and generate a JWT token
         if (!$token = Auth::guard($guard)->attempt($credentials)) {
             return response()->json([

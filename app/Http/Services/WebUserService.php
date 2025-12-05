@@ -2,6 +2,8 @@
 
 namespace App\Http\Services;
 
+use App\Models\StudyGroupDetail;
+use App\Models\WebUserProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +37,38 @@ class WebUserService{
         ]);
 
     } catch (\Exception $e) {
+         Log::error('Exception found in WebUserService: ', $e->getMessage());
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
+    }
+
+    public function getSubjectsByUser($user_id){
+        try{
+            $userProfile = WebUserProfile::where('user_id', $user_id)->first();
+            $groupId = $userProfile->study_group_id;
+            $subjects = StudyGroupDetail::where('study_group_id', $groupId)->with('subject:id,subject_name')->get();
+
+            $formatted = $subjects->map(function ($detail){
+                if($detail->subject){
+                    return [
+                        'id' => $detail->subject->id,
+                        'subject_name' => $detail->subject->subject_name,
+                    ];
+
+                }
+                return null;
+            })->filter()->values();
+
+            return response()->json([
+                'success' => 1,
+                'data' => $formatted,
+            ]);
+
+        }catch (\Exception $e) {
          Log::error('Exception found in WebUserService: ', $e->getMessage());
         return response()->json([
             'success' => 0,

@@ -9,6 +9,7 @@ use App\Http\Controllers\YearsController;
 use App\Http\Controllers\PapersController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Authentication\WebUserAuthController;
 use App\Http\Controllers\BooksController;
 use App\Http\Controllers\UnitsController;
 use App\Http\Controllers\TopicsController;
@@ -197,7 +198,9 @@ Route::post('save-institute', [InstituteController::class, 'saveInstitute']);
 Route::post('update-institute', [InstituteController::class, 'updateInstitute']);
 Route::get('get-institutes-by-city/{id}', [InstituteController::class, 'getInstitutesByCity']);
 
-Route::post('create-web-user', [AuthController::class, 'createWebUser']);
+Route::post('create-web-user', [WebUserAuthController::class, 'saveUserDataByAdmin']);
+Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserData']);
+Route::post('update-web-user', [WebUserAuthController::class, 'updateUserDataByAdmin']);
 
 Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
 Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);

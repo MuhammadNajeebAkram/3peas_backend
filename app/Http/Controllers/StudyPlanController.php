@@ -77,6 +77,7 @@ class StudyPlanController extends Controller
     }
     public function getStudyPlansByClass(Request $request){
         try{
+            
             $plans = DB::table('study_plan_tbl')
             ->where('class_id', $request->class_id)
             ->where('curriculum_board_id', $request->curriculum_id)
