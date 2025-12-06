@@ -62,7 +62,7 @@ public function registerWebUser(Request $request)
             'phone' => 'required|string',
             //'class_id' => 'nullable|integer',
             //'curriculum_board_id' => 'nullable|integer',
-            'institute_id' => 'nullable|integer|exists:institute_tbl,id', // Fixed typo
+            'institute_id' => 'nullable', // Fixed typo
             'incharge_name' => 'nullable|string',
             'incharge_phone' => 'nullable|string',
             'gender_id' => 'nullable|integer',
@@ -70,6 +70,8 @@ public function registerWebUser(Request $request)
             'designation' => 'nullable|string',
             'heard_about_id' => 'required|integer|exists:heard_about_tbl,id',
         ]);
+
+        $validatedData['institute_id'] = ($validatedData['institute_id'] == 'other' || $validatedData['institute_id'] == '0') ? null : $validatedData['institute_id'];
 
                 // Start transaction to ensure atomicity
                 DB::beginTransaction();
@@ -89,16 +91,16 @@ public function registerWebUser(Request $request)
                     'address' => $validatedData['address'] ?? null,
                     'city_id' => $validatedData['city_id'] ?? null,
                     'phone' => $validatedData['phone'] ?? null,
-                    'class_id' => $validatedData['class_id'] ?? 0,
-                    'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? 0,
+                    'class_id' => $validatedData['class_id'] ?? null,
+                    'curriculum_board_id' => $validatedData['curriculum_board_id'] ?? null,
                     'institute_id' => $validatedData['institute_id'] ?? null, // Fixed typo
                     'incharge_name' => $validatedData['incharge_name'] ?? null,
                     'incharge_phone' => $validatedData['incharge_phone'] ?? null,
                     'gender_id' => $validatedData['gender_id'] ?? null,
                     'dob' => $validatedData['dob'] ?? null,
                     'designation' => $validatedData['designation'] ?? null,
-                    'heard_about_id' => $validatedData['heard_about_id'] ?? null,
-                    'study_plan_id' => 0,
+                    'heard_about_id' => $validatedData['heard_about_id'],
+                    'study_plan_id' => null,
                     'activate' => 0,
                 ]);
 

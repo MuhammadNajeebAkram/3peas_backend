@@ -54,6 +54,8 @@ Route::get('/user', function (Request $request) {
 
 Route::post('login', [AuthController::class, 'login']);
 Route::post('web-login', [WebUserAuthController::class, 'login']);
+//Route::post('/register_user', [AuthController::class, 'registerWebUser']);
+Route::post('/register_user', [WebUserAuthController::class, 'registerWebUser']);
 
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLinkEmail']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
@@ -264,7 +266,7 @@ Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlo
 Route::post('/get_cities', [CityController::class, 'getCities']);
 Route::post('/get_institutes', [InstituteController::class, 'getInstitutes']);
 
-Route::post('/register_user', [AuthController::class, 'registerWebUser']);
+
 
 Route::post('/get_curriculum', [CurriculumBoardController::class, 'getCurriculumBoard']);
 

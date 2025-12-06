@@ -39,6 +39,7 @@ class UserPaymentSlipController extends Controller
                     'class_id' => $request->class_id,
                     'curriculum_board_id' => $request->curriculum_board_id,
                     'study_plan_id' => $request->study_plan,
+                    'study_group_id' => $request->study_group,
                 ]);
     
             if (!$request->is_trial) {
@@ -78,7 +79,7 @@ class UserPaymentSlipController extends Controller
             ]);
     
             // Assign subjects
-            $subjects = DB::table('study_group_detail_tbl')
+           /* $subjects = DB::table('study_group_detail_tbl')
                 ->where('study_group_id', $request->study_group)
                 ->pluck('subject_id');
     
@@ -89,7 +90,7 @@ class UserPaymentSlipController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-            }
+            }*/
     
             DB::commit();
     

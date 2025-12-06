@@ -200,7 +200,9 @@ Route::get('get-institutes-by-city/{id}', [InstituteController::class, 'getInsti
 
 Route::post('create-web-user', [WebUserAuthController::class, 'saveUserDataByAdmin']);
 Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserData']);
+Route::get('get-unverified-web-users', [WebUserAuthController::class, 'getUnVerifiedWebUsers']);
 Route::post('update-web-user', [WebUserAuthController::class, 'updateUserDataByAdmin']);
+Route::post('verified-web-user', [WebUserAuthController::class, 'verifiedUserByAdmin']);
 
 Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
 Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);

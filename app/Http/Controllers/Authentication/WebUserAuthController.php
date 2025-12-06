@@ -44,6 +44,27 @@ class WebUserAuthController extends Controller
         ]);
 
     }
+    public function registerWebUser(Request $request){
+       /* $register = $this->webUserAuthService->registerWebUser($request);
+        $registerData = $register->getData();
+
+        if($registerData->success == 1){
+            return response()->json([
+                    'message' => 'User registered successfully',
+                    'user' => $registerData->user,
+                    'success' => 1,
+                    'token' => $registerData->token,
+                ]);
+        }
+        $statusCode = $registerData->status;
+
+        return response()->json([
+            'success' => $registerData->success,
+            'message' => $registerData->message,
+            'error' => $registerData->error,
+        ]);*/
+        return $this->webUserAuthService->registerWebUser($request);
+    }
 
     public function getStatus(Request $request){
 
@@ -121,7 +142,7 @@ class WebUserAuthController extends Controller
                     'activate' => $request->activate ?? 1,
         ];
 
-        $userProfile = WebUserProfile::create($profileData);
+        WebUserProfile::create($profileData);
 
         $planData = [
             'user_id' => $user->id,
@@ -267,6 +288,67 @@ class WebUserAuthController extends Controller
                 'success' => 1,
                 'data' => $userData,
             ]);
+    }
+
+    public function verifiedUserByAdmin(Request $request){
+        $userEmail = $request->input('email');
+        $userId = $request->input('user_id');
+
+        $emailData = [
+            'email_verified_at' => now(), 
+        ];
+
+        $user = WebUser::find($userId);
+        if($user->email === $userEmail){
+            $user->update($emailData);
+            return response()->json([
+                'success' => 1,
+            ]);
+        }
+
+         return response()->json([
+                'success' => 0,
+            ]);
+
+    }
+    public function getUnVerifiedWebUsers(){
+        try{
+            $users = WebUser::where('email_verified_at', null)->with('profile')->get();
+
+            $formattedUsers = $users->map(function ($user) {
+                if($user->profile){
+                    return[
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'phone' => $user->profile->phone,
+                    ];
+                }
+                else{
+                     return[
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'phone' => '',
+                    ];
+
+                }
+            });
+
+            return response()->json([
+                'success' => 1,
+                'data' => $formattedUsers,
+            ]);
+
+        }catch (\Exception $e) {
+            
+            Log::error("Admin getUnVerifiedWebUsers: " . $e->getMessage());
+            
+            return response()->json([
+                'success' => -1,
+                'error' => 'Server Error: Could not complete the update.',
+            ], 500); 
+        }
     }
     
 }
