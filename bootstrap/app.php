@@ -20,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function () {
             Route::prefix('web_api')
-                ->name('web_api')
+                ->name('web_api.')
                 ->group(base_path('routes/web_api.php'));
             
         },

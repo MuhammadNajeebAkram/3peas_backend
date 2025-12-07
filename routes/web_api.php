@@ -53,7 +53,7 @@ Route::get('/user', function (Request $request) {
 
 
 Route::post('login', [AuthController::class, 'login']);
-Route::post('web-login', [WebUserAuthController::class, 'login']);
+Route::post('/web-login', [WebUserAuthController::class, 'login']);
 //Route::post('/register_user', [AuthController::class, 'registerWebUser']);
 Route::post('/register_user', [WebUserAuthController::class, 'registerWebUser']);
 
