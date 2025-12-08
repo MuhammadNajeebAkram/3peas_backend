@@ -356,7 +356,9 @@ class NewsController extends Controller
 
     //---------------- New News Module -----------------//
     public function getPaginatedNewsTitles(Request $request){
-        try{
+        $perPage = $request->input('per_page', 3);
+        return $this->newsService->getLatestNewsPaginatedTitles($perPage);
+      /*  try{
             $perPage = $request->input('per_page', 3); // Default to 3 if not provided
             
             $news = $this->newsService->getLatestNewsPaginatedTitles($perPage);
@@ -386,7 +388,7 @@ class NewsController extends Controller
                 'success' => 0,
                 'news' => 'Failed to retrieve news'], 500);
 
-        }
+        }*/
     }   
     public function getNewsDetailBySlug($slug){
         try{

@@ -27,7 +27,9 @@ class WebUserAuthController extends Controller
        
     }
     public function login(Request $request){
-        $status = $this->webUserAuthService->login($request);
+        Log::info('login');
+        return $this->webUserAuthService->login($request);
+       /* $status = $this->webUserAuthService->login($request);
         $statusData = $status->getData();
 
         if($statusData->success == 0){
@@ -41,7 +43,7 @@ class WebUserAuthController extends Controller
             'success' => 1,
             'token' => $statusData->token,
             'expires_in' => $statusData->expires_in,
-        ]);
+        ]);*/
 
     }
     public function registerWebUser(Request $request){
