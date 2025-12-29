@@ -238,66 +238,75 @@ class NewsController extends Controller
     }
 
     public function saveNews(Request $request){
+        Log::info('Entered NewsController@saveNews with request data: ', $request->all());
         try{
+             $validatedData = $request->validate([
+            'news_title' => 'required|string|max:255',
+            'slug' => 'required|string|unique:news_tbl,slug',
+            'news_content' => 'required|string',
+            'language' => 'required|string',
+            'description' => 'nullable|string',
+            'meta_description' => 'nullable|string',
+            'category_id' => 'nullable|integer|exists:news_category_tbl,id',
+            'have_file' => 'nullable|boolean',
+            'published_at' => 'nullable|date',
+            'files.*' => 'nullable|file|mimes:jpeg,png,jpg,pdf,doc,docx,mp4,mov,avi', // Max 5MB per file
+            'featured_image' => 'nullable|file|mimes:jpeg,png,jpg',
+            'breaking_news_image' => 'nullable|file|mimes:jpeg,png,jpg',            
+            'priority_score' => 'nullable|integer',
+            'is_breaking_news' => 'nullable|boolean',
+            'expires_at' => 'nullable|date',
+            'status' => 'nullable|string',
+            'meta_title' => 'nullable|string',
+            'url_link' => 'nullable|url',
+            'ticker' => 'nullable|string',
+        ]);
 
-            // Check for duplicate subject name
-        $checkDuplicate = DB::table('news_tbl')
-        ->where('slug', '=', $request->slug)
-        ->exists();  // Use exists() to check if the record exists
+        return $this->newsService->saveNews($validatedData);
+        
 
-        if ($checkDuplicate){
-
-            // Duplicate Record Exists
+        }catch(\Illuminate\Validation\ValidationException $e){
+             Log::error('validation error in saveNews', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+            $errors = $e->errors();
+            if(isset($errors['slug'])){
+                foreach($errors['slug'] as $msg){
+                    if(strpos($msg, 'unique') !== false || strpos(strtolower($msg), 'already exists') !== false){
+                        return response()->json([
+                            'success' => 2,
+                            'message' => 'Duplicate entry: Slug already exists.'
+                        ], 409);
+                    }
+                }
+            }   
             return response()->json([
-                'success' => 2, // Duplicate entry
-                'message' => 'News slug is already exists.'
-            ]);
-
-        }
-
-            $news = DB::table('news_tbl')
-            ->insertGetId([
-                'title' => $request -> news_title,
-                'content' => $request -> news_content,
-                'language' => $request -> language,
-                'category_id' => $request -> category_id,
-                'haveFile' => $request -> have_file, 
-                'slug' => $request -> slug,
-                'description' => $request -> description,               
-                'meta_description' => $request -> meta_description,
-                'activate' => 1,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            foreach($request -> file_objects as $file){
-                DB::table('news_files_tbl')
-                ->insert([
-                    'news_id' => $news,
-                    'path' => $file['file_name'],
-                    'file_type' => $file['file_type'],
-                    'description' => $file['description'],
-                    'activate' => 1,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-
-
-                ]);
-            }
-
-            return response()->json([
-                'success' => 1 // Successfully inserted
-            ]);
-
+                'success' => 0,
+                'message' => 'Validation error: ' . $e->getMessage(),
+            ], 422);
         }
         catch(\Exception $e){
+             Log::error('Database error in saveNews', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
             return response()->json([
-                'success' => 0,  // Error occurred
-                'error' => $e->getMessage(),
-            ]);
+                'success' => 0,
+                'message' => 'Error: ' . $e->getMessage(),
+            ], 500);
 
         }
+       
     }
+    public function getBreakingNews(Request $request){
+
+       return $this->newsService->getBreakingNews();
+    }
+    public function getFeaturedNews(Request $request){
+
+       return $this->newsService->getFeaturedNews();
+    }   
 
     public function editCategory(Request $request){
         try{

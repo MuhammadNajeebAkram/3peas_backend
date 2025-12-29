@@ -8,6 +8,8 @@
         "php": "^8.2",
         "illuminate/filesystem": "*",
         "illuminate/support": "*",
+        "intervention/image": "^3.11",
+        "intervention/image-laravel": "^1.5",
         "laravel/framework": "^11.9",
         "laravel/installer": "^5.17",
         "laravel/sanctum": "^4.0",

@@ -125,7 +125,7 @@ Route::post('/activate_board_question', [QuestionsController::class, 'activateBo
 Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion']);
 
 
-Route::post('/add_news', [NewsController::class, 'saveNews']);
+Route::post('/save_news', [NewsController::class, 'saveNews']);
 Route::post('/update_news', [NewsController::class, 'editNews']);
 Route::post('/activate_news', [NewsController::class, 'activateNews']);
 Route::get('/get_all_news_archive', [NewsController::class, 'getActiveAllNewsArchive']);
@@ -232,10 +232,16 @@ Route::middleware(CheckFrontendApiKey::class)->group(function () {
 
     Route::get('/get_all_unique_past_papers_slugs', [PapersController::class, 'getAllSlugs']);
     Route::get('/get_all_unique_news_slugs', [NewsController::class, 'getAllSlugs']);
+
+    Route::prefix('news')->group(function () {
+        Route::get('/breaking', [NewsController::class, 'getBreakingNews']);
+        Route::get('/featured', [NewsController::class, 'getFeaturedNews']);
+    });
     
 
     //
 });
+
 
 Route::get('/classes', [ClassesController::class, 'getClasses']);
 Route::post('/classes', [ClassesController::class, 'getClasses']);

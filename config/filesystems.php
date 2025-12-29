@@ -56,6 +56,8 @@ return [
             'throw' => true,
         ],
 
+        
+
     ],
 
     /*

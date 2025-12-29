@@ -124,7 +124,7 @@ public function uploadDepositSlipImage(Request $request){
         ], 422);
     }
 
-    $file = $request->file('deposit_slip');
+    $file = $request->file('deposit_slip'); 
     $s3Directory = 'test';
     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
     $s3Key = $s3Directory ? $s3Directory . '/' . $filename : $filename;

@@ -15,6 +15,7 @@ class NewsAttachment extends Model
         'file_type',
         'description',
         'activate',
+        'size_kb',
     ];
     public function news()
     {
