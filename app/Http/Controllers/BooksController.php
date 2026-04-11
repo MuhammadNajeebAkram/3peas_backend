@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Book;
+use App\Models\OfferedProgram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class BooksController extends Controller
 {
@@ -166,6 +169,39 @@ class BooksController extends Controller
             return response()->json(['success' => 1], 200);
         } else {
             return response()->json(['success' => 0], 400);
+        }
+    }
+
+    public function getBooksByProgram( $program_id, $subject_id){
+
+        try{
+            $program = OfferedProgram::with('offeredClass:id,class_id,curriculum_board_id')
+            ->find($program_id);
+
+            if (!$program || !$program->offeredClass) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Program not found',
+                ], 404);
+            }
+
+
+            $books = Book::with('units')             
+             ->where('activate', '=', 1)
+            ->where('class_id', '=', $program->offeredClass->class_id)
+            ->where('curriculum_board_id', '=', $program->offeredClass->curriculum_board_id)
+            ->where('subject_id', '=', $subject_id )
+            ->get();
+
+            return response()->json($books);
+
+        }
+        catch(\Exception $e){
+            Log::error("Failed to retrieve chapters for program_id: " . $program_id . ", subject_id: " . $subject_id, ['error_message' => $e->getMessage()]);
+            return response()->json([
+                'success' => 0,
+                'chapters' => 'Failed to retrieve chapters'], 500);
+
         }
     }
 }

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Authentication;
 
 use App\Http\Controllers\Controller;
-use App\Http\Services\Authentication\WebUserAuhService;
+use App\Http\Services\Authentication\WebUserAuthService;
 use App\Http\Services\WebUserService;
 use App\Models\StudyPlan;
 use App\Models\UserStudyPlan;
@@ -18,13 +18,24 @@ use function Symfony\Component\Clock\now;
 
 class WebUserAuthController extends Controller
 {
-    protected WebUserAuhService $webUserAuthService;
+    protected WebUserAuthService $webUserAuthService;
     protected WebUserService $webUserService;
     public function __construct()
     {
-        $this->webUserAuthService = new WebUserAuhService();
+        $this->webUserAuthService = new WebUserAuthService();
         $this->webUserService = new WebUserService();
        
+    }
+
+    public function googleLogin(Request $request){
+         $request->validate([
+        'idToken' => ['required', 'string'],
+    ]);
+        return $this->webUserAuthService->googleLogin($request->idToken);
+    }
+    public function me()  {
+        return $this->webUserAuthService->me();
+        
     }
     public function login(Request $request){
         Log::info('login');
@@ -66,6 +77,10 @@ class WebUserAuthController extends Controller
             'error' => $registerData->error,
         ]);*/
         return $this->webUserAuthService->registerWebUser($request);
+    }
+
+    public function logout(Request $request){
+        return $this->webUserAuthService->logout();
     }
 
     public function getStatus(Request $request){

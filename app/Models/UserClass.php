@@ -18,4 +18,7 @@ class UserClass extends Model
     public function modelPapers(){
         return $this->hasMany(ModelPaper::class);
     }
+    public function offeredClasses(){
+        return $this->hasMany(OfferedClass::class, 'class_id');
+    }
 }

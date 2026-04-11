@@ -1,6 +1,7 @@
 <?php
 
-
+use App\Http\Middleware\AttachJwtFromCookie;
+use App\Http\Middleware\AuthenticateJwtCookieGuard;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -34,6 +35,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['verified' => EnsureEmailsVerified::class]);
         $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
         $middleware->alias(['studySessionVerified' => EnsureStudySessionVerified::class]);
+        $middleware->alias(['jwt.cookie' => AttachJwtFromCookie::class]);
+        $middleware->alias(['jwt.auth' => AuthenticateJwtCookieGuard::class]);
 
        
         

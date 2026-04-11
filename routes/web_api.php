@@ -40,7 +40,12 @@ use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ModelPapers\ModelPaperController;
+use App\Http\Controllers\OfferedClassesController;
+use App\Http\Controllers\OfferedProgramController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PaymentAccountController;
+use App\Http\Controllers\UserPaymentController;
+use App\Http\Controllers\NewsTickerController;
 use App\Http\Middleware\EnsurePaymentVerified;
 use Illuminate\Auth\Events\PasswordReset;
 
@@ -50,6 +55,50 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 */
+
+Route::prefix('auth')->group(function () {
+    
+    Route::post('google-login', [WebUserAuthController::class, 'googleLogin']);
+    Route::post('/lms-login', [WebUserAuthController::class, 'login']);
+
+    Route::get('/get-offered-classes', [OfferedClassesController::class, 'getOfferedClasses']); 
+
+    Route::post('/register_user', [WebUserAuthController::class, 'registerWebUser']);
+
+    // LMS authentication routes use the `web_api` guard and a separate JWT cookie.
+    Route::middleware(['jwt.cookie:lms', 'auth:web_api'])->group(function () {
+        Route::GET('me', [WebUserAuthController::class, 'me']);
+        Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
+        Route::get('/get-user-subscribed-classes', [OfferedClassesController::class, 'getUserSubscribedClasses']);
+        Route::get('/get-offered-class-details/{slug}', [OfferedClassesController::class, 'getOfferedClassDetails']);
+        Route::get('/get-offered-program-details/{slug}', [OfferedProgramController::class, 'getOfferedProgramDetails']);
+        
+        Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest']);
+
+        Route::prefix('my-classes')->group(function () {
+            Route::get('/get-books/{program_id}/{subject_id}', [BooksController::class, 'getBooksByProgram']);
+            Route::get('/get-topics-by-units/{unit_id}/topics', [TopicsController::class, 'getTopicsByUnitForLMS']);
+            Route::get('/get-questions-by-topic/{topic_id}/questions', [QuestionsController::class, 'getQuestionsByTopicForLMS']);
+        });
+        
+        Route::prefix('accounts')->group(function () {
+            Route::get('/get-bank-accounts', [PaymentAccountController::class, 'getPaymentBankAccounts']);
+            
+        });
+
+    });
+
+});
+
+Route::prefix('news')->group(function () {
+    Route::get('/ticker', [NewsTickerController::class, 'getActiveTickersForWeb']);
+    Route::get('/featured', [NewsController::class, 'getPublishableFeturedNewsForWeb']);
+    Route::get('/educational', [NewsController::class, 'getPublishedEducationalNewsForWeb']);
+    Route::get('/events', [NewsController::class, 'getEventNewsForWeb']);
+    Route::get('/videos', [NewsController::class, 'getVideoNewsForWeb']);
+    Route::get('/detail/{slug}', [NewsController::class, 'getNewsDetailForWebBySlug']);
+});
+
 
 
 Route::post('login', [AuthController::class, 'login']);
@@ -76,7 +125,7 @@ Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
 
     Route::post('/upload_deposit_slip', [UserPaymentSlipController::class, 'uploadPaymentSlip'])->middleware('auth:web_api');
 
-    Route::post('/upload-image-to-s3', [UserPaymentSlipController::class, 'uploadDepositSlipImage'])->middleware('auth:web_api');
+Route::post('/upload-image-to-s3', [UserPaymentSlipController::class, 'uploadDepositSlipImage'])->middleware('auth:web_api');
 
 Route::middleware(['auth:web_api', 'verified', EnsurePaymentVerified::class, 'studySessionVerified'])->group(function () {
 
@@ -228,6 +277,9 @@ Route::get('generate-model-paper-questions/{id}', [ModelPaperController::class, 
     
 });
 
+Route::prefix('news')->group(function () {
+    Route::get('/ticker', [NewsTickerController::class, 'getActiveTickersForWeb']);
+});
 
 
 

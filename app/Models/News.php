@@ -9,43 +9,62 @@ class News extends Model
 {
     use HasFactory;
 
-    protected $table = 'news_tbl';
+    
+
+    //protected $table = 'news_tbl';
     protected $fillable = [
         'title',
         'content',
         'category_id',
-        'language',
-        'activate',
-        'has_attachment',
+        'language',                
         'published_at',
         'slug',
-        'description',
+        'summary',
+        'meta_keywords',
         'meta_description',
-        'featured_image',
-        'breaking_news_image',
+        'news_type',
+        'featured_image',       
         'thumbnail_image',
-        'og_image',
-        'priority_score',
-        'is_breaking_news',
+        'video_url',
+        'og_image',       
+        'is_breaking',
+        'is_featured',
+        'is_published',
         'expires_at',
         'status',
-        'meta_title',
-        'url_link',
-        'ticker_text'
+        'meta_title',       
+       'institute_id',
+        'event_date',
+        'location',
+        'video_url',
+        'display_order',
+        'created_by',
+        'updated_by',
+        'is_activated',
 
+    ];
+
+    protected $casts = [
+        'published_at' => 'datetime',
+        'expires_at' => 'date',
+        'event_date' => 'date',
     ];
 
     public function category()
     {
         return $this->belongsTo(NewsCategory::class, 'category_id');
-    }
-    public function attachments()
-    {
-        return $this->hasMany(NewsAttachment::class, 'news_id');
-    }
+    }   
 
-    public function contentImages()
+    public function media()
     {
-        return $this->hasMany(NewsImage::class, 'news_id');
+        return $this->hasMany(NewsMedia::class, 'news_id');
+    }
+    public function tickers()
+    {
+        return $this->hasMany(NewsTicker::class, 'news_id');
+    }
+    public function institute()
+    {
+        return $this->belongsTo(Institute::class, 'institute_id');
     }
 }

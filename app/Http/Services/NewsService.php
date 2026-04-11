@@ -19,6 +19,7 @@ class NewsService
 
     public function saveNews($validatedData)
 {
+    Log::info('start saveNews method in service');
     set_time_limit(300);
     DB::beginTransaction();
     try {
@@ -52,6 +53,7 @@ class NewsService
             'url_link' => $validatedData['url_link'] ?? null,
             'ticker_text' => $validatedData['ticker'] ?? null,
         ]);
+        Log::info('News record created', ['news_id' => $news->id]);
 
         // Upload breaking news image FIRST
         if ($breakingNewsImage && $breakingNewsImage->isValid()) {
@@ -68,6 +70,7 @@ class NewsService
 
         // Upload featured image and generate thumbnail/OG
         if ($featuredImage && $featuredImage->isValid()) {
+            Log::info('Uploading featured image for news ID: ' . $news->id);
             $fileName = 'news-' . $news->id . '-featured-' . substr(md5(uniqid()), 0, 6) . '.' . $featuredImage->getClientOriginalExtension();
             $featuredImagePath = $this->awsUploadService->uploadFileToS3(
                 $featuredImage,
@@ -95,6 +98,7 @@ class NewsService
 
             // Generate OG image
             try {
+                Log::info('Generating OG image for news ID: ' . $news->id);
                 $ogImage = Image::read($featuredImage->getRealPath())
                     ->cover(1200, 630)
                     ->toWebp(85);
@@ -403,9 +407,8 @@ public function getFeaturedNews($limit = 5){
                 'public'
             );*/
 
-            $cdnURL = env('CDN_URL');
             if ($s3Key){
-                 $s3Url = rtrim($cdnURL, '/') . '/' . ltrim($s3Key, '/');
+                 $s3Url = $this->awsUploadService->getS3Url($s3Key);
                     return str_replace(
                     'src="data:image/' . $imageType . ';base64,' . $base64Data . '"',
                     'src="' . $s3Url . '"',
@@ -448,8 +451,11 @@ private function processExternalImages($content, $s3Directory)
             $imageUrl = $matches[1];
             $extension = $matches[2];
 
-            // Skip if already on your S3
-            if (strpos($imageUrl, Storage::disk('s3')->url('')) !== false) {
+            $cdnUrl = env('CDN_URL');
+
+            // Skip if already on your CDN or S3
+            if (($cdnUrl && str_contains($imageUrl, rtrim($cdnUrl, '/'))) ||
+                str_contains($imageUrl, Storage::disk('s3')->url(''))) {
                 return $matches[0];
             }
 
@@ -473,8 +479,7 @@ private function processExternalImages($content, $s3Directory)
             );
 
             if ($uploaded) {
-                // Get the S3 URL
-                $s3Url = Storage::disk('s3')->url($s3Key);
+                $s3Url = $this->awsUploadService->getS3Url($s3Key);
                 
                 // Replace the external URL with S3 URL
                 return str_replace(

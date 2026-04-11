@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Services\BookService;
+use App\Models\BookUnitTopic;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -365,6 +366,27 @@ class TopicsController extends Controller
             ], 500);
 
         }*/
+    }
+
+
+    //---------------- new lms -------------------
+
+    public function getTopicsByUnitForLMS($unit_id){
+        try{
+            $topics = BookUnitTopic::where('unit_id', $unit_id)
+            ->where('activate', 1)
+            ->select('id', 'topic_name', 'topic_no')
+            ->get();
+
+            return response()->json($topics);
+
+        }
+        catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'topics' => 'Failed to retrieve topics'], 500);
+
+        }
     }
 
     

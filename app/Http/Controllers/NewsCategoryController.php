@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\NewsCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class NewsCategoryController extends Controller
 {
@@ -136,6 +139,221 @@ class NewsCategoryController extends Controller
             return response()->json(['success' => 1], 200);
         } else {
             return response()->json(['success' => 0], 400);
+        }
+    }
+
+    public function saveNewsCategoryForAdmin(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'slug' => 'nullable|string|max:255|unique:news_categories,slug',
+                'description' => 'nullable|string',
+                'is_active' => 'nullable|boolean',
+                'display_order' => 'nullable|integer|min:0',
+            ]);
+
+            $admin = Auth::guard('api')->user();
+
+            if (!$admin) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+            DB::beginTransaction();
+
+            $baseSlug = $validated['slug'] ?? Str::slug($validated['name']);
+            $slug = $baseSlug;
+            $suffix = 1;
+
+            while (DB::table('news_categories')->where('slug', $slug)->exists()) {
+                $slug = $baseSlug . '-' . $suffix;
+                $suffix++;
+            }
+
+            $categoryId = DB::table('news_categories')->insertGetId([
+                'name' => $validated['name'],
+                'slug' => $slug,
+                'description' => $validated['description'] ?? null,
+                'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : true,
+                'display_order' => $validated['display_order'] ?? 0,
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $category = DB::table('news_categories')->where('id', $categoryId)->first();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'News category saved successfully.',
+                'data' => $category,
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to save news category.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getAllNewsCategoryForAdmin(Request $request)
+    {
+        try {
+            $admin = Auth::guard('api')->user();
+
+            if (!$admin) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+           $categories = NewsCategory::orderBy('created_at', 'desc')->get();
+
+            return response()->json($categories);
+            
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to retrieve news categories.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getActiveNewsCategoryForAdmin(Request $request)
+    {
+        try {
+            $admin = Auth::guard('api')->user();
+
+            if (!$admin) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+           $categories = NewsCategory::where('is_active', true)
+           ->orderBy('created_at', 'desc')->get();
+
+            return response()->json($categories);
+            
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to retrieve active news categories.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateNewsCategoryForAdmin(Request $request, $id)
+    {
+        try {
+            $admin = Auth::guard('api')->user();
+
+            if (!$admin) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+            $category = NewsCategory::findOrFail($id);
+
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'slug' => 'nullable|string|max:255|unique:news_categories,slug,' . $category->id,
+                'description' => 'nullable|string',
+                'is_active' => 'nullable|boolean',
+                'display_order' => 'nullable|integer|min:0',
+            ]);
+
+            DB::beginTransaction();
+
+            $category->update([
+                'name' => $validated['name'],
+                'slug' => $validated['slug'] ?? Str::slug($validated['name']),
+                'description' => $validated['description'] ?? null,
+                'is_active' => array_key_exists('is_active', $validated)
+                    ? (bool) $validated['is_active']
+                    : $category->is_active,
+                'display_order' => $validated['display_order'] ?? $category->display_order,
+                'updated_by' => $admin->id,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'News category updated successfully.',
+                'data' => $category->fresh(),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to update news category.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteNewsCategoryForAdmin(Request $request, $id)
+    {
+        try {
+            $admin = Auth::guard('api')->user();
+
+            if (!$admin) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+            $category = NewsCategory::findOrFail($id);
+
+            if ($category->news()->exists()) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'This category is already used by news records and cannot be deleted.',
+                ], 422);
+            }
+
+            $category->delete();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'News category deleted successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to delete news category.',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

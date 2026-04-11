@@ -38,9 +38,12 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
         'name',
         'email',
         'password',
-        'role',
-        'study_session_id',
+        'role',        
         'email_verified_at',
+        'google_id',
+        'avatar',
+        'login_provider',
+        'status',
     ];
 
     // Hide sensitive data
@@ -53,6 +56,8 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
         'email_verified_at' => 'datetime', // Cast verification date
     ];
 
+   
+
     public function profile()
     {
         return $this->hasOne(WebUserProfile::class, 'user_id', 'id');
@@ -62,4 +67,10 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
     {
         return $this->hasOne(UserPaymentSlip::class, 'user_id', 'id');
     }
+    /*
+     public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class);
+    }
+        */
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ExamQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -854,6 +855,27 @@ if ($existingRecord) {
 
         }
     }
+
+    //----------------- new lms -----------------------
+
+    public function getQuestionsByTopicForLMS($topic_id){
+        try{
+            $questions = ExamQuestion::with(['answers', 'answerOptions', 'questionType'])
+                ->where('topic_id', $topic_id)
+                ->where('activate', 1)
+                ->orderBy('question_type', 'asc')
+                ->get();
+                return response()->json($questions);
+
+
+        } catch(\Exception $e){
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+        
 
     
 }

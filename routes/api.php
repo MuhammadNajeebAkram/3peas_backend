@@ -2,6 +2,7 @@
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminAuth\AuthController as AdminAuthController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\BoardsController;
@@ -17,11 +18,14 @@ use App\Http\Controllers\QuestionTypesController;
 use App\Http\Controllers\QuestionsController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
+use App\Http\Controllers\NewsTickerController;
 use App\Http\Controllers\BlogsController;
 use App\Http\Controllers\BlogsCategoryController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
+use App\Http\Middleware\AttachJwtFromCookie;
+use App\Http\Middleware\AuthenticateJwtCookieGuard;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DivisionController;
@@ -43,7 +47,45 @@ Route::get('/user', function (Request $request) {
 */
 
 
-Route::post('login', [AuthController::class, 'login']);
+Route::post('login', [AdminAuthController::class, 'login']);
+
+// Admin authentication routes use the `api` guard and a dedicated JWT cookie.
+Route::prefix('admin/auth')->group(function () {
+    Route::post('login', [AdminAuthController::class, 'login']);
+
+    Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin'])->group(function () {
+        Route::get('me', [AdminAuthController::class, 'me']);
+        Route::post('logout', [AdminAuthController::class, 'logout']);
+        Route::post('media/presign', [NewsController::class, 'presignMediaUpload']);
+
+        Route::prefix('news')->group(function () {
+            Route::get('/all', [NewsController::class, 'getAllNewsForAdmin']);
+            Route::post('/add', [NewsController::class, 'saveNewsFromAdmin']);
+            Route::get('/{id}', [NewsController::class, 'getNewsForAdminById']);
+            Route::post('/update/{id}', [NewsController::class, 'updateNewsFromAdmin']);
+            Route::post('/activate', [NewsController::class, 'activateNews']);
+
+            Route::prefix('ticker')->group(function () {
+                Route::get('/all', [NewsTickerController::class, 'getAllTickersForAdmin']);
+                Route::get('/news-options', [NewsTickerController::class, 'getNewsOptionsForTicker']);
+                Route::post('/add', [NewsTickerController::class, 'saveTickerForAdmin']);
+                Route::post('/update/{id}', [NewsTickerController::class, 'updateTickerForAdmin']);
+                Route::delete('/delete/{id}', [NewsTickerController::class, 'deleteTickerForAdmin']);
+            });
+            
+            Route::prefix('category')->group(function () {
+                Route::get('/all', [NewsCategoryController::class, 'getAllNewsCategoryForAdmin']);
+                Route::post('/add', [NewsCategoryController::class, 'saveNewsCategoryForAdmin']);
+                Route::post('/update/{id}', [NewsCategoryController::class, 'updateNewsCategoryForAdmin']);
+                Route::delete('/delete/{id}', [NewsCategoryController::class, 'deleteNewsCategoryForAdmin']);
+                Route::get('/active', [NewsCategoryController::class, 'getActiveNewsCategoryForAdmin']);
+            });
+        });
+    });
+});
+
+
+
 
 Route::middleware(['auth:api'])->group(function () {
 
@@ -273,3 +315,5 @@ Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlo
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);
 Route::post('/save_test', [QuestionsController::class, 'saveTest']);
+
+

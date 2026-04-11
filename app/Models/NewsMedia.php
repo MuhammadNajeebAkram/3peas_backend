@@ -5,24 +5,25 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class NewsCategory extends Model
+class NewsMedia extends Model
 {
     use HasFactory;
-   // protected $table = 'news_category_tbl';
+
     protected $fillable = [
-        'name',
-        'slug',
-        'description',
-        'is_active',
+        'news_id',
+        'media_type',
+        'media_url',
+        'thumbnail_url',
+        'caption',
+        'alt_text',
         'display_order',
+        'is_active',
         'created_by',
         'updated_by',
-        'created_at',
-        'updated_at',
     ];
-    
+
     public function news()
     {
-        return $this->hasMany(News::class, 'category_id');
+        return $this->belongsTo(News::class, 'news_id');
     }
 }
