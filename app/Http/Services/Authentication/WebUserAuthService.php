@@ -337,8 +337,8 @@ class WebUserAuthService
                 ]);
 
                 WebUserProfile::create([
-                    'user_id' => $user->id,                   
-                    'phone' => $validatedData['phone'] ?? null,
+                    'user_id' => $user->id,                  
+                    
                     //'gender_id' => $validatedData['gender_id'] ?? null,
                     //'dob' => $validatedData['dob'] ?? null,
                    // 'designation' => $validatedData['designation'] ?? null,
