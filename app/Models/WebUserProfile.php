@@ -24,6 +24,7 @@ class WebUserProfile extends Model
         'address', 
         'city_id', 
         'phone', 
+        'profile_completed',
         'curriculum_board_id', 
         'institute_id', 
         'gender_id',

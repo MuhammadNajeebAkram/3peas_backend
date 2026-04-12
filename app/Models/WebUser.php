@@ -38,6 +38,7 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
         'name',
         'email',
         'password',
+        'phone',
         'role',        
         'email_verified_at',
         'google_id',

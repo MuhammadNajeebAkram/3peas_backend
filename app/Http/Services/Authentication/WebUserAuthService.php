@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use League\Config\Exception\ValidationException;
+use Illuminate\Validation\ValidationException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Throwable;
 
@@ -296,7 +296,7 @@ class WebUserAuthService
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'phone' => $user->phone,
+            'phone' => $user->phone ?? optional($user->profile)->phone,
             'avatar' => $user->avatar,
             'login_provider' => $user->login_provider,
             'role' => $user->role,
@@ -338,6 +338,7 @@ class WebUserAuthService
 
                 WebUserProfile::create([
                     'user_id' => $user->id,                   
+                    'phone' => $validatedData['phone'] ?? null,
                     //'gender_id' => $validatedData['gender_id'] ?? null,
                     //'dob' => $validatedData['dob'] ?? null,
                    // 'designation' => $validatedData['designation'] ?? null,
