@@ -346,7 +346,7 @@ class WebUserAuthService
                     'profile_completed' => true,
                 ]);
 
-                event(new Registered($user));
+               // event(new Registered($user));
 
                 return $user->fresh(['profile']);
             });
