@@ -1,11 +1,23 @@
 <?php
 
+$defaultOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:4100',
+    'http://127.0.0.1:4100',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://thestudentstimes.com',
+    'https://www.thestudentstimes.com',
+    'https://admin.thestudentstimes.com',
+    'https://api.thestudentstimes.com',
+];
+
 $configuredOrigins = explode(
     ',',
-    env(
-        'CORS_ALLOWED_ORIGINS',
-        env('FRONTEND_URL', 'http://localhost:3000') . ',' . env('APP_URL', 'http://localhost:8000')
-    )
+    env('CORS_ALLOWED_ORIGINS', implode(',', $defaultOrigins))
 );
 
 $allowedOrigins = [];
@@ -29,17 +41,6 @@ foreach ($configuredOrigins as $origin) {
     } elseif ($host === '127.0.0.1') {
         $allowedOrigins[] = $scheme . '://localhost' . $port;
     }
-}
-
-if (env('APP_ENV') === 'local') {
-    $allowedOrigins = array_merge($allowedOrigins, [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:8000',
-        'http://127.0.0.1:8000',
-    ]);
 }
 
 $allowedOrigins = array_values(array_unique($allowedOrigins));
