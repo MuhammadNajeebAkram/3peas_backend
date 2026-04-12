@@ -249,6 +249,7 @@ class NewsController extends Controller
 
     public function getPublishableFeturedNewsForWeb(Request $request)
     {
+        Log::info('Entered getPublishableFeturedNewsForWeb with request data: ', $request->all());
         try {
             $limit = (int) ($request->get('limit', 6));
             $limit = $limit > 0 ? min($limit, 20) : 6;
@@ -287,6 +288,8 @@ class NewsController extends Controller
                         'created_at' => optional($item->created_at)->toDateTimeString(),
                     ];
                 });
+
+                Log::info('getPublishableFeturedNewsForWeb retrieved news count: ' . $news->count());
 
             return response()->json([
                 'success' => 1,
