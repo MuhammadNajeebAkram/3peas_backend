@@ -47,6 +47,8 @@ use App\Http\Controllers\PaymentAccountController;
 use App\Http\Controllers\UserPaymentController;
 use App\Http\Controllers\NewsTickerController;
 use App\Http\Middleware\EnsurePaymentVerified;
+use App\Http\Middleware\AttachJwtFromCookie;
+use App\Http\Middleware\AuthenticateJwtCookieGuard;
 use Illuminate\Auth\Events\PasswordReset;
 
 
@@ -66,7 +68,10 @@ Route::prefix('auth')->group(function () {
     Route::post('/register_user', [WebUserAuthController::class, 'registerWebUser']);
 
     // LMS authentication routes use the `web_api` guard and a separate JWT cookie.
-    Route::middleware(['jwt.cookie:lms', 'auth:web_api'])->group(function () {
+    Route::middleware([
+        AttachJwtFromCookie::class . ':lms',
+        AuthenticateJwtCookieGuard::class . ':lms',
+    ])->group(function () {
         Route::GET('me', [WebUserAuthController::class, 'me']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
         Route::get('/get-user-subscribed-classes', [OfferedClassesController::class, 'getUserSubscribedClasses']);
