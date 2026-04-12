@@ -183,6 +183,14 @@ class WebUserAuthService
             $user = Auth::guard($this->guard)->user();
 
             if (!$user) {
+                Log::warning('Web user me unauthorized', [
+                    'guard' => $this->guard,
+                    'has_cookie' => request()->hasCookie($this->cookieName()),
+                    'has_bearer' => !empty(request()->bearerToken()),
+                    'ip' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                ]);
+
                 return response()->json([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -256,6 +264,8 @@ class WebUserAuthService
 
         return response()->json([
             'message' => $message,
+            'token' => $token,
+            'expires_in' => (int) config('jwt.ttl') * 60,
             'user' => $this->userPayload($user),
             'profile_complete' => (bool) optional($user->profile)->profile_completed,
         ])->cookie(
@@ -267,27 +277,31 @@ class WebUserAuthService
             $this->cookieSecure(),
             true,
             false,
-            'Lax'
+            $this->cookieSameSite()
         );
     }
 
     private function cookieDomain(): ?string
     {
-        if (app()->environment('production')) {
-            return 'api.thestudentstimes.com';
-        }
-
-        return null;
+        return env('LMS_JWT_COOKIE_DOMAIN', app()->environment('production') ? 'api.thestudentstimes.com' : null);
     }
 
     private function cookieSecure(): bool
     {
-        return app()->environment('production');
+        return filter_var(
+            env('LMS_JWT_COOKIE_SECURE', app()->environment('production')),
+            FILTER_VALIDATE_BOOL
+        );
     }
 
     private function cookieName(): string
     {
         return env('LMS_JWT_COOKIE_NAME', 'lms_auth_token');
+    }
+
+    private function cookieSameSite(): string
+    {
+        return env('LMS_JWT_COOKIE_SAMESITE', 'Lax');
     }
 
     private function userPayload(WebUser $user): array
