@@ -61,6 +61,13 @@ class OfferedClassesController extends Controller
     public function getOfferedClasses(){
         $cls = $this->offeredClassesQuery()->get();
 
+        Log::info('Offered classes retrieved for LMS.', [
+            'offered_classes_count' => $cls->count(),
+            'first_offered_class_id' => optional($cls->first())->id,
+            'first_user_class_slug' => optional(optional($cls->first())->userClass)->slug,
+            'first_offered_programs_count' => optional(optional($cls->first())->offeredPrograms)->count(),
+        ]);
+
         return response()->json($cls);
     }
 
@@ -69,7 +76,12 @@ class OfferedClassesController extends Controller
 
         $cls = $this->userSubscribedClassesQuery($user->id)->get();
 
-        Log::info("User subscribed classes retrieved for user_id: " . $user->id, ['subscribed_classes_count' => $cls->count()]);
+        Log::info("User subscribed classes retrieved for user_id: " . $user->id, [
+            'subscribed_classes_count' => $cls->count(),
+            'first_subscription_id' => optional($cls->first())->id,
+            'first_offered_program_id' => optional(optional($cls->first())->offeredProgram)->id,
+            'first_offered_class_id' => optional(optional(optional($cls->first())->offeredProgram)->offeredClass)->id,
+        ]);
 
         return response()->json($cls);
     }
@@ -88,6 +100,12 @@ class OfferedClassesController extends Controller
         $offeredClasses = $this->offeredClassesQuery()
             ->whereIn('id', $subscribedOfferedClassIds)
             ->get();
+
+        Log::info("Dashboard classes retrieved for user_id: " . $user->id, [
+            'subscribed_classes_count' => $subscribedClasses->count(),
+            'offered_classes_count' => $offeredClasses->count(),
+            'subscribed_offered_class_ids' => $subscribedOfferedClassIds->all(),
+        ]);
 
         return response()->json([
             'offered_classes' => $offeredClasses,
@@ -119,7 +137,13 @@ class OfferedClassesController extends Controller
             ])
             ->firstOrFail();
 
-            Log::info("Offered class details retrieved for slug: " . $slug, ['offeredClass' => $offereClass]);
+            Log::info("Offered class details retrieved for slug: " . $slug, [
+                'user_class_id' => $offereClass->id,
+                'user_class_slug' => $offereClass->slug,
+                'offered_classes_count' => optional($offereClass->offeredClasses)->count(),
+                'first_offered_class_id' => optional(optional($offereClass->offeredClasses)->first())->id,
+                'first_offered_programs_count' => optional(optional(optional($offereClass->offeredClasses)->first())->offeredPrograms)->count(),
+            ]);
 
         return response()->json($offereClass);
     }   
@@ -272,3 +296,4 @@ class OfferedClassesController extends Controller
             }
         }
 }
+
