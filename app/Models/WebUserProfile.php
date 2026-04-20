@@ -22,16 +22,22 @@ class WebUserProfile extends Model
     protected $fillable = [
         'user_id', 
         'address', 
-        'city_id',        
-        'profile_completed',        
+        'city_id',
+        'phone',
+        'class_id',
+        'curriculum_board_id',
         'institute_id', 
+        'incharge_name',
+        'incharge_phone',
         'gender_id',
         'dob',
-        'designation',        
-        'heard_about_id', 
-        'preferred_language', 
-        'referral_code',     
-       
+        'study_plan_id',
+        'study_group_id',
+        'designation',
+        'heard_about_id',
+        'referral_code',
+        'profile_completed',
+        'preferred_language',
     ];
 
     public function user(){

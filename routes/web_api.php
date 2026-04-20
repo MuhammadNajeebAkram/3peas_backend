@@ -26,6 +26,7 @@ use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\InstituteController;
+use App\Http\Controllers\StudentActivityController;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\HeardAboutController;
 use App\Http\Controllers\StudyPlanController;
@@ -46,6 +47,10 @@ use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentAccountController;
 use App\Http\Controllers\UserPaymentController;
 use App\Http\Controllers\NewsTickerController;
+use App\Http\Controllers\Stats\StudentSubjectProgressSummaryController;
+use App\Http\Controllers\Stats\StudentUnitProgressSummaryController;
+use App\Http\Controllers\Tests\PracticeSessionController;
+use App\Http\Controllers\Tests\TestController;
 use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\AttachJwtFromCookie;
 use App\Http\Middleware\AuthenticateJwtCookieGuard;
@@ -75,13 +80,41 @@ Route::prefix('auth')->group(function () {
         Route::GET('me', [WebUserAuthController::class, 'me']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
         Route::get('/get-user-subscribed-classes', [OfferedClassesController::class, 'getUserSubscribedClasses']);
+        Route::get('/get-user-subscribed-programs', [OfferedProgramController::class, 'getUserSubscribedOfferedProgramsForLMS']);
         Route::get('/get-offered-class-details/{slug}', [OfferedClassesController::class, 'getOfferedClassDetails']);
         Route::get('/get-offered-program-details/{slug}', [OfferedProgramController::class, 'getOfferedProgramDetails']);
+
+        Route::prefix('statistics')->group(function () {
+            Route::post('/get-subject-preparation-scores', [StudentSubjectProgressSummaryController::class, 'getSubjectPreparationScoresForLms']);
+            Route::post('/get-student-subject-performance-overview', [StudentSubjectProgressSummaryController::class, 'getStudentSubjectPerformanceOverviewForLms']);
+            Route::post('/get-student-subject-mcq-stats', [StudentSubjectProgressSummaryController::class, 'getStudentSubjectMcqStatsForLms']);
+            Route::post('/get-student-weak-units', [StudentSubjectProgressSummaryController::class, 'getStudentWeakUnitsForLms']);
+            Route::post('/get-student-weak-topics', [StudentUnitProgressSummaryController::class, 'getStudentWeakTopicsForLms']);
+            Route::post('/get-student-unit-performance-overview', [StudentUnitProgressSummaryController::class, 'getStudentUnitPerformanceOverviewForLms']);
+            Route::post('/get-student-unit-mcq-stats', [StudentUnitProgressSummaryController::class, 'getStudentUnitMcqStatsForLms']);
+        });
+
+        Route::prefix('tests')->group(function () {
+            Route::post('/generate-selected-units-formal-test', [TestController::class, 'generateSelectedUnitsFormalTestForLms']);
+            Route::post('/generate-full-book-formal-test', [TestController::class, 'generateFullBookFormalTestForLms']);
+            Route::get('/get-recent-attempts', [TestController::class, 'getRecentAttemptsForLms']);
+            Route::post('/save-formal-test-question-progress', [TestController::class, 'saveFormalTestQuestionProgressForLms']);
+            Route::post('/submit-formal-test', [TestController::class, 'submitFormalTestForLms']);
+            Route::post('/generate-selected-units-practice-session', [PracticeSessionController::class, 'generateSelectedUnitsPracticeSessionForLms']);
+            Route::post('/generate-full-book-practice-session', [PracticeSessionController::class, 'generateFullBookPracticeSessionForLms']);
+            Route::post('/save-practice-session-question-progress', [PracticeSessionController::class, 'savePracticeSessionQuestionProgressForLms']);
+            Route::post('/submit-practice-session', [PracticeSessionController::class, 'submitPracticeSessionForLms']);
+        });
+
+        Route::prefix('activities')->group(function () {
+            Route::get('/get-student-activities', [StudentActivityController::class, 'getStudentActivitiesForLms']);
+        });
         
         Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest']);
 
         Route::prefix('my-classes')->group(function () {
             Route::get('/get-books/{program_id}/{subject_id}', [BooksController::class, 'getBooksByProgram']);
+            Route::get('/get-units/{program_id}/{subject_id}', [UnitsController::class, 'getUnitsOfUserSubjectForLMS']);
             Route::get('/get-topics-by-units/{unit_id}/topics', [TopicsController::class, 'getTopicsByUnitForLMS']);
             Route::get('/get-questions-by-topic/{topic_id}/questions', [QuestionsController::class, 'getQuestionsByTopicForLMS']);
         });

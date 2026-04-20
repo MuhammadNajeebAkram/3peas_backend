@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Institute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class InstituteController extends Controller
 {
@@ -105,6 +106,29 @@ class InstituteController extends Controller
                 'error' => $e -> getMessage(),
             ]);
 
+        }
+    }
+
+    public function getActiveInstituteByCityForAdmin($city_id){
+        try{
+            $institutes = Institute::where('city_id', $city_id)
+            ->where('activate', 1)
+            ->select(['id', 'name'])
+            ->orderBy('name', 'asc')
+            ->get();
+
+            return response()->json([
+                'success' => 1,
+                'data' => $institutes,
+            ], 200);
+        }
+        catch(\Exception $e){
+            Log::error('error in getActiveInstituteByCityForAdmin: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

@@ -29,15 +29,18 @@ use App\Http\Middleware\AuthenticateJwtCookieGuard;
 use App\Http\Controllers\CurriculumBoardController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DivisionController;
+use App\Http\Controllers\HeardAboutController;
 use App\Http\Controllers\InstituteController;
 use App\Http\Controllers\ModelPapers\ModelPaperController;
 use App\Http\Controllers\ModelPapers\ModelPaperQuestionController;
+use App\Http\Controllers\OfferedClassesController;
 use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\StudyGroupController;
 use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\StudySessionController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
+use App\Http\Controllers\OfferedProgramController;
 use App\Http\Middleware\CheckFrontendApiKey;
 
 /*
@@ -58,6 +61,14 @@ Route::prefix('admin/auth')->group(function () {
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::post('media/presign', [NewsController::class, 'presignMediaUpload']);
 
+        Route::prefix('web-user')->group(function () {
+            Route::post('/create', [WebUserAuthController::class, 'saveUserDataByAdmin']);
+            Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin']);
+            Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin']);
+
+        });
+       
+       
         Route::prefix('news')->group(function () {
             Route::get('/all', [NewsController::class, 'getAllNewsForAdmin']);
             Route::post('/add', [NewsController::class, 'saveNewsFromAdmin']);
@@ -80,6 +91,83 @@ Route::prefix('admin/auth')->group(function () {
                 Route::delete('/delete/{id}', [NewsCategoryController::class, 'deleteNewsCategoryForAdmin']);
                 Route::get('/active', [NewsCategoryController::class, 'getActiveNewsCategoryForAdmin']);
             });
+            
+        });
+
+        Route::prefix('class')->group(function () {
+            Route::get('/all', [ClassesController::class, 'getClassesForAdmin']);
+            Route::get('/active', [ClassesController::class, 'getActiveClassesForAdmin']);
+            Route::post('/add', [ClassesController::class, 'saveClassForAdmin']);
+            Route::post('/update/{id}', [ClassesController::class, 'updateClassForAdmin']);
+        });
+
+        Route::prefix('curriculum-board')->group(function () {
+            Route::get('/all', [CurriculumBoardController::class, 'getAllCurriculumBoardsForAdmin']);
+            Route::get('/active', [CurriculumBoardController::class, 'getActiveCurriculumBoardsForAdmin']);
+            Route::post('/add', [CurriculumBoardController::class, 'saveCurriculumBoardForAdmin']);
+            Route::post('/update/{id}', [CurriculumBoardController::class, 'updateCurriculumBoardForAdmin']);
+            Route::post('/activate', [CurriculumBoardController::class, 'activateCurriculumBoardForAdmin']);
+        });
+
+        Route::prefix('subject')->group(function () {
+            Route::get('/all', [SubjectsController::class, 'getSubjectsForAdmin']);
+            Route::get('/active', [SubjectsController::class, 'getActiveSubjectsForAdmin']);
+            Route::post('/add', [SubjectsController::class, 'saveSubjectForAdmin']);
+            Route::post('/update/{id}', [SubjectsController::class, 'updateSubjectForAdmin']);
+            Route::post('/activate', [SubjectsController::class, 'activateSubjectForAdmin']);
+        });
+
+        Route::prefix('book')->group(function () {
+            Route::get('/all', [BooksController::class, 'getBooksForAdmin']);
+            Route::get('/active', [BooksController::class, 'getActiveBooksForAdmin']);
+            Route::post('/add', [BooksController::class, 'saveBookForAdmin']);
+            Route::post('/update/{id}', [BooksController::class, 'updateBookForAdmin']);
+            Route::post('/activate', [BooksController::class, 'activateBookForAdmin']);
+        });
+
+        Route::prefix('book-unit')->group(function () {
+            Route::get('/all', [UnitsController::class, 'getUnitsForAdmin']);
+            Route::get('/active', [UnitsController::class, 'getActiveUnitsForAdmin']);
+            Route::post('/add', [UnitsController::class, 'saveUnitForAdmin']);
+            Route::post('/update/{id}', [UnitsController::class, 'updateUnitForAdmin']);
+            Route::post('/activate', [UnitsController::class, 'activateUnitForAdmin']);
+        });
+
+        Route::prefix('topic')->group(function () {
+            Route::get('/all', [TopicsController::class, 'getTopicsForAdmin']);
+            Route::get('/active', [TopicsController::class, 'getActiveTopicsForAdmin']);
+            Route::post('/add', [TopicsController::class, 'saveTopicForAdmin']);
+            Route::post('/update/{id}', [TopicsController::class, 'updateTopicForAdmin']);
+            Route::post('/activate', [TopicsController::class, 'activateTopicForAdmin']);
+        });
+
+        Route::prefix('offered-classes')->group(function () {
+            Route::get('/all', [OfferedClassesController::class, 'getAllOfferedClassesForAdmin']);
+            Route::get('/active', [OfferedClassesController::class, 'getActiveOfferedClassesForAdmin']);
+            Route::post('/add', [OfferedClassesController::class, 'saveOfferedClassForAdmin']);
+            Route::post('/update/{id}', [OfferedClassesController::class, 'updateOfferedClassForAdmin']);
+            Route::post('/activate', [OfferedClassesController::class, 'activateOfferedClassForAdmin']);
+        });
+        Route::prefix('offered-programs')->group(function () {
+            Route::get('/all', [OfferedProgramController::class, 'getAllOfferedProgramsForAdmin']);
+            Route::get('/active', [OfferedProgramController::class, 'getActiveOfferedProgramsForAdmin']);
+            Route::post('/add', [OfferedProgramController::class, 'saveOfferedProgramForAdmin']);
+             Route::post('/update/{id}', [OfferedProgramController::class, 'updateOfferedProgramForAdmin']);
+            // Route::post('/activate', [OfferedProgramController::class, 'activateOfferedProgramForAdmin']); 
+        });
+
+        Route::prefix('cities')->group(function () {
+            Route::post('/add', [CityController::class, 'saveCity']);
+            Route::get('/active', [CityController::class, 'getActiveCitiesForAdmin']);
+
+        });
+
+        Route::prefix('institutes')->group(function () {
+            Route::get('/active/{city_id}', [InstituteController::class, 'getActiveInstituteByCityForAdmin']);
+        });
+
+        Route::prefix('heard-about')->group(function () {
+            Route::get('/active', [HeardAboutController::class, 'getActiveHeardAboutForAdmin']);
         });
     });
 });
@@ -241,7 +329,7 @@ Route::post('update-institute', [InstituteController::class, 'updateInstitute'])
 Route::get('get-institutes-by-city/{id}', [InstituteController::class, 'getInstitutesByCity']);
 
 Route::post('create-web-user', [WebUserAuthController::class, 'saveUserDataByAdmin']);
-Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserData']);
+Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserDataByAdmin']);
 Route::get('get-unverified-web-users', [WebUserAuthController::class, 'getUnVerifiedWebUsers']);
 Route::post('update-web-user', [WebUserAuthController::class, 'updateUserDataByAdmin']);
 Route::post('verified-web-user', [WebUserAuthController::class, 'verifiedUserByAdmin']);

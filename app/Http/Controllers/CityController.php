@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\City;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CityController extends Controller
 {
@@ -96,4 +97,23 @@ class CityController extends Controller
 
         }
     }
+
+    public function getActiveCitiesForAdmin(){
+        try{
+            $cities = City::where('activate', 1)->get();
+
+            return response()->json([
+                'success' => 1,
+                'data' => $cities,
+            ]);
+        }
+        catch(\Exception $e){
+            Log::error('error in getActiveCitiesForAdmin', $e->getMessage());
+            return response()->json([
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+   
 }

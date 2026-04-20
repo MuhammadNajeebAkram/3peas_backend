@@ -9,6 +9,10 @@ class CurriculumBoard extends Model
 {
     use HasFactory;
     protected $table = 'curriculum_board_tbl';
+    protected $fillable = [
+        'name',
+        'activate',
+    ];
 
     public function modelPapers(){
         return $this->hasMany(ModelPaper::class, 'curriculum_board_id');

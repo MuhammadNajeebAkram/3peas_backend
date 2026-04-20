@@ -7,9 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserClass extends Model
 {
+    protected $table = 'class_tbl';
     use HasFactory;
 
-    protected $table = 'class_tbl';
+    protected $fillable = [
+        'class_name',
+        'class_name_um',
+        'slug',
+    ];
+
+    
 
      public function books(){
         return $this->hasMany(Book::class, 'class_id');

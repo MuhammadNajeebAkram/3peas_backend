@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\UserClass;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth as FacadesAuth;
 use Illuminate\Support\Facades\DB;
@@ -152,6 +153,96 @@ class ClassesController extends Controller
         ]);
     }
 }
+
+public function getClassesForAdmin(Request $request){
+    try {
+       $classes = UserClass::get();
+
+        return response()->json([
+            'success' => 1,
+            'classes' => $classes
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
+    }
+}
+public function getActiveClassesForAdmin(Request $request){
+    try {
+       $classes = UserClass::where('activate', 1)->get();
+
+        return response()->json([
+            'success' => 1,
+            'data' => $classes
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
+    }
+}
+
+public function saveClassForAdmin(Request $request){
+    $validate = $request->validate([
+        'class_name' => 'required|string|unique:class_tbl,class_name',
+        'class_name_um' => 'nullable|string|unique:class_tbl,class_name_um',
+        'slug' => 'required|string|unique:class_tbl,slug',
+    ]);
+
+    try {
+        $class = new UserClass();
+        $class->class_name = $request->class_name;
+        $class->class_name_um = $request->class_name_um;
+        $class->slug = $request->slug;
+        $class->activate = 1;
+        $class->save();
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Class saved successfully.'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
+    }
+}
+
+public function updateClassForAdmin(Request $request, $id){
+    $validate = $request->validate([
+        'class_name' => 'required|string|unique:class_tbl,class_name,' . $id,
+        'class_name_um' => 'nullable|string|unique:class_tbl,class_name_um,' . $id,
+        'slug' => 'required|string|unique:class_tbl,slug,' . $id,
+    ]);
+
+    try {
+        $class = UserClass::findOrFail($id);
+        $class->class_name = $request->class_name;
+        $class->class_name_um = $request->class_name_um;
+        $class->slug = $request->slug;
+        if ($request->has('activate')) {
+            $class->activate = $request->activate;
+        }
+        $class->save();
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Class updated successfully.'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ]);
+    }       }
 
 
     

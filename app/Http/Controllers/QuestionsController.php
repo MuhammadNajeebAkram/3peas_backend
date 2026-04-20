@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExamQuestion;
+use App\Models\StudentActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -858,13 +859,77 @@ if ($existingRecord) {
 
     //----------------- new lms -----------------------
 
-    public function getQuestionsByTopicForLMS($topic_id){
+    public function getQuestionsByTopicForLMS(Request $request, $topic_id){
         try{
             $questions = ExamQuestion::with(['answers', 'answerOptions', 'questionType'])
                 ->where('topic_id', $topic_id)
                 ->where('activate', 1)
                 ->orderBy('question_type', 'asc')
                 ->get();
+
+            $topicContext = DB::table('book_unit_topic_tbl as topics')
+                ->join('book_unit_tbl as units', 'units.id', '=', 'topics.unit_id')
+                ->join('book_tbl as books', 'books.id', '=', 'units.book_id')
+                ->join('subject_tbl as subjects', 'subjects.id', '=', 'books.subject_id')
+                ->where('topics.id', $topic_id)
+                ->select(
+                    'topics.id as topic_id',
+                    'topics.topic_name',
+                    'topics.topic_no',
+                    'units.id as unit_id',
+                    'units.unit_name',
+                    'units.unit_no',
+                    'subjects.id as subject_id',
+                    'subjects.subject_name'
+                )
+                ->first();
+
+            if ($topicContext && $request->user()) {
+                $unitLabel = $topicContext->unit_no
+                    ? 'Unit ' . $topicContext->unit_no
+                    : $topicContext->unit_name;
+
+                if ($topicContext->unit_name) {
+                    $unitLabel .= ' - ' . $topicContext->unit_name;
+                }
+
+                $topicLabel = $topicContext->topic_no
+                    ? 'Topic ' . $topicContext->topic_no
+                    : 'Topic';
+
+                if ($topicContext->topic_name) {
+                    $topicLabel .= ' - ' . $topicContext->topic_name;
+                }
+
+                StudentActivity::create([
+                    'user_id' => $request->user()->id,
+                    'activity_type' => 'topic_questions_opened',
+                    'title' => 'Topic Questions Opened',
+                    'description' => 'Opened questions for '
+                        . $topicContext->subject_name
+                        . ' covering '
+                        . $unitLabel
+                        . ' and '
+                        . $topicLabel
+                        . '.',
+                    'offered_program_id' => $request->integer('offered_program_id') ?: null,
+                    'subject_id' => $topicContext->subject_id,
+                    'unit_id' => $topicContext->unit_id,
+                    'reference_id' => $topicContext->topic_id,
+                    'reference_type' => 'topic',
+                    'meta' => [
+                        'topic_id' => (int) $topicContext->topic_id,
+                        'topic_name' => $topicContext->topic_name,
+                        'topic_no' => $topicContext->topic_no,
+                        'unit_name' => $topicContext->unit_name,
+                        'unit_no' => $topicContext->unit_no,
+                        'subject_name' => $topicContext->subject_name,
+                        'question_count' => $questions->count(),
+                    ],
+                    'activity_at' => now(),
+                ]);
+            }
+
                 return response()->json($questions);
 
 

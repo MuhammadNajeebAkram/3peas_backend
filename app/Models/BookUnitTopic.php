@@ -20,7 +20,7 @@ class BookUnitTopic extends Model
     ];
 
     public function bookUnit(){
-        return $this->belongsTo(BookUnit::class);
+        return $this->belongsTo(BookUnit::class, 'unit_id');
     }
 
     public function questions(){

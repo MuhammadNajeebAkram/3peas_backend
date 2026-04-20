@@ -204,4 +204,164 @@ class BooksController extends Controller
 
         }
     }
+
+    public function getBooksForAdmin()
+    {
+        try {
+            $books = Book::with([
+                'userClass:id,class_name',
+                'subject:id,subject_name',
+                'curriculmBoard:id,name',
+            ])
+                ->orderBy('book_name')
+                ->get()
+                ->map(function ($book) {
+                    return [
+                        'id' => $book->id,
+                        'book_name' => $book->book_name,
+                        'class_id' => $book->class_id,
+                        'class_name' => $book->userClass?->class_name,
+                        'subject_id' => $book->subject_id,
+                        'subject_name' => $book->subject?->subject_name,
+                        'curriculum_board_id' => $book->curriculum_board_id,
+                        'curriculum_board_name' => $book->curriculmBoard?->name,
+                        'activate' => (bool) $book->activate,
+                    ];
+                });
+
+            return response()->json([
+                'success' => 1,
+                'books' => $books,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getActiveBooksForAdmin()
+    {
+        try {
+            $books = Book::with([
+                'userClass:id,class_name',
+                'subject:id,subject_name',
+                'curriculmBoard:id,name',
+            ])
+                ->where('activate', 1)
+                ->orderBy('book_name')
+                ->get()
+                ->map(function ($book) {
+                    return [
+                        'id' => $book->id,
+                        'book_name' => $book->book_name,
+                        'class_id' => $book->class_id,
+                        'class_name' => $book->userClass?->class_name,
+                        'subject_id' => $book->subject_id,
+                        'subject_name' => $book->subject?->subject_name,
+                        'curriculum_board_id' => $book->curriculum_board_id,
+                        'curriculum_board_name' => $book->curriculmBoard?->name,
+                    ];
+                });
+
+            return response()->json([
+                'success' => 1,
+                'books' => $books,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function saveBookForAdmin(Request $request)
+    {
+        $request->validate([
+            'book_name' => 'required|string|max:255|unique:book_tbl,book_name',
+            'class_id' => 'required|integer|exists:class_tbl,id',
+            'subject_id' => 'required|integer|exists:subject_tbl,id',
+            'curriculum_board_id' => 'required|integer|exists:curriculum_board_tbl,id',
+        ]);
+
+        try {
+            Book::create([
+                'book_name' => $request->book_name,
+                'class_id' => $request->class_id,
+                'subject_id' => $request->subject_id,
+                'curriculum_board_id' => $request->curriculum_board_id,
+                'activate' => 1,
+            ]);
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Book saved successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateBookForAdmin(Request $request, $id)
+    {
+        $request->validate([
+            'book_name' => 'required|string|max:255|unique:book_tbl,book_name,' . $id,
+            'class_id' => 'required|integer|exists:class_tbl,id',
+            'subject_id' => 'required|integer|exists:subject_tbl,id',
+            'curriculum_board_id' => 'required|integer|exists:curriculum_board_tbl,id',
+        ]);
+
+        try {
+            $book = Book::findOrFail($id);
+            $book->book_name = $request->book_name;
+            $book->class_id = $request->class_id;
+            $book->subject_id = $request->subject_id;
+            $book->curriculum_board_id = $request->curriculum_board_id;
+
+            if ($request->has('activate')) {
+                $book->activate = $request->activate;
+            }
+
+            $book->save();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Book updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function activateBookForAdmin(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:book_tbl,id',
+            'activate' => 'required|boolean',
+        ]);
+
+        try {
+            $book = Book::findOrFail($request->id);
+            $book->activate = $request->activate;
+            $book->save();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Book status updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

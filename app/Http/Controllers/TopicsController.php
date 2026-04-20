@@ -389,7 +389,187 @@ class TopicsController extends Controller
         }
     }
 
-    
+    public function getTopicsForAdmin()
+    {
+        try {
+            $topics = BookUnitTopic::with('bookUnit:id,unit_name')
+                ->orderBy('unit_id')
+                ->orderBy('topic_no')
+                ->get()
+                ->map(function ($topic) {
+                    return [
+                        'id' => $topic->id,
+                        'topic_name' => $topic->topic_name,
+                        'topic_name_um' => $topic->topic_name_um,
+                        'topic_no' => $topic->topic_no,
+                        'unit_id' => $topic->unit_id,
+                        'unit_name' => $topic->bookUnit?->unit_name,
+                        'activate' => (bool) $topic->activate,
+                        'is_alp' => (bool) $topic->is_alp,
+                    ];
+                });
+
+            return response()->json([
+                'success' => 1,
+                'topics' => $topics,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getActiveTopicsForAdmin()
+    {
+        try {
+            $topics = BookUnitTopic::with('bookUnit:id,unit_name')
+                ->where('activate', 1)
+                ->orderBy('unit_id')
+                ->orderBy('topic_no')
+                ->get()
+                ->map(function ($topic) {
+                    return [
+                        'id' => $topic->id,
+                        'topic_name' => $topic->topic_name,
+                        'topic_name_um' => $topic->topic_name_um,
+                        'topic_no' => $topic->topic_no,
+                        'unit_id' => $topic->unit_id,
+                        'unit_name' => $topic->bookUnit?->unit_name,
+                        'is_alp' => (bool) $topic->is_alp,
+                    ];
+                });
+
+            return response()->json([
+                'success' => 1,
+                'topics' => $topics,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function saveTopicForAdmin(Request $request)
+    {
+        $request->validate([
+            'topic_name' => 'required|string|max:255',
+            'topic_name_um' => 'nullable|string|max:255',
+            'topic_no' => 'nullable|integer|min:1',
+            'unit_id' => 'required|integer|exists:book_unit_tbl,id',
+            'is_alp' => 'nullable|boolean',
+        ]);
+
+        try {
+            $duplicateTopic = BookUnitTopic::where('unit_id', $request->unit_id)
+                ->where('topic_name', $request->topic_name)
+                ->exists();
+
+            if ($duplicateTopic) {
+                return response()->json([
+                    'success' => 2,
+                    'message' => 'Topic name already exists for this unit.',
+                ]);
+            }
+
+            BookUnitTopic::create([
+                'topic_name' => $request->topic_name,
+                'topic_name_um' => $request->topic_name_um,
+                'topic_no' => $request->topic_no,
+                'unit_id' => $request->unit_id,
+                'activate' => 1,
+                'is_alp' => $request->boolean('is_alp', true),
+            ]);
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Topic saved successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateTopicForAdmin(Request $request, $id)
+    {
+        $request->validate([
+            'topic_name' => 'required|string|max:255',
+            'topic_name_um' => 'nullable|string|max:255',
+            'topic_no' => 'nullable|integer|min:1',
+            'unit_id' => 'required|integer|exists:book_unit_tbl,id',
+            'is_alp' => 'nullable|boolean',
+        ]);
+
+        try {
+            $topic = BookUnitTopic::findOrFail($id);
+
+            $duplicateTopic = BookUnitTopic::where('unit_id', $request->unit_id)
+                ->where('topic_name', $request->topic_name)
+                ->where('id', '!=', $id)
+                ->exists();
+
+            if ($duplicateTopic) {
+                return response()->json([
+                    'success' => 2,
+                    'message' => 'Topic name already exists for this unit.',
+                ]);
+            }
+
+            $topic->topic_name = $request->topic_name;
+            $topic->topic_name_um = $request->topic_name_um;
+            $topic->topic_no = $request->topic_no;
+            $topic->unit_id = $request->unit_id;
+            $topic->is_alp = $request->has('is_alp')
+                ? $request->boolean('is_alp')
+                : $topic->is_alp;
+
+            if ($request->has('activate')) {
+                $topic->activate = $request->activate;
+            }
+
+            $topic->save();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Topic updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function activateTopicForAdmin(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:book_unit_topic_tbl,id',
+            'activate' => 'required|boolean',
+        ]);
+
+        try {
+            $topic = BookUnitTopic::findOrFail($request->id);
+            $topic->activate = $request->activate;
+            $topic->save();
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Topic status updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 
 
 }

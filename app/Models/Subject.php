@@ -10,6 +10,11 @@ class Subject extends Model
     use HasFactory;
 
     protected $table = 'subject_tbl';
+    protected $fillable = [
+        'subject_name',
+        'icon_name',
+        'activate',
+    ];
 
     
     

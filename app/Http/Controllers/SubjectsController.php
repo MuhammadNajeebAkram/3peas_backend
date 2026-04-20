@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Services\WebUserService;
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -167,7 +168,7 @@ class SubjectsController extends Controller
         }
     }
 
-    public function getSubjectsByUser(Request $request)
+public function getSubjectsByUser(Request $request)
 {
     $user = Auth::guard('web_api')->user();
 
@@ -204,6 +205,122 @@ class SubjectsController extends Controller
         return response()->json([
             'success' => 0,
             'error' => $e->getMessage(), // Changed key from 'subjects' to 'error' for clarity
+        ], 500);
+    }
+}
+
+public function getSubjectsForAdmin()
+{
+    try {
+        $subjects = Subject::orderBy('subject_name')->get();
+
+        return response()->json([
+            'success' => 1,
+            'subjects' => $subjects,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+public function getActiveSubjectsForAdmin()
+{
+    try {
+        $subjects = Subject::where('activate', 1)
+            ->orderBy('subject_name')
+            ->get(['id', 'subject_name', 'icon_name']);
+
+        return response()->json([
+            'success' => 1,
+            'subjects' => $subjects,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+public function saveSubjectForAdmin(Request $request)
+{
+    $request->validate([
+        'subject_name' => 'required|string|max:255|unique:subject_tbl,subject_name',
+        'icon_name' => 'nullable|string|max:255',
+    ]);
+
+    try {
+        Subject::create([
+            'subject_name' => $request->subject_name,
+            'icon_name' => $request->icon_name,
+            'activate' => 1,
+        ]);
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Subject saved successfully.',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+public function updateSubjectForAdmin(Request $request, $id)
+{
+    $request->validate([
+        'subject_name' => 'required|string|max:255|unique:subject_tbl,subject_name,' . $id,
+        'icon_name' => 'nullable|string|max:255',
+    ]);
+
+    try {
+        $subject = Subject::findOrFail($id);
+        $subject->subject_name = $request->subject_name;
+        $subject->icon_name = $request->icon_name;
+
+        if ($request->has('activate')) {
+            $subject->activate = $request->activate;
+        }
+
+        $subject->save();
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Subject updated successfully.',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+public function activateSubjectForAdmin(Request $request)
+{
+    $request->validate([
+        'id' => 'required|integer|exists:subject_tbl,id',
+        'activate' => 'required|boolean',
+    ]);
+
+    try {
+        $subject = Subject::findOrFail($request->id);
+        $subject->activate = $request->activate;
+        $subject->save();
+
+        return response()->json([
+            'success' => 1,
+            'message' => 'Subject status updated successfully.',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => 0,
+            'error' => $e->getMessage(),
         ], 500);
     }
 }

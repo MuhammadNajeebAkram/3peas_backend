@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Services\Authentication\WebUserAuthService;
 use App\Http\Services\WebUserService;
 use App\Models\StudyPlan;
+use App\Models\UserSubscription;
 use App\Models\UserStudyPlan;
 use App\Models\WebUser;
 use App\Models\WebUserProfile;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 use function Symfony\Component\Clock\now;
 
@@ -104,76 +106,98 @@ class WebUserAuthController extends Controller
 
     public function saveUserDataByAdmin(Request $request){
         $validated = $request->validate([
-            'name' => 'required|string',
-            'email' => 'required|email|unique:web_users',
-            'password' => 'required|min:8|confirmed',
-            'role' => 'required|string', // Ensure 'role' is validated
-            'address' => 'required|string',
-            'city_id' => 'required|integer|exists:city_tbl,id',
-            'phone' => 'required|string',
-            'class_id' => 'nullable|integer|exists:class_tbl,id',
-            'curriculum_board_id' => 'nullable|integer|exists:curriculum_board_tbl,id',
-            'institute_id' => 'nullable|exists:institute_tbl,id', // Fixed typo
-            'incharge_name' => 'nullable|string',
-            'incharge_phone' => 'nullable|string',
-            'gender_id' => 'nullable|integer',
-            'dob' => 'required|date',
-            'designation' => 'nullable|string',
-            'heard_about_id' => 'required|integer|exists:heard_about_tbl,id',
-            'study_group_id' => 'integer|exists:study_group_tbl,id',
-            'study_plan_id' => 'integer|exists:study_plan_tbl,id',
+            'name' => ['required', 'string'],
+            'email' => ['required', 'email', 'unique:web_users,email'],
+            'password' => ['required', 'string', 'min:8'],
+            'role' => ['required', 'string'],
+            'phone' => ['nullable', 'string', 'unique:web_users,phone'],
+            'google_id' => ['nullable', 'string', 'unique:web_users,google_id'],
+            'login_provider' => ['required', Rule::in(['email', 'google'])],
+            'avatar' => ['nullable', 'string'],
+            'status' => ['nullable', Rule::in(['active', 'blocked'])],
+            'email_verified_at' => ['nullable', 'date'],
+            'last_login_at' => ['nullable', 'date'],
+            'profile' => ['nullable', 'array'],
+            'profile.address' => ['nullable', 'string'],
+            'profile.city_id' => ['nullable', 'integer', 'exists:city_tbl,id'],
+            'profile.institute_id' => ['nullable', 'integer', 'exists:institute_tbl,id'],
+            'profile.gender_id' => ['nullable', 'integer'],
+            'profile.dob' => ['nullable', 'date'],
+            'profile.designation' => ['nullable', 'string'],
+            'profile.heard_about_id' => ['nullable', 'integer', 'exists:heard_about_tbl,id'],
+            'profile.referral_code' => ['nullable', 'integer', 'unique:user_profile_tbl,referral_code'],
+            'profile.profile_completed' => ['nullable', 'boolean'],
+            'profile.preferred_language' => ['nullable', Rule::in(['en', 'ur'])],
+            'subscriptions' => ['nullable', 'array'],
+            'subscriptions.*.id' => ['nullable', 'integer', 'exists:user_subscriptions,id'],
+            'subscriptions.*.offered_program_id' => ['required', 'integer', 'exists:offered_programs,id'],
+            'subscriptions.*.status' => ['required', Rule::in(['pending', 'active', 'expired', 'rejected', 'cancelled'])],
+            'subscriptions.*.access_type' => ['required', Rule::in(['paid', 'discounted', 'free_specimen', 'complimentary'])],
+            'subscriptions.*.price_paid' => ['nullable', 'numeric', 'min:0'],
+            'subscriptions.*.started_at' => ['nullable', 'date'],
+            'subscriptions.*.expires_at' => ['nullable', 'date'],
+            'subscriptions.*.approved_at' => ['nullable', 'date'],
+            'subscriptions.*.approved_by' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         DB::beginTransaction();
         try{
-            $planId = $request->study_plan_id;
-            $plan = StudyPlan::find($planId);
-            $session_id = $plan->session_id;
+            $profile = $validated['profile'] ?? [];
+            $subscriptions = $validated['subscriptions'] ?? [];
+            $loginProvider = $validated['login_provider'];
 
-             $webUserData = [
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'email_verified_at' => now(),
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
-            'study_session_id' => $session_id,
-        ];
-        $user = WebUser::create($webUserData);
+            $webUserData = [
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'email_verified_at' => $validated['email_verified_at'] ?? ($loginProvider === 'google' ? now() : null),
+                'password' => Hash::make($validated['password']),
+                'role' => $validated['role'],
+                'avatar' => $validated['avatar'] ?? null,
+                'status' => $validated['status'] ?? 'active',
+                'phone' => $validated['phone'] ?? null,
+                'google_id' => $validated['google_id'] ?? null,
+                'login_provider' => $loginProvider,
+                'last_login_at' => $validated['last_login_at'] ?? null,
+            ];
 
-        $profileData = [
-            'user_id' => $user->id,
-                    'address' => $validated['address'] ?? null,
-                    'city_id' => $validated['city_id'],
-                    'phone' => $validated['phone'] ?? null,
-                    'class_id' => $validated['class_id'] ?? null,
-                    'curriculum_board_id' => $validated['curriculum_board_id'] ?? null,
-                    'institute_id' => $validated['institute_id'] ?? null, // Fixed typo
-                    'incharge_name' => $validated['incharge_name'] ?? null,
-                    'incharge_phone' => $validated['incharge_phone'] ?? null,
-                    'gender_id' => $validated['gender_id'],
-                    'dob' => $validated['dob'] ,
-                    'designation' => $validated['designation'] ?? null,
-                    'heard_about_id' => $validated['heard_about_id'],
-                    'study_plan_id' => $validated['study_plan_id'],
-                    'study_group_id' => $validated['study_group_id'],
-                    'activate' => $request->activate ?? 1,
-        ];
+            $user = WebUser::create($webUserData);
 
-        WebUserProfile::create($profileData);
+            $profileData = [
+                'user_id' => $user->id,
+                'address' => $profile['address'] ?? null,
+                'city_id' => $profile['city_id'] ?? null,
+                'institute_id' => $profile['institute_id'] ?? null,
+                'gender_id' => $profile['gender_id'] ?? null,
+                'dob' => $profile['dob'] ?? null,
+                'designation' => $profile['designation'] ?? null,
+                'heard_about_id' => $profile['heard_about_id'] ?? null,
+                'referral_code' => $profile['referral_code'] ?? null,
+                'profile_completed' => $profile['profile_completed'] ?? false,
+                'preferred_language' => $profile['preferred_language'] ?? 'en',
+            ];
 
-        $planData = [
-            'user_id' => $user->id,
-            'study_plan_id' => $validated['study_plan_id'],
-            'qty' => 1,
-            'price' => $request->price ?? 0,
-        ];
+            WebUserProfile::create($profileData);
 
-        UserStudyPlan::created($planData);
+            foreach ($subscriptions as $subscription) {
+                UserSubscription::create([
+                    'user_id' => $user->id,
+                    'offered_program_id' => $subscription['offered_program_id'],
+                    'status' => $subscription['status'],
+                    'access_type' => $subscription['access_type'],
+                    'price_paid' => $subscription['price_paid'] ?? 0,
+                    'started_at' => $subscription['started_at'] ?? null,
+                    'expires_at' => $subscription['expires_at'] ?? null,
+                    'approved_at' => $subscription['approved_at'] ?? null,
+                    'approved_by' => $subscription['approved_by'] ?? null,
+                ]);
+            }
 
         DB::commit();
 
         return response()->json([
-            'success' => 1
+            'success' => 1,
+            'message' => 'User created successfully by admin.',
+            'user_id' => $user->id,
         ]);
 
 
@@ -190,21 +214,49 @@ class WebUserAuthController extends Controller
 
     public function updateUserDataByAdmin(Request $request)
     {
-        // --- 1. Validation (CRITICAL FOR ADMIN ROUTES) ---
-        $request->validate([
-            'user_id' => 'required|integer|exists:web_users,id',
-            'profile_id' => 'required|integer|exists:user_profile_tbl,id',
-            'name' => 'required|string|max:255',
-            'phone' => 'nullable|string|max:20', 
-            // Add all other required validation rules here...
+        $validatedData = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:web_users,id'],
+            'name' => ['required', 'string'],
+            'email' => ['required', 'email', Rule::unique('web_users', 'email')->ignore($request->user_id)],
+            'password' => ['nullable', 'string', 'min:8'],
+            'role' => ['required', 'string'],
+            'phone' => ['nullable', 'string', Rule::unique('web_users', 'phone')->ignore($request->user_id)],
+            'google_id' => ['nullable', 'string', Rule::unique('web_users', 'google_id')->ignore($request->user_id)],
+            'login_provider' => ['required', Rule::in(['email', 'google'])],
+            'avatar' => ['nullable', 'string'],
+            'status' => ['nullable', Rule::in(['active', 'blocked'])],
+            'email_verified_at' => ['nullable', 'date'],
+            'last_login_at' => ['nullable', 'date'],
+            'profile' => ['nullable', 'array'],
+            'profile.address' => ['nullable', 'string'],
+            'profile.city_id' => ['nullable', 'integer', 'exists:city_tbl,id'],
+            'profile.institute_id' => ['nullable', 'integer', 'exists:institute_tbl,id'],
+            'profile.gender_id' => ['nullable', 'integer'],
+            'profile.dob' => ['nullable', 'date'],
+            'profile.designation' => ['nullable', 'string'],
+            'profile.heard_about_id' => ['nullable', 'integer', 'exists:heard_about_tbl,id'],
+            'profile.referral_code' => [
+                'nullable',
+                'integer',
+                Rule::unique('user_profile_tbl', 'referral_code')->ignore($request->input('profile.id')),
+            ],
+            'profile.profile_completed' => ['nullable', 'boolean'],
+            'profile.preferred_language' => ['nullable', Rule::in(['en', 'ur'])],
+            'subscriptions' => ['nullable', 'array'],
+            'subscriptions.*.offered_program_id' => ['required', 'integer', 'exists:offered_programs,id'],
+            'subscriptions.*.status' => ['required', Rule::in(['pending', 'active', 'expired', 'rejected', 'cancelled'])],
+            'subscriptions.*.access_type' => ['required', Rule::in(['paid', 'discounted', 'free_specimen', 'complimentary'])],
+            'subscriptions.*.price_paid' => ['nullable', 'numeric', 'min:0'],
+            'subscriptions.*.started_at' => ['nullable', 'date'],
+            'subscriptions.*.expires_at' => ['nullable', 'date'],
+            'subscriptions.*.approved_at' => ['nullable', 'date'],
+            'subscriptions.*.approved_by' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         DB::beginTransaction();
 
         try {
-            // --- 2. Target User Retrieval (FIXED) ---
-            // Use find() or firstOrFail() to get a single Model instance, not a Query Builder.
-            $userId = $request->user_id;
+            $userId = $validatedData['user_id'];
             $user = WebUser::find($userId);
 
             if (!$user) {
@@ -214,64 +266,90 @@ class WebUserAuthController extends Controller
                 ], 404);
             }
 
-            // Retrieve the profile using the requested profile ID
-            $userProfileId = $request->profile_id;
-            $userProfile = WebUserProfile::find($userProfileId);
-            
-            if (!$userProfile || $userProfile->user_id !== $user->id) {
-                 return response()->json([
-                    'success' => 0,
-                    'error' => "Profile ID {$userProfileId} does not match User ID {$userId}."
-                ], 404);
-            }
+            $profile = $validatedData['profile'] ?? [];
+            $subscriptions = $validatedData['subscriptions'] ?? null;
+            $userProfile = WebUserProfile::firstOrCreate(['user_id' => $user->id]);
 
-            // --- 3. Update User Data ---
             $userData = [
-                'name' => $request->name,
-                // Do NOT allow email update here unless you have a dedicated flow
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'role' => $validatedData['role'],
+                'avatar' => $validatedData['avatar'] ?? null,
+                'status' => $validatedData['status'] ?? 'active',
+                'phone' => $validatedData['phone'] ?? null,
+                'google_id' => $validatedData['google_id'] ?? null,
+                'login_provider' => $validatedData['login_provider'],
+                'email_verified_at' => $validatedData['email_verified_at'] ?? null,
+                'last_login_at' => $validatedData['last_login_at'] ?? null,
             ];
 
-            // FIXED: Correct syntax for assigning email_verified_at
-            if ($user->email_verified_at === null) {
-                $userData['email_verified_at'] = now();
+            if (!empty($validatedData['password'])) {
+                $userData['password'] = Hash::make($validatedData['password']);
             }
 
             $user->update($userData);
 
-            // --- 4. Update Profile Data ---
             $profileData = [
-                'address' => $request->address,
-                'phone' => $request->phone,
-                'city_id' => $request->city_id,
-                'institute_id' => $request->institute_id,
-                'incharge_name' => $request->incharge_name,
-                'incharge_phone' => $request->incharge_phone,
-                'gender_id' => $request->gender_id,
-                'dob' => $request->dob,
-                'study_plan_id' => $request->study_plan_id,
-                'class_id' => $request->class_id,
-                'curriculum_board_id' => $request->curriculum_board_id,
-                'study_group_id' => $request->study_group_id,
+                'address' => $profile['address'] ?? null,
+                'city_id' => $profile['city_id'] ?? null,
+                'institute_id' => $profile['institute_id'] ?? null,
+                'gender_id' => $profile['gender_id'] ?? null,
+                'dob' => $profile['dob'] ?? null,
+                'designation' => $profile['designation'] ?? null,
+                'heard_about_id' => $profile['heard_about_id'] ?? null,
+                'referral_code' => $profile['referral_code'] ?? null,
+                'profile_completed' => $profile['profile_completed'] ?? false,
+                'preferred_language' => $profile['preferred_language'] ?? 'en',
             ];
 
             $userProfile->update($profileData);
 
-           $plan = UserStudyPlan::where('user_id', $user->id)->first();
+            if ($subscriptions !== null) {
+                $submittedSubscriptionIds = [];
 
-            $planData = [
-            'user_id' => $user->id,
-            'study_plan_id' => $request->study_plan_id,
-            'qty' => 1,
-            'price' => $request->price ?? 590,
-        ];
+                foreach ($subscriptions as $subscription) {
+                    $subscriptionData = [
+                        'user_id' => $user->id,
+                        'offered_program_id' => $subscription['offered_program_id'],
+                        'status' => $subscription['status'],
+                        'access_type' => $subscription['access_type'],
+                        'price_paid' => $subscription['price_paid'] ?? 0,
+                        'started_at' => $subscription['started_at'] ?? null,
+                        'expires_at' => $subscription['expires_at'] ?? null,
+                        'approved_at' => $subscription['approved_at'] ?? null,
+                        'approved_by' => $subscription['approved_by'] ?? null,
+                    ];
 
-        if(!$plan){
-            UserStudyPlan::create($planData);
-        }
-        else{
-            $planModel = UserStudyPlan::find($plan->id);
-            $planModel->update($planData);
-        }
+                    if (!empty($subscription['id'])) {
+                        $existingSubscription = UserSubscription::where('id', $subscription['id'])
+                            ->where('user_id', $user->id)
+                            ->first();
+
+                        if (!$existingSubscription) {
+                            DB::rollBack();
+
+                            return response()->json([
+                                'success' => 0,
+                                'error' => "Subscription ID {$subscription['id']} does not belong to User ID {$user->id}.",
+                            ], 404);
+                        }
+
+                        $existingSubscription->update($subscriptionData);
+                        $submittedSubscriptionIds[] = $existingSubscription->id;
+                        continue;
+                    }
+
+                    $newSubscription = UserSubscription::create($subscriptionData);
+                    $submittedSubscriptionIds[] = $newSubscription->id;
+                }
+
+                UserSubscription::where('user_id', $user->id)
+                    ->when(
+                        !empty($submittedSubscriptionIds),
+                        fn ($query) => $query->whereNotIn('id', $submittedSubscriptionIds)
+                    )
+                    ->delete();
+            }
 
             DB::commit();
             
@@ -291,20 +369,46 @@ class WebUserAuthController extends Controller
         }
     }
 
-    public function getUserData(Request $request){
-        $email = $request->email;
-        $userData = WebUser::where('email', $email)
-        ->with('profile')->first();
+    public function getUserDataByAdmin(Request $request)
+    {
+        $validatedData = $request->validate([
+            'email' => 'nullable|email',
+            'phone' => 'nullable|string',
+        ]);
 
-        if(!$userData){
+        if (!isset($validatedData['email']) && !isset($validatedData['phone'])) {
             return response()->json([
                 'success' => 0,
-            ], 401);
+                'error' => 'Either email or phone is required.',
+            ], 422);
         }
-         return response()->json([
-                'success' => 1,
-                'data' => $userData,
-            ]);
+
+        $userQuery = WebUser::with('profile');
+
+        if (isset($validatedData['email'])) {
+            $userQuery->where('email', $validatedData['email']);
+        } elseif (isset($validatedData['phone'])) {
+            $userQuery->where('phone', $validatedData['phone']);
+        }
+
+        $userData = $userQuery->first();
+
+        if (!$userData) {
+            return response()->json([
+                'success' => 0,
+                'error' => 'Web user not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => 1,
+            'data' => $userData,
+        ]);
+    }
+
+    public function getUserData(Request $request)
+    {
+        return $this->getUserDataByAdmin($request);
     }
 
     public function verifiedUserByAdmin(Request $request){
