@@ -22,20 +22,31 @@ class AttachJwtFromCookie
         $cookieName = $this->resolveCookieName($context);
         $cookieToken = $request->cookie($cookieName);
         $guard = $this->resolveGuard($context);
+        $bearerToken = $request->bearerToken();
 
         Log::info('Attaching JWT from cookie', [
             'context' => $context,
             'guard' => $guard,
             'cookie_name' => $cookieName,
             'has_cookie_token' => !empty($cookieToken),
-            'has_bearer_token' => !empty($request->bearerToken()),
+            'has_bearer_token' => !empty($bearerToken),
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
 
+        if (!empty($cookieToken) && !empty($bearerToken) && $cookieToken !== $bearerToken) {
+            Log::warning('AttachJwtFromCookie token conflict detected', [
+                'context' => $context,
+                'guard' => $guard,
+                'cookie_name' => $cookieName,
+            ]);
+        }
+
         // Prefer the context-specific cookie token so stale frontend Bearer
         // tokens do not override a valid cookie during page refreshes.
         if (!empty($cookieToken)) {
+            Auth::shouldUse($guard);
+
             $authorizationHeader = 'Bearer ' . $cookieToken;
 
             $request->headers->set(

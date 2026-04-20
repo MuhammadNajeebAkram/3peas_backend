@@ -15,17 +15,32 @@ class AuthenticateJwtCookieGuard
     public function handle(Request $request, Closure $next, ?string $context = null): Response
     {
         $guard = $this->resolveGuard($context);
-        $token = $request->bearerToken() ?: $request->cookie($this->resolveCookieName($context));
+        $cookieName = $this->resolveCookieName($context);
+        $cookieToken = $request->cookie($cookieName);
+        $bearerToken = $request->bearerToken();
+        $token = !empty($cookieToken) ? $cookieToken : $bearerToken;
 
         Auth::shouldUse($guard);
 
         Log::info('AuthenticateJwtCookieGuard invoked', [
             'context' => $context,
             'guard' => $guard,
+            'cookie_name' => $cookieName,
+            'has_cookie_token' => !empty($cookieToken),
+            'has_bearer_token' => !empty($bearerToken),
+            'token_source' => !empty($cookieToken) ? 'cookie' : (!empty($bearerToken) ? 'bearer' : null),
             'has_token' => !empty($token),
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+
+        if (!empty($cookieToken) && !empty($bearerToken) && $cookieToken !== $bearerToken) {
+            Log::warning('AuthenticateJwtCookieGuard token conflict detected', [
+                'context' => $context,
+                'guard' => $guard,
+                'cookie_name' => $cookieName,
+            ]);
+        }
 
         if (empty($token)) {
             Log::warning('AuthenticateJwtCookieGuard missing token', [
@@ -74,10 +89,13 @@ class AuthenticateJwtCookieGuard
                 'guard' => $guard,
                 'user_id' => $user->id,
             ]);
-        } catch (JWTException) {
+        } catch (JWTException $e) {
             Log::warning('AuthenticateJwtCookieGuard JWT failure', [
                 'context' => $context,
                 'guard' => $guard,
+                'cookie_name' => $cookieName,
+                'token_source' => !empty($cookieToken) ? 'cookie' : (!empty($bearerToken) ? 'bearer' : null),
+                'message' => $e->getMessage(),
             ]);
 
             return response()->json([
