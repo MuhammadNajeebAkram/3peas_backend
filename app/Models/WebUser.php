@@ -2,20 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable; // Correct import for Authenticatable
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Tymon\JWTAuth\Contracts\JWTSubject;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use App\Notifications\CustomVerifyEmail;
-use App\Models\WebUserProfile;
-use App\Models\UserPaymentSlip;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
 class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
-    // Add these methods for JWTSubject
     public function getJWTIdentifier()
     {
         return $this->getKey();
@@ -31,47 +32,94 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
         $this->notify(new CustomVerifyEmail());
     }
 
-    protected $table = 'web_users'; // Ensure it uses the correct table
+    protected $table = 'web_users';
 
-    // Add the 'fillable' property for mass assignment
     protected $fillable = [
         'name',
         'email',
         'password',
         'phone',
-        'role',        
+        'role',
+        'study_session_id',
         'email_verified_at',
         'last_login_at',
+        'last_token',
         'google_id',
         'avatar',
         'login_provider',
         'status',
     ];
 
-    // Hide sensitive data
     protected $hidden = [
         'password',
         'remember_token',
+        'last_token',
     ];
 
     protected $casts = [
-        'email_verified_at' => 'datetime', // Cast verification date
+        'study_session_id' => 'integer',
+        'email_verified_at' => 'datetime',
         'last_login_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
-   
-
-    public function profile()
+    public function profile(): HasOne
     {
         return $this->hasOne(WebUserProfile::class, 'user_id', 'id');
     }
 
-    public function paymentSlip()
+    public function paymentSlip(): HasOne
     {
         return $this->hasOne(UserPaymentSlip::class, 'user_id', 'id');
     }
-    public function subscriptions()
+
+    public function subscriptions(): HasMany
     {
         return $this->hasMany(UserSubscription::class, 'user_id', 'id');
+    }
+
+    public function studySession(): BelongsTo
+    {
+        return $this->belongsTo(StudySession::class, 'study_session_id');
+    }
+
+    public function studyPlans(): HasMany
+    {
+        return $this->hasMany(UserStudyPlan::class, 'user_id', 'id');
+    }
+
+    public function subscriptionPaymentRequests(): HasMany
+    {
+        return $this->hasMany(SubscriptionPaymentRequest::class, 'user_id', 'id');
+    }
+
+    public function practiceSessions(): HasMany
+    {
+        return $this->hasMany(PracticeSession::class, 'user_id', 'id');
+    }
+
+    public function testAttempts(): HasMany
+    {
+        return $this->hasMany(TestAttempt::class, 'user_id', 'id');
+    }
+
+    public function studentActivities(): HasMany
+    {
+        return $this->hasMany(StudentActivity::class, 'user_id', 'id');
+    }
+
+    public function studentQuestionProgressSummaries(): HasMany
+    {
+        return $this->hasMany(StudentQuestionProgressSummary::class, 'user_id', 'id');
+    }
+
+    public function studentSubjectProgressSummaries(): HasMany
+    {
+        return $this->hasMany(StudentSubjectProgressSummary::class, 'user_id', 'id');
+    }
+
+    public function studentUnitProgressSummaries(): HasMany
+    {
+        return $this->hasMany(StudentUnitProgressSummary::class, 'user_id', 'id');
     }
 }

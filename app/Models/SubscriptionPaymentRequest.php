@@ -10,20 +10,32 @@ class SubscriptionPaymentRequest extends Model
     use HasFactory;
     protected $fillable = [
         'user_id',  
-       'offered_program_id',
-       'subscription_id',
-       'payment_account_id',
-       'amount',
-       'transaction_id',
-       'payer_name',
-       'payer_phone',
-       'proof_file_path',
-       'status',
-       'approved_at',
-       'approved_by',
-       'rejected_by',
-       'rejection_reason'
+        'offered_program_id',
+        'subscription_id',
+        'payment_account_id',
+        'price',
+        'discount_amount',
+        'discount_percentage',
+        'final_amount',
+        'transaction_id',
+        'payer_name',
+        'payer_phone',
+        'proof_file_path',
+        'status',
+        'approved_at',
+        'approved_by',
+        'rejected_by',
+        'rejection_reason',
+        'admin_remarks',
 
+    ];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'discount_percentage' => 'decimal:2',
+        'final_amount' => 'decimal:2',
+        'approved_at' => 'date',
     ];
     public function userApproved(){
         return $this->belongsTo(User::class, 'approved_by');

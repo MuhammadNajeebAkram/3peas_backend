@@ -62,8 +62,10 @@ Route::prefix('admin/auth')->group(function () {
         Route::post('media/presign', [NewsController::class, 'presignMediaUpload']);
 
         Route::prefix('web-user')->group(function () {
+            Route::get('/all', [WebUserAuthController::class, 'getAllUsersDataByAdmin']);
             Route::post('/create', [WebUserAuthController::class, 'saveUserDataByAdmin']);
             Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin']);
+            Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin']);
             Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin']);
 
         });
