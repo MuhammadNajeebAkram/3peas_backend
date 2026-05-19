@@ -12,6 +12,7 @@ use App\Http\Middleware\EnsureEmailsVerified;
 use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\EnsureStudySessionVerified;
 use App\Http\Middleware\VerifyUserSession;
+use App\Http\Middleware\CheckPermission;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -37,9 +38,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['studySessionVerified' => EnsureStudySessionVerified::class]);
         $middleware->alias(['jwt.cookie' => AttachJwtFromCookie::class]);
         $middleware->alias(['jwt.auth' => AuthenticateJwtCookieGuard::class]);
+        $middleware->alias(['permission' => CheckPermission::class]);
 
        
-        
+       
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

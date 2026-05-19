@@ -10,7 +10,8 @@ class Role extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'name',        
+        'name',
+        'display_name',
     ];
 
         public function users()
@@ -25,6 +26,11 @@ class Role extends Model
         public function rolePermissions()
         {
             return $this->hasMany(RolePermission::class, 'role_id');
+        }
+
+        public function permissionScopes()
+        {
+            return $this->hasMany(RolePermissionScope::class, 'role_id');
         }
 
 }

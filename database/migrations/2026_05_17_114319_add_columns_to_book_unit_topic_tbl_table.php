@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
+        Schema::table('book_unit_topic_tbl', function (Blueprint $table) {
             //
-            $table->foreignId('role_id')->nullable()->constrained('roles')->onDelete('set null');
+            $table->string('slo_no')->nullable()->after('topic_no');
         });
     }
 
@@ -22,9 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['role_id']);
-            $table->dropColumn('role_id');
+        Schema::table('book_unit_topic_tbl', function (Blueprint $table) {
+            //
+            $table->dropColumn('slo_no');
         });
     }
 };

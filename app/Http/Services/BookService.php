@@ -339,6 +339,7 @@ class BookService {
                 }),
             ],                       
             'topic_no' => 'required|integer',
+            'slo_no' => 'nullable|string|max:255',
             'activate' => 'required|boolean',
             'is_alp' => 'required|boolean',
         ]);
@@ -412,7 +413,8 @@ class BookService {
                         return $query->where('unit_id', $request->unit_id);
                     }),
                 ],
-                'topic_no' => 'required|integer',                
+                'topic_no' => 'required|integer',
+                'slo_no' => 'nullable|string|max:255',
                 'is_alp' => 'required|boolean',
             ]);
 

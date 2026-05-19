@@ -15,6 +15,7 @@ class BookUnitTopic extends Model
         'topic_name',
         'topic_name_um',
         'topic_no',
+        'slo_no',
         'activate',
         'is_alp'
     ];

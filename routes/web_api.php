@@ -55,6 +55,7 @@ use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\AttachJwtFromCookie;
 use App\Http\Middleware\AuthenticateJwtCookieGuard;
 use Illuminate\Auth\Events\PasswordReset;
+use App\Http\Controllers\WorkshopController;
 
 
 /*
@@ -137,6 +138,16 @@ Route::prefix('news')->group(function () {
     Route::get('/detail/{slug}', [NewsController::class, 'getNewsDetailForWebBySlug']);
 });
 
+Route::prefix('lms/workshops')->group(function () {
+    Route::get('/', [WorkshopController::class, 'index']);
+    Route::get('/{slug}', [WorkshopController::class, 'show']);
+
+    Route::middleware( [AttachJwtFromCookie::class . ':lms',
+    AuthenticateJwtCookieGuard::class . ':lms'],)->group(function () {
+        Route::post('/{id}/register', [WorkshopController::class, 'register']);
+        Route::post('/{id}/unregister', [WorkshopController::class, 'unregister']);
+    });
+});
 
 
 Route::post('login', [AuthController::class, 'login']);

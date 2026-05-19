@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\AdminAuth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -60,7 +61,7 @@ class AuthController extends Controller
                 ], 403);
             }
 
-            $user->load(['role', 'role.permissions']);
+            $user->load(['role', 'role.permissions', 'role.permissionScopes.permission']);
 
             return response()->json([
                 'message' => 'Login successful.',
@@ -109,7 +110,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $user->load(['role', 'role.permissions']);
+        $user->load(['role', 'role.permissions', 'role.permissionScopes.permission']);
 
         Log::info('Admin me authenticated', [
             'user_id' => $user->id,
@@ -147,12 +148,30 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
+        $roleName = $user->role?->name;
+        $normalizedRoleName = str_replace(['-', ' '], '_', strtolower(trim((string) $roleName)));
+        $permissions = $normalizedRoleName === 'super_admin'
+            ? Permission::orderBy('name')->pluck('name')->values()->all()
+            : ($user->role?->permissions?->pluck('name')->values()->all() ?? []);
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'role' => $user->role?->name,
-            'permissions' => $user->role?->permissions?->pluck('name')->values()->all() ?? [],
+            'role_id' => $user->role_id,
+            'role' => $roleName,
+            'role_display_name' => $user->role?->display_name,
+            'is_super_admin' => $normalizedRoleName === 'super_admin',
+            'permissions' => $permissions,
+            'permission_scopes' => $user->role?->permissionScopes
+                ?->map(fn ($scope) => [
+                    'permission_id' => $scope->permission_id,
+                    'permission_name' => $scope->permission?->name,
+                    'scope_type' => $scope->scope_type,
+                    'scope_id' => $scope->scope_id,
+                ])
+                ->values()
+                ->all() ?? [],
         ];
     }
 

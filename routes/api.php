@@ -2,6 +2,7 @@
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminAuth\AuthController as AdminAuthController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\SubjectsController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\StudySessionController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\OfferedProgramController;
+use App\Http\Controllers\RolePermissionController;
 use App\Http\Middleware\CheckFrontendApiKey;
 
 /*
@@ -59,117 +61,186 @@ Route::prefix('admin/auth')->group(function () {
     Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin'])->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
         Route::post('logout', [AdminAuthController::class, 'logout']);
-        Route::post('media/presign', [NewsController::class, 'presignMediaUpload']);
+        Route::post('media/presign', [NewsController::class, 'presignMediaUpload'])->middleware('permission:admin.media.presign');
+
+        Route::prefix('roles')->group(function () {
+            Route::get('/all', [RolePermissionController::class, 'getRoles'])->middleware('permission:roles.view');
+            Route::post('/add', [RolePermissionController::class, 'saveRole'])->middleware('permission:roles.create');
+            Route::post('/update/{id}', [RolePermissionController::class, 'updateRole'])->middleware('permission:roles.update');
+            Route::delete('/delete/{id}', [RolePermissionController::class, 'deleteRole'])->middleware('permission:roles.delete');
+            Route::post('/{id}/permissions', [RolePermissionController::class, 'syncRolePermissions'])->middleware('permission:roles.assign-permissions');
+            Route::post('/{id}/permission-scopes', [RolePermissionController::class, 'syncRolePermissionScopes'])->middleware('permission:roles.assign-permission-scopes');
+        });
+
+        Route::prefix('permissions')->group(function () {
+            Route::get('/all', [RolePermissionController::class, 'getPermissions'])->middleware('permission:permissions.view');
+        });
+
+        Route::prefix('admin-user')->group(function () {
+            Route::get('/all', [AdminUserController::class, 'getAdminUsers'])->middleware('permission:admin-users.view');
+            Route::post('/add', [AdminUserController::class, 'saveAdminUser'])->middleware('permission:admin-users.create');
+            Route::post('/update/{id}', [AdminUserController::class, 'updateAdminUser'])->middleware('permission:admin-users.update');
+            Route::post('/activate', [AdminUserController::class, 'activateAdminUser'])->middleware('permission:admin-users.activate');
+        });
+
+        Route::prefix('admin-users')->group(function () {
+            Route::get('/all', [AdminUserController::class, 'getAdminUsers'])->middleware('permission:admin-users.view');
+            Route::post('/add', [AdminUserController::class, 'saveAdminUser'])->middleware('permission:admin-users.create');
+            Route::post('/update/{id}', [AdminUserController::class, 'updateAdminUser'])->middleware('permission:admin-users.update');
+            Route::post('/activate', [AdminUserController::class, 'activateAdminUser'])->middleware('permission:admin-users.activate');
+        });
 
         Route::prefix('web-user')->group(function () {
-            Route::get('/all', [WebUserAuthController::class, 'getAllUsersDataByAdmin']);
-            Route::post('/create', [WebUserAuthController::class, 'saveUserDataByAdmin']);
-            Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin']);
-            Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin']);
-            Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin']);
+            Route::get('/all', [WebUserAuthController::class, 'getAllUsersDataByAdmin'])->middleware('permission:web-users.view');
+            Route::post('/create', [WebUserAuthController::class, 'saveUserDataByAdmin'])->middleware('permission:web-users.create');
+            Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin'])->middleware('permission:web-users.update');
+            Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin'])->middleware('permission:web-users.approve-subscription');
+            Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin'])->middleware('permission:web-users.view');
 
         });
        
        
         Route::prefix('news')->group(function () {
-            Route::get('/all', [NewsController::class, 'getAllNewsForAdmin']);
-            Route::post('/add', [NewsController::class, 'saveNewsFromAdmin']);
-            Route::get('/{id}', [NewsController::class, 'getNewsForAdminById']);
-            Route::post('/update/{id}', [NewsController::class, 'updateNewsFromAdmin']);
-            Route::post('/activate', [NewsController::class, 'activateNews']);
+            Route::get('/all', [NewsController::class, 'getAllNewsForAdmin'])->middleware('permission:news.view');
+            Route::post('/add', [NewsController::class, 'saveNewsFromAdmin'])->middleware('permission:news.create');
+            Route::get('/{id}', [NewsController::class, 'getNewsForAdminById'])->middleware('permission:news.view');
+            Route::post('/update/{id}', [NewsController::class, 'updateNewsFromAdmin'])->middleware('permission:news.update');
+            Route::post('/activate', [NewsController::class, 'activateNews'])->middleware('permission:news.activate');
 
             Route::prefix('ticker')->group(function () {
-                Route::get('/all', [NewsTickerController::class, 'getAllTickersForAdmin']);
-                Route::get('/news-options', [NewsTickerController::class, 'getNewsOptionsForTicker']);
-                Route::post('/add', [NewsTickerController::class, 'saveTickerForAdmin']);
-                Route::post('/update/{id}', [NewsTickerController::class, 'updateTickerForAdmin']);
-                Route::delete('/delete/{id}', [NewsTickerController::class, 'deleteTickerForAdmin']);
+                Route::get('/all', [NewsTickerController::class, 'getAllTickersForAdmin'])->middleware('permission:news-tickers.view');
+                Route::get('/news-options', [NewsTickerController::class, 'getNewsOptionsForTicker'])->middleware('permission:news.view');
+                Route::post('/add', [NewsTickerController::class, 'saveTickerForAdmin'])->middleware('permission:news-tickers.create');
+                Route::post('/update/{id}', [NewsTickerController::class, 'updateTickerForAdmin'])->middleware('permission:news-tickers.update');
+                Route::delete('/delete/{id}', [NewsTickerController::class, 'deleteTickerForAdmin'])->middleware('permission:news-tickers.delete');
             });
             
             Route::prefix('category')->group(function () {
-                Route::get('/all', [NewsCategoryController::class, 'getAllNewsCategoryForAdmin']);
-                Route::post('/add', [NewsCategoryController::class, 'saveNewsCategoryForAdmin']);
-                Route::post('/update/{id}', [NewsCategoryController::class, 'updateNewsCategoryForAdmin']);
-                Route::delete('/delete/{id}', [NewsCategoryController::class, 'deleteNewsCategoryForAdmin']);
-                Route::get('/active', [NewsCategoryController::class, 'getActiveNewsCategoryForAdmin']);
+                Route::get('/all', [NewsCategoryController::class, 'getAllNewsCategoryForAdmin'])->middleware('permission:news-categories.view');
+                Route::post('/add', [NewsCategoryController::class, 'saveNewsCategoryForAdmin'])->middleware('permission:news-categories.create');
+                Route::post('/update/{id}', [NewsCategoryController::class, 'updateNewsCategoryForAdmin'])->middleware('permission:news-categories.update');
+                Route::delete('/delete/{id}', [NewsCategoryController::class, 'deleteNewsCategoryForAdmin'])->middleware('permission:news-categories.delete');
+                Route::get('/active', [NewsCategoryController::class, 'getActiveNewsCategoryForAdmin'])->middleware('permission:news-categories.view');
             });
             
         });
 
         Route::prefix('class')->group(function () {
-            Route::get('/all', [ClassesController::class, 'getClassesForAdmin']);
-            Route::get('/active', [ClassesController::class, 'getActiveClassesForAdmin']);
-            Route::post('/add', [ClassesController::class, 'saveClassForAdmin']);
-            Route::post('/update/{id}', [ClassesController::class, 'updateClassForAdmin']);
+            Route::get('/all', [ClassesController::class, 'getClassesForAdmin'])->middleware('permission:classes.view');
+            Route::get('/active', [ClassesController::class, 'getActiveClassesForAdmin'])->middleware('permission:classes.view');
+            Route::post('/add', [ClassesController::class, 'saveClassForAdmin'])->middleware('permission:classes.create');
+            Route::post('/update/{id}', [ClassesController::class, 'updateClassForAdmin'])->middleware('permission:classes.update');
         });
 
         Route::prefix('curriculum-board')->group(function () {
-            Route::get('/all', [CurriculumBoardController::class, 'getAllCurriculumBoardsForAdmin']);
-            Route::get('/active', [CurriculumBoardController::class, 'getActiveCurriculumBoardsForAdmin']);
-            Route::post('/add', [CurriculumBoardController::class, 'saveCurriculumBoardForAdmin']);
-            Route::post('/update/{id}', [CurriculumBoardController::class, 'updateCurriculumBoardForAdmin']);
-            Route::post('/activate', [CurriculumBoardController::class, 'activateCurriculumBoardForAdmin']);
+            Route::get('/all', [CurriculumBoardController::class, 'getAllCurriculumBoardsForAdmin'])->middleware('permission:curriculum-boards.view');
+            Route::get('/active', [CurriculumBoardController::class, 'getActiveCurriculumBoardsForAdmin'])->middleware('permission:curriculum-boards.view');
+            Route::post('/add', [CurriculumBoardController::class, 'saveCurriculumBoardForAdmin'])->middleware('permission:curriculum-boards.create');
+            Route::post('/update/{id}', [CurriculumBoardController::class, 'updateCurriculumBoardForAdmin'])->middleware('permission:curriculum-boards.update');
+            Route::post('/activate', [CurriculumBoardController::class, 'activateCurriculumBoardForAdmin'])->middleware('permission:curriculum-boards.activate');
         });
 
         Route::prefix('subject')->group(function () {
-            Route::get('/all', [SubjectsController::class, 'getSubjectsForAdmin']);
-            Route::get('/active', [SubjectsController::class, 'getActiveSubjectsForAdmin']);
-            Route::post('/add', [SubjectsController::class, 'saveSubjectForAdmin']);
-            Route::post('/update/{id}', [SubjectsController::class, 'updateSubjectForAdmin']);
-            Route::post('/activate', [SubjectsController::class, 'activateSubjectForAdmin']);
+            Route::get('/all', [SubjectsController::class, 'getSubjectsForAdmin'])->middleware('permission:subjects.view');
+            Route::get('/active', [SubjectsController::class, 'getActiveSubjectsForAdmin'])->middleware('permission:subjects.view');
+            Route::post('/add', [SubjectsController::class, 'saveSubjectForAdmin'])->middleware('permission:subjects.create');
+            Route::post('/update/{id}', [SubjectsController::class, 'updateSubjectForAdmin'])->middleware('permission:subjects.update');
+            Route::post('/activate', [SubjectsController::class, 'activateSubjectForAdmin'])->middleware('permission:subjects.activate');
         });
 
         Route::prefix('book')->group(function () {
-            Route::get('/all', [BooksController::class, 'getBooksForAdmin']);
-            Route::get('/active', [BooksController::class, 'getActiveBooksForAdmin']);
-            Route::post('/add', [BooksController::class, 'saveBookForAdmin']);
-            Route::post('/update/{id}', [BooksController::class, 'updateBookForAdmin']);
-            Route::post('/activate', [BooksController::class, 'activateBookForAdmin']);
+            Route::get('/all', [BooksController::class, 'getBooksForAdmin'])->middleware('permission:books.view');
+            Route::get('/active', [BooksController::class, 'getActiveBooksForAdmin'])->middleware('permission:books.view');
+            Route::post('/add', [BooksController::class, 'saveBookForAdmin'])->middleware('permission:books.create');
+            Route::post('/update/{id}', [BooksController::class, 'updateBookForAdmin'])->middleware('permission:books.update');
+            Route::post('/activate', [BooksController::class, 'activateBookForAdmin'])->middleware('permission:books.activate');
         });
 
         Route::prefix('book-unit')->group(function () {
-            Route::get('/all', [UnitsController::class, 'getUnitsForAdmin']);
-            Route::get('/active', [UnitsController::class, 'getActiveUnitsForAdmin']);
-            Route::post('/add', [UnitsController::class, 'saveUnitForAdmin']);
-            Route::post('/update/{id}', [UnitsController::class, 'updateUnitForAdmin']);
-            Route::post('/activate', [UnitsController::class, 'activateUnitForAdmin']);
+            Route::get('/all', [UnitsController::class, 'getUnitsForAdmin'])->middleware('permission:units.view');
+            Route::get('/active', [UnitsController::class, 'getActiveUnitsForAdmin'])->middleware('permission:units.view');
+            Route::post('/add', [UnitsController::class, 'saveUnitForAdmin'])->middleware('permission:units.create');
+            Route::post('/update/{id}', [UnitsController::class, 'updateUnitForAdmin'])->middleware('permission:units.update');
+            Route::post('/activate', [UnitsController::class, 'activateUnitForAdmin'])->middleware('permission:units.activate');
         });
 
         Route::prefix('topic')->group(function () {
-            Route::get('/all', [TopicsController::class, 'getTopicsForAdmin']);
-            Route::get('/active', [TopicsController::class, 'getActiveTopicsForAdmin']);
-            Route::post('/add', [TopicsController::class, 'saveTopicForAdmin']);
-            Route::post('/update/{id}', [TopicsController::class, 'updateTopicForAdmin']);
-            Route::post('/activate', [TopicsController::class, 'activateTopicForAdmin']);
+            Route::get('/all', [TopicsController::class, 'getTopicsForAdmin'])->middleware('permission:topics.view');
+            Route::get('/active', [TopicsController::class, 'getActiveTopicsForAdmin'])->middleware('permission:topics.view');
+            Route::post('/add', [TopicsController::class, 'saveTopicForAdmin'])->middleware('permission:topics.create');
+            Route::post('/update/{id}', [TopicsController::class, 'updateTopicForAdmin'])->middleware('permission:topics.update');
+            Route::post('/activate', [TopicsController::class, 'activateTopicForAdmin'])->middleware('permission:topics.activate');
+        });
+
+        Route::prefix('board')->group(function () {
+            Route::get('/active', [BoardsController::class, 'getBoards'])->middleware('permission:exam-boards.view');
+        });
+
+        Route::prefix('exam-board')->group(function () {
+            Route::get('/all', [BoardsController::class, 'getAllBoards'])->middleware('permission:exam-boards.view');
+            Route::post('/add', [BoardsController::class, 'saveBoard'])->middleware('permission:exam-boards.create');
+            Route::post('/update', [BoardsController::class, 'editBoard'])->middleware('permission:exam-boards.update');
+            Route::post('/activate', [BoardsController::class, 'activateBoard'])->middleware('permission:exam-boards.activate');
+        });
+
+        Route::prefix('question-type')->group(function () {
+            Route::get('/all', [QuestionTypesController::class, 'getAllTypes'])->middleware('permission:question-types.view');
+        });
+
+        Route::prefix('cognitive-domain')->group(function () {
+            Route::get('/all', [CognitiveDomainController::class, 'getDomain'])->middleware('permission:cognitive-domains.view');
+        });
+
+        Route::prefix('topic-content')->group(function () {
+            Route::get('/all', [TopicContentController::class, 'getAllContents'])->middleware('permission:topic-content.view');
+            Route::get('/by-topic/{topic_id}', [TopicContentController::class, 'getContentsByTopic'])->middleware('permission:topic-content.view');
+            Route::post('/add', [TopicContentController::class, 'saveContent'])->middleware('permission:topic-content.create');
+            Route::post('/update/{id}', [TopicContentController::class, 'updateContent'])->middleware('permission:topic-content.update');
+            Route::post('/activate', [TopicContentController::class, 'activateTopicContent'])->middleware('permission:topic-content.activate');
+
+            Route::prefix('structure')->group(function () {
+                Route::get('/by-topic/{topic_id}', [TopicContentController::class, 'getTopicContentStructures'])->middleware('permission:topic-content.view');
+                Route::post('/add', [TopicContentController::class, 'saveTopicContentStructure'])->middleware('permission:topic-content.update');
+                Route::post('/sync', [TopicContentController::class, 'syncTopicContentStructures'])->middleware('permission:topic-content.update');
+                Route::delete('/delete/{id}', [TopicContentController::class, 'deleteTopicContentStructure'])->middleware('permission:topic-content.update');
+            });
+        });
+
+        Route::prefix('question')->group(function () {
+            Route::post('/filter', [QuestionsController::class, 'getQuestionsByFilters'])->middleware('permission:questions.view');
+            Route::post('/detail', [QuestionsController::class, 'getQuestionDataById'])->middleware('permission:questions.view');
+            Route::post('/save', [QuestionsController::class, 'saveQuestion'])->middleware('permission:questions.create');
+            Route::post('/update', [QuestionsController::class, 'updateQuestion'])->middleware('permission:questions.update');
+            Route::post('/activate', [QuestionsController::class, 'activateQuestion'])->middleware('permission:questions.activate');
         });
 
         Route::prefix('offered-classes')->group(function () {
-            Route::get('/all', [OfferedClassesController::class, 'getAllOfferedClassesForAdmin']);
-            Route::get('/active', [OfferedClassesController::class, 'getActiveOfferedClassesForAdmin']);
-            Route::post('/add', [OfferedClassesController::class, 'saveOfferedClassForAdmin']);
-            Route::post('/update/{id}', [OfferedClassesController::class, 'updateOfferedClassForAdmin']);
-            Route::post('/activate', [OfferedClassesController::class, 'activateOfferedClassForAdmin']);
+            Route::get('/all', [OfferedClassesController::class, 'getAllOfferedClassesForAdmin'])->middleware('permission:offered-classes.view');
+            Route::get('/active', [OfferedClassesController::class, 'getActiveOfferedClassesForAdmin'])->middleware('permission:offered-classes.view');
+            Route::post('/add', [OfferedClassesController::class, 'saveOfferedClassForAdmin'])->middleware('permission:offered-classes.create');
+            Route::post('/update/{id}', [OfferedClassesController::class, 'updateOfferedClassForAdmin'])->middleware('permission:offered-classes.update');
+            Route::post('/activate', [OfferedClassesController::class, 'activateOfferedClassForAdmin'])->middleware('permission:offered-classes.activate');
         });
         Route::prefix('offered-programs')->group(function () {
-            Route::get('/all', [OfferedProgramController::class, 'getAllOfferedProgramsForAdmin']);
-            Route::get('/active', [OfferedProgramController::class, 'getActiveOfferedProgramsForAdmin']);
-            Route::post('/add', [OfferedProgramController::class, 'saveOfferedProgramForAdmin']);
-             Route::post('/update/{id}', [OfferedProgramController::class, 'updateOfferedProgramForAdmin']);
+            Route::get('/all', [OfferedProgramController::class, 'getAllOfferedProgramsForAdmin'])->middleware('permission:offered-programs.view');
+            Route::get('/active', [OfferedProgramController::class, 'getActiveOfferedProgramsForAdmin'])->middleware('permission:offered-programs.view');
+            Route::post('/add', [OfferedProgramController::class, 'saveOfferedProgramForAdmin'])->middleware('permission:offered-programs.create');
+             Route::post('/update/{id}', [OfferedProgramController::class, 'updateOfferedProgramForAdmin'])->middleware('permission:offered-programs.update');
             // Route::post('/activate', [OfferedProgramController::class, 'activateOfferedProgramForAdmin']); 
         });
 
         Route::prefix('cities')->group(function () {
-            Route::post('/add', [CityController::class, 'saveCity']);
-            Route::get('/active', [CityController::class, 'getActiveCitiesForAdmin']);
+            Route::post('/add', [CityController::class, 'saveCity'])->middleware('permission:locations.cities.create');
+            Route::get('/active', [CityController::class, 'getActiveCitiesForAdmin'])->middleware('permission:locations.cities.view');
 
         });
 
         Route::prefix('institutes')->group(function () {
-            Route::get('/active/{city_id}', [InstituteController::class, 'getActiveInstituteByCityForAdmin']);
+            Route::get('/active/{city_id}', [InstituteController::class, 'getActiveInstituteByCityForAdmin'])->middleware('permission:institutes.view');
         });
 
         Route::prefix('heard-about')->group(function () {
-            Route::get('/active', [HeardAboutController::class, 'getActiveHeardAboutForAdmin']);
+            Route::get('/active', [HeardAboutController::class, 'getActiveHeardAboutForAdmin'])->middleware('permission:heard-about.view');
         });
     });
 });
@@ -242,6 +313,7 @@ Route::post('/update_question_type', [QuestionTypesController::class, 'editType'
 Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType']);
 
 Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']);
+Route::post('/get_questions_by_filters', [QuestionsController::class, 'getQuestionsByFilters']);
 Route::post('/get_questions_by_topic', [QuestionsController::class, 'getQuestionsByTopic']);
 Route::post('/get_questions_by_unit', [QuestionsController::class, 'getQuestionsByUnit']);
 Route::post('/get_questions_by_book', [QuestionsController::class, 'getQuestionsByBook']);

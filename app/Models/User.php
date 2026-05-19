@@ -42,4 +42,19 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->belongsTo(Role::class, 'role_id');
     }
+
+    public function createdWorkshops()
+{
+    return $this->hasMany(Workshop::class, 'created_by');
+}
+
+public function updatedWorkshops()
+{
+    return $this->hasMany(Workshop::class, 'updated_by');
+}
+
+public function markedWorkshopAttendances()
+{
+    return $this->hasMany(WorkshopRegistration::class, 'attendance_marked_by');
+}
 }

@@ -375,7 +375,7 @@ class TopicsController extends Controller
         try{
             $topics = BookUnitTopic::where('unit_id', $unit_id)
             ->where('activate', 1)
-            ->select('id', 'topic_name', 'topic_no')
+            ->select('id', 'topic_name', 'topic_no', 'slo_no')
             ->get();
 
             return response()->json($topics);
@@ -402,6 +402,7 @@ class TopicsController extends Controller
                         'topic_name' => $topic->topic_name,
                         'topic_name_um' => $topic->topic_name_um,
                         'topic_no' => $topic->topic_no,
+                        'slo_no' => $topic->slo_no,
                         'unit_id' => $topic->unit_id,
                         'unit_name' => $topic->bookUnit?->unit_name,
                         'activate' => (bool) $topic->activate,
@@ -435,6 +436,7 @@ class TopicsController extends Controller
                         'topic_name' => $topic->topic_name,
                         'topic_name_um' => $topic->topic_name_um,
                         'topic_no' => $topic->topic_no,
+                        'slo_no' => $topic->slo_no,
                         'unit_id' => $topic->unit_id,
                         'unit_name' => $topic->bookUnit?->unit_name,
                         'is_alp' => (bool) $topic->is_alp,
@@ -459,6 +461,7 @@ class TopicsController extends Controller
             'topic_name' => 'required|string|max:255',
             'topic_name_um' => 'nullable|string|max:255',
             'topic_no' => 'nullable|integer|min:1',
+            'slo_no' => 'nullable|string|max:255',
             'unit_id' => 'required|integer|exists:book_unit_tbl,id',
             'is_alp' => 'nullable|boolean',
         ]);
@@ -479,6 +482,7 @@ class TopicsController extends Controller
                 'topic_name' => $request->topic_name,
                 'topic_name_um' => $request->topic_name_um,
                 'topic_no' => $request->topic_no,
+                'slo_no' => $request->slo_no,
                 'unit_id' => $request->unit_id,
                 'activate' => 1,
                 'is_alp' => $request->boolean('is_alp', true),
@@ -502,6 +506,7 @@ class TopicsController extends Controller
             'topic_name' => 'required|string|max:255',
             'topic_name_um' => 'nullable|string|max:255',
             'topic_no' => 'nullable|integer|min:1',
+            'slo_no' => 'nullable|string|max:255',
             'unit_id' => 'required|integer|exists:book_unit_tbl,id',
             'is_alp' => 'nullable|boolean',
         ]);
@@ -524,6 +529,7 @@ class TopicsController extends Controller
             $topic->topic_name = $request->topic_name;
             $topic->topic_name_um = $request->topic_name_um;
             $topic->topic_no = $request->topic_no;
+            $topic->slo_no = $request->slo_no;
             $topic->unit_id = $request->unit_id;
             $topic->is_alp = $request->has('is_alp')
                 ? $request->boolean('is_alp')

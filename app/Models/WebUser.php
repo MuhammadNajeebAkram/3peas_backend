@@ -122,4 +122,16 @@ class WebUser extends Authenticatable implements JWTSubject, MustVerifyEmail
     {
         return $this->hasMany(StudentUnitProgressSummary::class, 'user_id', 'id');
     }
+
+    public function workshopRegistrations()
+{
+    return $this->hasMany(WorkshopRegistration::class, 'user_id');
+}
+
+public function workshops()
+{
+    return $this->belongsToMany(Workshop::class, 'workshop_registrations', 'user_id', 'workshop_id')
+        ->withPivot(['status', 'registered_at', 'attendance_marked_at', 'attendance_marked_by'])
+        ->withTimestamps();
+}
 }
