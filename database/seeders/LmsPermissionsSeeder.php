@@ -17,6 +17,7 @@ class LmsPermissionsSeeder extends Seeder
             'dashboard.view',
 
             'admin.media.presign',
+            'admin.media.delete',
 
             'roles.view',
             'roles.create',

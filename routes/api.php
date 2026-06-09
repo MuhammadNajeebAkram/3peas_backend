@@ -62,6 +62,7 @@ Route::prefix('admin/auth')->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::post('media/presign', [NewsController::class, 'presignMediaUpload'])->middleware('permission:admin.media.presign');
+        Route::post('media/delete', [NewsController::class, 'deleteMediaUpload'])->middleware('permission:admin.media.delete');
 
         Route::prefix('roles')->group(function () {
             Route::get('/all', [RolePermissionController::class, 'getRoles'])->middleware('permission:roles.view');
@@ -181,6 +182,14 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/add', [BoardsController::class, 'saveBoard'])->middleware('permission:exam-boards.create');
             Route::post('/update', [BoardsController::class, 'editBoard'])->middleware('permission:exam-boards.update');
             Route::post('/activate', [BoardsController::class, 'activateBoard'])->middleware('permission:exam-boards.activate');
+        });
+
+        Route::prefix('exam-session')->group(function () {
+            Route::get('/all', [ExamSessionController::class, 'getAllExamSessions'])->middleware('permission:exam-sessions.view');
+            Route::get('/active', [ExamSessionController::class, 'getExamSessions'])->middleware('permission:exam-sessions.view');
+            Route::post('/add', [ExamSessionController::class, 'saveSession'])->middleware('permission:exam-sessions.create');
+            Route::post('/update', [ExamSessionController::class, 'editSession'])->middleware('permission:exam-sessions.update');
+            Route::post('/activate', [ExamSessionController::class, 'activateSession'])->middleware('permission:exam-sessions.activate');
         });
 
         Route::prefix('question-type')->group(function () {

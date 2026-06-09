@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ExamQuestion;
 use App\Models\StudentActivity;
+use App\Http\Services\AwsUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class QuestionsController extends Controller
 {
@@ -53,7 +55,7 @@ class QuestionsController extends Controller
         'ea.question_id'
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -139,7 +141,7 @@ class QuestionsController extends Controller
         'ea.question_id'
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -226,7 +228,7 @@ class QuestionsController extends Controller
         'ea.question_id'
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id',
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -297,7 +299,7 @@ class QuestionsController extends Controller
     ->join('book_tbl', 'book_unit_tbl.book_id', '=', 'book_tbl.id')
     ->join('exam_question_board_tbl', 'exam_question_tbl.id', '=', 'exam_question_board_tbl.question_id')
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id')
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram')
     ->where('book_tbl.subject_id', $request -> subject_id)
     ->where('book_tbl.class_id', $request -> class_id)
     ->where('exam_question_board_tbl.board_id', $request -> board_id)
@@ -337,6 +339,7 @@ class QuestionsController extends Controller
         'question_type_tbl.type_name', 
         'exam_question_tbl.activate', 
         'exam_question_tbl.topic_id',
+        'exam_question_tbl.has_diagram',
         DB::raw("
              CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -392,7 +395,8 @@ class QuestionsController extends Controller
         'book_unit_topic_tbl.topic_name', 
         'question_type_tbl.type_name', 
         'exam_question_tbl.activate', 
-        'exam_question_tbl.topic_id'
+        'exam_question_tbl.topic_id',
+        'exam_question_tbl.has_diagram'
         
     )
     ->get();
@@ -483,6 +487,38 @@ class QuestionsController extends Controller
 
             }
 
+            $boardLinks = DB::table('exam_question_board_tbl as question_boards')
+                ->leftJoin('board_tbl as boards', 'question_boards.board_id', '=', 'boards.id')
+                ->leftJoin('exam_session_tbl as sessions', 'question_boards.session_id', '=', 'sessions.id')
+                ->leftJoin('study_group_tbl as groups', 'question_boards.group_id', '=', 'groups.id')
+                ->where('question_boards.question_id', '=', $question->id)
+                ->select(
+                    'question_boards.id',
+                    'question_boards.board_id',
+                    'boards.board_name',
+                    'question_boards.session_id',
+                    'sessions.session_name',
+                    'question_boards.year',
+                    'question_boards.group_id',
+                    'groups.name as group_name',
+                    'question_boards.activate'
+                )
+                ->orderByDesc('question_boards.year')
+                ->orderBy('boards.board_name')
+                ->orderBy('sessions.session_name')
+                ->get();
+
+            $firstBoardLink = $boardLinks->first();
+
+            $question->board_links = $boardLinks;
+            $question->board_id = $firstBoardLink?->board_id;
+            $question->board_name = $firstBoardLink?->board_name;
+            $question->session_id = $firstBoardLink?->session_id;
+            $question->session_name = $firstBoardLink?->session_name;
+            $question->year = $firstBoardLink?->year;
+            $question->group_id = $firstBoardLink?->group_id;
+            $question->group_name = $firstBoardLink?->group_name;
+
             return response() -> json([
                 'success' => true,
                 'question_data' => $questionData,
@@ -491,6 +527,7 @@ class QuestionsController extends Controller
                 'sublass' => $sublass,
                 'options' => $options,
                 'answers' => $answers,
+                'board_links' => $boardLinks,
 
             ]);
 
@@ -548,6 +585,7 @@ class QuestionsController extends Controller
                     'q.explanation_video_url',
                     'q.activate',
                     'q.is_mcq',
+                    'q.has_diagram',
                     'q.is_alp_question',
                     'q.created_at',
                     'q.updated_at'
@@ -577,10 +615,30 @@ class QuestionsController extends Controller
             $applyFilter('q.difficulty', $request->input('difficulty'));
             $applyFilter('q.activate', $request->input('activate'));
             $applyFilter('q.is_mcq', $request->input('is_mcq'));
+            $applyFilter('q.has_diagram', $request->input('has_diagram'));
             $applyFilter('q.is_alp_question', $request->input('is_alp_question'));
             $applyFilter('books.class_id', $request->input('class_id'));
             $applyFilter('books.subject_id', $request->input('subject_id'));
             $applyFilter('books.curriculum_board_id', $request->input('curriculum_board_id'));
+
+            $boardFilters = [];
+
+            foreach (['board_id', 'session_id', 'year', 'group_id'] as $boardFilter) {
+                if ($request->filled($boardFilter)) {
+                    $value = $request->input($boardFilter);
+                    $boardFilters[$boardFilter] = is_array($value) ? $value : [$value];
+                }
+            }
+
+            $applyBoardFilters = function ($boardQuery) use ($boardFilters) {
+                foreach ($boardFilters as $column => $values) {
+                    $values = array_values(array_filter($values, fn ($item) => $item !== null && $item !== ''));
+
+                    if (!empty($values)) {
+                        $boardQuery->whereIn('question_boards.' . $column, $values);
+                    }
+                }
+            };
 
             if ($request->filled('search')) {
                 $search = '%' . $request->input('search') . '%';
@@ -614,14 +672,13 @@ class QuestionsController extends Controller
                 });
             }
 
-            if ($request->filled('board_id')) {
-                $boardIds = is_array($request->board_id) ? $request->board_id : [$request->board_id];
-
-                $query->whereExists(function ($boardQuery) use ($boardIds) {
+            if (!empty($boardFilters)) {
+                $query->whereExists(function ($boardQuery) use ($applyBoardFilters) {
                     $boardQuery->select(DB::raw(1))
                         ->from('exam_question_board_tbl as question_boards')
-                        ->whereColumn('question_boards.question_id', 'q.id')
-                        ->whereIn('question_boards.board_id', $boardIds);
+                        ->whereColumn('question_boards.question_id', 'q.id');
+
+                    $applyBoardFilters($boardQuery);
                 });
             }
 
@@ -632,6 +689,52 @@ class QuestionsController extends Controller
             $questions = $query
                 ->orderByDesc('q.id')
                 ->paginate($perPage);
+
+            $questionIds = collect($questions->items())->pluck('id')->filter()->values();
+
+            if ($questionIds->isNotEmpty()) {
+                $boardLinks = DB::table('exam_question_board_tbl as question_boards')
+                    ->leftJoin('board_tbl as boards', 'question_boards.board_id', '=', 'boards.id')
+                    ->leftJoin('exam_session_tbl as sessions', 'question_boards.session_id', '=', 'sessions.id')
+                    ->leftJoin('study_group_tbl as groups', 'question_boards.group_id', '=', 'groups.id')
+                    ->whereIn('question_boards.question_id', $questionIds->all())
+                    ->select(
+                        'question_boards.question_id',
+                        'question_boards.board_id',
+                        'boards.board_name',
+                        'question_boards.session_id',
+                        'sessions.session_name',
+                        'question_boards.year',
+                        'question_boards.group_id',
+                        'groups.name as group_name',
+                        'question_boards.activate'
+                    );
+
+                $applyBoardFilters($boardLinks);
+
+                $boardLinksByQuestion = $boardLinks
+                    ->orderByDesc('question_boards.year')
+                    ->orderBy('boards.board_name')
+                    ->orderBy('sessions.session_name')
+                    ->get()
+                    ->groupBy('question_id');
+
+                $questions->getCollection()->transform(function ($question) use ($boardLinksByQuestion) {
+                    $links = $boardLinksByQuestion->get($question->id, collect())->values();
+                    $firstLink = $links->first();
+
+                    $question->board_links = $links;
+                    $question->board_id = $firstLink?->board_id;
+                    $question->board_name = $firstLink?->board_name;
+                    $question->session_id = $firstLink?->session_id;
+                    $question->session_name = $firstLink?->session_name;
+                    $question->year = $firstLink?->year;
+                    $question->group_id = $firstLink?->group_id;
+                    $question->group_name = $firstLink?->group_name;
+
+                    return $question;
+                });
+            }
 
             return response()->json([
                 'success' => 1,
@@ -690,6 +793,7 @@ class QuestionsController extends Controller
                     ? $request->activate
                     : ($status !== 'archived'),
                 'is_mcq' => $request -> is_mcq,
+                'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
                 'is_alp_question' => $request->is_alp_question,
                 'created_by' => optional($request->user())->id,
                 'updated_by' => optional($request->user())->id,
@@ -697,6 +801,17 @@ class QuestionsController extends Controller
                 'updated_at' => now(), 
 
             ]);
+
+            if ($this->hasQuestionStatementImage($request)) {
+                $questionStatement = $this->resolveQuestionStatement($request, null, $question);
+
+                DB::table('exam_question_tbl')
+                    ->where('id', '=', $question)
+                    ->update([
+                        'question' => $questionStatement,
+                        'updated_at' => now(),
+                    ]);
+            }
 
             if ($request -> answer != "" || $request ->answer_um != ""){
                 $answer = DB::table('exam_answer_tbl')
@@ -799,12 +914,19 @@ class QuestionsController extends Controller
             $reviewedAt = $request->filled('reviewed_at')
                 ? $request->reviewed_at
                 : ($status === 'published' ? now() : null);
+
+            $existingQuestion = DB::table('exam_question_tbl')
+                ->where('id', '=', $request->id)
+                ->select('question')
+                ->first();
+
+            $questionStatement = $this->resolveQuestionStatement($request, $existingQuestion?->question, $request->id);
     
             // Update the main question
             DB::table('exam_question_tbl')
                 ->where('id', '=', $request->id) // Apply the where condition first
                 ->update([
-                    'question' => $request->question,
+                    'question' => $questionStatement,
                     'question_um' => $request->question_um,
                     'topic_id' => $request->topic_id,
                     'question_type' => $request->question_type,
@@ -827,6 +949,7 @@ class QuestionsController extends Controller
                         ? $request->activate
                         : ($status !== 'archived'),
                     'is_mcq' => $request -> is_mcq,
+                    'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
                     'updated_by' => optional($request->user())->id,
                     'updated_at' => now(),
                     'is_alp_question' => $request->is_alp_question,
@@ -890,8 +1013,48 @@ if ($existingRecord) {
                     }
                 }
             }
-    
+
+            if ($request->has('board_links') && is_array($request->board_links)) {
+                DB::table('exam_question_board_tbl')
+                    ->where('question_id', '=', $request->id)
+                    ->delete();
+
+                foreach ($request->board_links as $boardLink) {
+                    if (!empty($boardLink['board_id'])) {
+                        DB::table('exam_question_board_tbl')
+                            ->insert([
+                                'question_id' => $request->id,
+                                'board_id' => $boardLink['board_id'],
+                                'session_id' => $boardLink['session_id'] ?? null,
+                                'group_id' => $boardLink['group_id'] ?? null,
+                                'year' => $boardLink['year'] ?? null,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                    }
+                }
+            } elseif ($request->filled('board_id')) {
+                DB::table('exam_question_board_tbl')
+                    ->where('question_id', '=', $request->id)
+                    ->delete();
+
+                DB::table('exam_question_board_tbl')
+                    ->insert([
+                        'question_id' => $request->id,
+                        'board_id' => $request->board_id,
+                        'session_id' => $request->session_id,
+                        'group_id' => $request->group_id,
+                        'year' => $request->year,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+            }
+
             DB::commit();
+
+            if ($this->hasQuestionStatementImage($request)) {
+                $this->deleteManagedQuestionStatementImage($existingQuestion?->question);
+            }
     
             return response()->json(['success' => true, 'message' => 'Question and options updated successfully.']);
         } catch(\Exception $e) {
@@ -1204,6 +1367,127 @@ if ($existingRecord) {
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function resolveQuestionStatement(Request $request, ?string $currentStatement = null, $questionId = null): ?string
+    {
+        $image = $this->questionStatementImage($request);
+
+        if (!$image) {
+            return $request->has('question') ? $request->question : $currentStatement;
+        }
+
+        if (!$questionId) {
+            throw new \InvalidArgumentException('Question ID is required to upload a question statement image.');
+        }
+
+        $extension = strtolower($image->getClientOriginalExtension() ?: $image->extension() ?: 'jpg');
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'];
+
+        if (!in_array($extension, $allowedExtensions, true) || !str_starts_with((string) $image->getMimeType(), 'image/')) {
+            throw new \InvalidArgumentException('Question statement image must be a valid image file.');
+        }
+
+        $awsUploadService = app(AwsUploadService::class);
+        $s3Key = $awsUploadService->uploadFileToS3(
+            $image,
+            $extension,
+            $this->questionStatementImageDirectory($questionId)
+        );
+
+        if (!$s3Key) {
+            throw new \RuntimeException('Failed to upload question statement image.');
+        }
+
+        return $awsUploadService->getS3Url($s3Key);
+    }
+
+    private function questionStatementImageDirectory($questionId): string
+    {
+        return 'questions/' . (int) $questionId . '/question_statement';
+    }
+
+    private function hasQuestionStatementImage(Request $request): bool
+    {
+        return $this->questionStatementImage($request) !== null;
+    }
+
+    private function questionStatementImage(Request $request)
+    {
+        foreach (['question_image', 'question_statement_image', 'statement_image', 'image'] as $field) {
+            if ($request->hasFile($field) && $request->file($field)->isValid()) {
+                return $request->file($field);
+            }
+        }
+
+        return null;
+    }
+
+    private function deleteManagedQuestionStatementImage(?string $statement): void
+    {
+        $s3Key = $this->managedQuestionStatementImageKey($statement);
+
+        if (!$s3Key) {
+            return;
+        }
+
+        app(AwsUploadService::class)->deleteFileFromS3($s3Key);
+    }
+
+    private function managedQuestionStatementImageKey(?string $statement): ?string
+    {
+        $statement = trim((string) $statement);
+
+        if ($statement === '') {
+            return null;
+        }
+
+        foreach ($this->managedStorageUrlPrefixes() as $prefix) {
+            if (str_starts_with($statement, $prefix)) {
+                return ltrim(substr($statement, strlen($prefix)), '/');
+            }
+        }
+
+        if (parse_url($statement, PHP_URL_SCHEME) || parse_url($statement, PHP_URL_HOST)) {
+            return null;
+        }
+
+        $path = parse_url($statement, PHP_URL_PATH);
+
+        if (!$path) {
+            return null;
+        }
+
+        $key = ltrim($path, '/');
+
+        if (str_contains($key, 'questions/question_statements/')) {
+            return $key;
+        }
+
+        return preg_match('#(^|/)questions/\d+/question_statement/#', $key) ? $key : null;
+    }
+
+    private function managedStorageUrlPrefixes(): array
+    {
+        $prefixes = [];
+
+        if (env('CDN_URL')) {
+            $prefixes[] = rtrim(env('CDN_URL'), '/') . '/';
+        }
+
+        try {
+            $s3Url = Storage::disk('s3')->url('');
+
+            if ($s3Url) {
+                $prefixes[] = rtrim($s3Url, '/') . '/';
+            }
+        } catch (\Exception $e) {
+            Log::warning('Unable to build S3 URL prefix for question image cleanup.', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return array_values(array_unique($prefixes));
     }
 
     private function applyQuestionScopeFilter($query, Request $request, string $permissionName): void

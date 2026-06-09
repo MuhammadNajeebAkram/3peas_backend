@@ -1414,6 +1414,120 @@ class NewsController extends Controller
         }
     }
 
+    public function deleteMediaUpload(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'key' => ['nullable', 'string', 'max:1024'],
+                'url' => ['nullable', 'string', 'max:2048'],
+            ]);
+
+            if (empty($validated['key']) && empty($validated['url'])) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'A media key or URL is required.',
+                ], 422);
+            }
+
+            $key = $this->managedMediaKeyFromValue($validated['key'] ?? $validated['url']);
+
+            if (!$key) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Only managed media uploads can be deleted.',
+                ], 422);
+            }
+
+            $deleted = $this->awsUploadService->deleteFileFromS3($key);
+
+            return response()->json([
+                'success' => $deleted ? 1 : 0,
+                'deleted' => $deleted,
+                'key' => $key,
+                'message' => $deleted ? 'Media deleted successfully.' : 'Media was not found or could not be deleted.',
+            ], $deleted ? 200 : 404);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('deleteMediaUpload failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to delete media.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function managedMediaKeyFromValue(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        $key = $value;
+
+        foreach ($this->managedMediaUrlPrefixes() as $prefix) {
+            if (str_starts_with($value, $prefix)) {
+                $key = substr($value, strlen($prefix));
+                break;
+            }
+        }
+
+        if (filter_var($key, FILTER_VALIDATE_URL)) {
+            $path = parse_url($key, PHP_URL_PATH);
+            $key = is_string($path) ? $path : '';
+        }
+
+        $key = ltrim($key, '/');
+        $key = strtok($key, '?#') ?: '';
+
+        if (
+            $key === ''
+            || str_contains($key, '..')
+            || str_contains($key, '\\')
+            || !str_starts_with($key, $this->managedUploadPrefix() . '/')
+        ) {
+            return null;
+        }
+
+        return $key;
+    }
+
+    private function managedMediaUrlPrefixes(): array
+    {
+        return collect([
+            env('CDN_URL'),
+            env('AWS_URL'),
+        ])
+            ->filter()
+            ->map(fn ($prefix) => rtrim((string) $prefix, '/') . '/')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function managedUploadPrefix(): string
+    {
+        $configuredPrefix = env('AWS_UPLOAD_PREFIX');
+
+        if (!empty($configuredPrefix)) {
+            return trim($configuredPrefix, '/');
+        }
+
+        return app()->environment('production') ? 'prod' : 'dev';
+    }
+
     public function getAllSlugs(){
         $slugs = $this->newsService->getAllSlugs();
         $slugsData = $slugs->getData();
