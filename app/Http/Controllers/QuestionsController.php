@@ -8,6 +8,7 @@ use App\Http\Services\AwsUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class QuestionsController extends Controller
@@ -760,16 +761,17 @@ class QuestionsController extends Controller
 
             DB::beginTransaction();
 
+            $userId = $this->authenticatedUserId($request);
             $status = $request->status ?? 'draft';
             $reviewedBy = $request->filled('reviewed_by')
                 ? $request->reviewed_by
-                : ($status === 'published' ? optional($request->user())->id : null);
+                : ($status === 'published' ? $userId : null);
             $reviewedAt = $request->filled('reviewed_at')
                 ? $request->reviewed_at
                 : ($status === 'published' ? now() : null);
 
             $question = DB::table('exam_question_tbl')
-            ->insertGetId([
+            ->insertGetId($this->withAuditColumns('exam_question_tbl', [
                 'question' => $request -> question,
                 'question_um' => $request -> question_um,
                 'topic_id' => $request -> topic_id,
@@ -795,27 +797,25 @@ class QuestionsController extends Controller
                 'is_mcq' => $request -> is_mcq,
                 'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
                 'is_alp_question' => $request->is_alp_question,
-                'created_by' => optional($request->user())->id,
-                'updated_by' => optional($request->user())->id,
                 'created_at' => now(),
                 'updated_at' => now(), 
 
-            ]);
+            ], $userId));
 
             if ($this->hasQuestionStatementImage($request)) {
                 $questionStatement = $this->resolveQuestionStatement($request, null, $question);
 
                 DB::table('exam_question_tbl')
                     ->where('id', '=', $question)
-                    ->update([
+                    ->update($this->withAuditColumns('exam_question_tbl', [
                         'question' => $questionStatement,
                         'updated_at' => now(),
-                    ]);
+                    ], $userId, false));
             }
 
             if ($request -> answer != "" || $request ->answer_um != ""){
                 $answer = DB::table('exam_answer_tbl')
-                ->insert([
+                ->insert($this->withAuditColumns('exam_answer_tbl', [
                     'question_id' => $question,
                     'answer' => $request -> answer,
                     'answer_um' => $request -> answer_um,                    
@@ -823,7 +823,7 @@ class QuestionsController extends Controller
                     'answer_um_lang' => $request->answer_um_lang,
                     'created_at' => now(),
                     'updated_at' => now(), 
-                ]);
+                ], $userId));
             }
             $boardLinks = $request->board_links;
 
@@ -831,7 +831,7 @@ class QuestionsController extends Controller
                 foreach ($boardLinks as $boardLink) {
                     if (!empty($boardLink['board_id'])) {
                         DB::table('exam_question_board_tbl')
-                            ->insert([
+                            ->insert($this->withAuditColumns('exam_question_board_tbl', [
                                 'question_id' => $question,
                                 'board_id' => $boardLink['board_id'],
                                 'session_id' => $boardLink['session_id'] ?? null,
@@ -839,12 +839,12 @@ class QuestionsController extends Controller
                                 'year' => $boardLink['year'] ?? null,
                                 'created_at' => now(),
                                 'updated_at' => now(),
-                            ]);
+                            ], $userId));
                     }
                 }
             } elseif ($request->board_id) {
                 DB::table('exam_question_board_tbl')
-                    ->insert([
+                    ->insert($this->withAuditColumns('exam_question_board_tbl', [
                         'question_id' => $question,
                         'board_id' => $request->board_id,
                         'session_id' => $request->session_id,
@@ -852,7 +852,7 @@ class QuestionsController extends Controller
                         'year' => $request->year,
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ]);
+                    ], $userId));
             }
            
 
@@ -860,7 +860,7 @@ class QuestionsController extends Controller
 
             if ($options != null && is_array($options)) {
                 foreach ($options as $option) {
-                    DB::table('exam_question_options_tbl')->insert([
+                    DB::table('exam_question_options_tbl')->insert($this->withAuditColumns('exam_question_options_tbl', [
                         'question_id' => $question,
                         'option' => $option['text'], // Assuming 'text' is a key in each option array
                         'option_um' => $option['text_um'],
@@ -868,7 +868,7 @@ class QuestionsController extends Controller
                         'option_lang' => $request->option_lang,
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ]);
+                    ], $userId));
                 }
             }
 
@@ -907,10 +907,11 @@ class QuestionsController extends Controller
 
             DB::beginTransaction();
 
+            $userId = $this->authenticatedUserId($request);
             $status = $request->status ?? 'draft';
             $reviewedBy = $request->filled('reviewed_by')
                 ? $request->reviewed_by
-                : ($status === 'published' ? optional($request->user())->id : null);
+                : ($status === 'published' ? $userId : null);
             $reviewedAt = $request->filled('reviewed_at')
                 ? $request->reviewed_at
                 : ($status === 'published' ? now() : null);
@@ -925,7 +926,7 @@ class QuestionsController extends Controller
             // Update the main question
             DB::table('exam_question_tbl')
                 ->where('id', '=', $request->id) // Apply the where condition first
-                ->update([
+                ->update($this->withAuditColumns('exam_question_tbl', [
                     'question' => $questionStatement,
                     'question_um' => $request->question_um,
                     'topic_id' => $request->topic_id,
@@ -950,10 +951,9 @@ class QuestionsController extends Controller
                         : ($status !== 'archived'),
                     'is_mcq' => $request -> is_mcq,
                     'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
-                    'updated_by' => optional($request->user())->id,
                     'updated_at' => now(),
                     'is_alp_question' => $request->is_alp_question,
-                ]);
+                ], $userId, false));
 
                
                     $existingRecord = DB::table('exam_answer_tbl')
@@ -964,17 +964,17 @@ if ($existingRecord) {
     // Update the existing record
     DB::table('exam_answer_tbl')
         ->where('question_id', $request->id)
-        ->update([
+        ->update($this->withAuditColumns('exam_answer_tbl', [
             'answer' => $request->answer,
             'answer_um' => $request->answer_um,           
             'answer_lang' => $request->answer_lang,
             'answer_um_lang' => $request->answer_um_lang,
             'updated_at' => now(),
-        ]);
+        ], $userId, false));
 } else {
     // Insert a new record
     DB::table('exam_answer_tbl')
-        ->insert([
+        ->insert($this->withAuditColumns('exam_answer_tbl', [
             'question_id' => $request->id,
             'answer' => $request->answer,
             'answer_um' => $request->answer_um,            
@@ -982,7 +982,7 @@ if ($existingRecord) {
             'answer_um_lang' => $request->answer_um_lang,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ], $userId));
 
                 }
     
@@ -993,15 +993,15 @@ if ($existingRecord) {
                     if (!empty($option['id'])) {
                         DB::table('exam_question_options_tbl')
                             ->where('id', '=', $option['id']) // Correctly reference the option ID
-                            ->update([
+                            ->update($this->withAuditColumns('exam_question_options_tbl', [
                                 'option' => $option['text'], // Assuming 'text' is a key in each option array
                                 'option_um' => $option['text_um'],
                                 'is_answer' => $option['is_correct'], // Assuming 'is_correct' is a boolean key in each option array
                                 'option_lang' => $request->option_lang,
                                 'updated_at' => now(),
-                            ]);
+                            ], $userId, false));
                     } else {
-                        DB::table('exam_question_options_tbl')->insert([
+                        DB::table('exam_question_options_tbl')->insert($this->withAuditColumns('exam_question_options_tbl', [
                             'question_id' => $request->id,
                             'option' => $option['text'], // Assuming 'text' is a key in each option array
                             'option_um' => $option['text_um'],
@@ -1009,7 +1009,7 @@ if ($existingRecord) {
                             'option_lang' => $request->option_lang,
                             'created_at' => now(),
                             'updated_at' => now(),
-                        ]);
+                        ], $userId));
                     }
                 }
             }
@@ -1022,7 +1022,7 @@ if ($existingRecord) {
                 foreach ($request->board_links as $boardLink) {
                     if (!empty($boardLink['board_id'])) {
                         DB::table('exam_question_board_tbl')
-                            ->insert([
+                            ->insert($this->withAuditColumns('exam_question_board_tbl', [
                                 'question_id' => $request->id,
                                 'board_id' => $boardLink['board_id'],
                                 'session_id' => $boardLink['session_id'] ?? null,
@@ -1030,7 +1030,7 @@ if ($existingRecord) {
                                 'year' => $boardLink['year'] ?? null,
                                 'created_at' => now(),
                                 'updated_at' => now(),
-                            ]);
+                            ], $userId));
                     }
                 }
             } elseif ($request->filled('board_id')) {
@@ -1039,7 +1039,7 @@ if ($existingRecord) {
                     ->delete();
 
                 DB::table('exam_question_board_tbl')
-                    ->insert([
+                    ->insert($this->withAuditColumns('exam_question_board_tbl', [
                         'question_id' => $request->id,
                         'board_id' => $request->board_id,
                         'session_id' => $request->session_id,
@@ -1047,7 +1047,7 @@ if ($existingRecord) {
                         'year' => $request->year,
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ]);
+                    ], $userId));
             }
 
             DB::commit();
@@ -1074,6 +1074,7 @@ if ($existingRecord) {
 
         try{
 
+            $userId = $this->authenticatedUserId($request);
 
             $exists = DB::table('exam_question_board_tbl')
             ->where('question_id', $request->id)
@@ -1088,7 +1089,7 @@ if ($existingRecord) {
         }
 
             $board_question = DB::table('exam_question_board_tbl')
-            ->insert([
+            ->insert($this->withAuditColumns('exam_question_board_tbl', [
                 'question_id' => $request -> id,
                 'board_id' => $request -> board_id,
                 'session_id' => $request -> session_id,
@@ -1096,7 +1097,7 @@ if ($existingRecord) {
                 'year' => $request -> year,
                 'created_at' => now(),
                 'updated_at' => now(), 
-            ]);
+            ], $userId));
 
             return response()->json(['success' => 1, 'message' => 'Question repeated successfully.']);
 
@@ -1113,6 +1114,8 @@ if ($existingRecord) {
     public function activateQuestion(Request $request){
 
         try{
+            $userId = $this->authenticatedUserId($request);
+
             if (!$this->canAccessQuestionScope($request, 'questions.activate', $this->questionContextById($request->id))) {
                 return response()->json([
                     'success' => 0,
@@ -1122,8 +1125,10 @@ if ($existingRecord) {
 
             $activate = DB::table('exam_question_tbl')
          ->where('id', '=', $request -> id)
-        ->update(['activate' => $request -> activate,
-                  'updated_at' => now()]);
+        ->update($this->withAuditColumns('exam_question_tbl', [
+            'activate' => $request -> activate,
+            'updated_at' => now(),
+        ], $userId, false));
 
         if ($activate) {
             return response()->json(['success' => 1], 200);
@@ -1164,10 +1169,14 @@ if ($existingRecord) {
     public function activateBoardQuestion(Request $request){
 
         try{
+            $userId = $this->authenticatedUserId($request);
+
             $activate = DB::table('exam_question_board_tbl')
          ->where('id', '=', $request -> id)
-        ->update(['activate' => $request -> activate,
-                  'updated_at' => now()]);
+        ->update($this->withAuditColumns('exam_question_board_tbl', [
+            'activate' => $request -> activate,
+            'updated_at' => now(),
+        ], $userId, false));
 
         if ($activate) {
             return response()->json(['success' => 1], 200);
@@ -1185,15 +1194,17 @@ if ($existingRecord) {
     }
     public function updateBoardQuestion(Request $request){
         try{
+            $userId = $this->authenticatedUserId($request);
+
             $question = DB::table('exam_question_board_tbl')
             ->where('id', '=', $request -> id)
-            ->update([
+            ->update($this->withAuditColumns('exam_question_board_tbl', [
                 'board_id' => $request -> board_id,
                 'year' => $request -> year,
                 'session_id' => $request -> session_id,
                 'group_id' => $request -> group_id,
                 'updated_at' => now(),
-            ]);
+            ], $userId, false));
 
             if ($question) {
                 return response()->json(['success' => 1], 200);
@@ -1231,8 +1242,10 @@ if ($existingRecord) {
 
     public function saveTest(Request $request){
         try{
+            $userId = $this->authenticatedUserId($request);
+
             $question = DB::table('exam_question_tbl')
-            ->insertGetId([
+            ->insertGetId($this->withAuditColumns('exam_question_tbl', [
                 'question' => $request -> question,
                 'question_um' => $request -> question,
                 'topic_id' =>  1,
@@ -1243,7 +1256,7 @@ if ($existingRecord) {
                 'created_at' => now(),
                 'updated_at' => now(), 
 
-            ]);
+            ], $userId));
 
             return response()->json(['success' => true, 'message' => 'Question and options saved successfully.']);
 
@@ -1488,6 +1501,33 @@ if ($existingRecord) {
         }
 
         return array_values(array_unique($prefixes));
+    }
+
+    private function authenticatedUserId(Request $request): ?int
+    {
+        $user = $request->user()
+            ?: auth('api')->user()
+            ?: auth('web_api')->user()
+            ?: auth()->user();
+
+        return $user?->id ? (int) $user->id : null;
+    }
+
+    private function withAuditColumns(string $table, array $data, ?int $userId, bool $isCreate = true): array
+    {
+        if (!$userId) {
+            return $data;
+        }
+
+        if ($isCreate && Schema::hasColumn($table, 'created_by') && !array_key_exists('created_by', $data)) {
+            $data['created_by'] = $userId;
+        }
+
+        if (Schema::hasColumn($table, 'updated_by') && !array_key_exists('updated_by', $data)) {
+            $data['updated_by'] = $userId;
+        }
+
+        return $data;
     }
 
     private function applyQuestionScopeFilter($query, Request $request, string $permissionName): void
