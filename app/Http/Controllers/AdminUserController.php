@@ -114,29 +114,38 @@ class AdminUserController extends Controller
 
         try {
             $user = User::findOrFail($id);
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
 
-            if (array_key_exists('role_id', $validated)) {
-                $user->role_id = $validated['role_id'];
+            if (
+                array_key_exists('is_active', $validated)
+                && (int) $user->id === (int) $request->user()?->id
+                && !$validated['is_active']
+            ) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'You cannot deactivate your own admin account.',
+                ], 422);
             }
 
-            if (!empty($validated['password'])) {
-                $user->password = Hash::make($validated['password']);
-            }
+            $user = DB::transaction(function () use ($user, $validated) {
+                $user->name = $validated['name'];
+                $user->email = $validated['email'];
 
-            if (array_key_exists('is_active', $validated)) {
-                if ((int) $user->id === (int) $request->user()?->id && !$validated['is_active']) {
-                    return response()->json([
-                        'success' => 0,
-                        'message' => 'You cannot deactivate your own admin account.',
-                    ], 422);
+                if (array_key_exists('role_id', $validated)) {
+                    $user->role_id = $validated['role_id'];
                 }
 
-                $user->is_active = $validated['is_active'];
-            }
+                if (!empty($validated['password'])) {
+                    $user->password = Hash::make($validated['password']);
+                }
 
-            $user->save();
+                if (array_key_exists('is_active', $validated)) {
+                    $user->is_active = $validated['is_active'];
+                }
+
+                $user->save();
+
+                return $user;
+            });
             $user->load(['role:id,name,display_name', 'adminProfile']);
 
             return response()->json([
@@ -162,17 +171,23 @@ class AdminUserController extends Controller
 
         try {
             $user = User::findOrFail($validated['id']);
-            if ((int) $user->id === (int) $request->user()?->id && !(array_key_exists('is_active', $validated) ? $validated['is_active'] : $validated['activate'])) {
+            $isActive = array_key_exists('is_active', $validated)
+                ? $validated['is_active']
+                : $validated['activate'];
+
+            if ((int) $user->id === (int) $request->user()?->id && !$isActive) {
                 return response()->json([
                     'success' => 0,
                     'message' => 'You cannot deactivate your own admin account.',
                 ], 422);
             }
 
-            $user->is_active = array_key_exists('is_active', $validated)
-                ? $validated['is_active']
-                : $validated['activate'];
-            $user->save();
+            $user = DB::transaction(function () use ($user, $isActive) {
+                $user->is_active = $isActive;
+                $user->save();
+
+                return $user;
+            });
             $user->load(['role:id,name,display_name', 'adminProfile']);
 
             return response()->json([

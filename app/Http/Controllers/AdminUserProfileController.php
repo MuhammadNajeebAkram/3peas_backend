@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AdminUserProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminUserProfileController extends Controller
 {
@@ -41,11 +42,14 @@ class AdminUserProfileController extends Controller
         $validated = $this->validateProfile($request);
 
         try {
-            $user = User::findOrFail($userId);
-            $profile = AdminUserProfile::updateOrCreate(
-                ['user_id' => $user->id],
-                $validated
-            );
+            $profile = DB::transaction(function () use ($userId, $validated) {
+                $user = User::findOrFail($userId);
+
+                return AdminUserProfile::updateOrCreate(
+                    ['user_id' => $user->id],
+                    $validated
+                );
+            });
 
             return response()->json([
                 'success' => 1,

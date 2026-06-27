@@ -24,8 +24,8 @@ return new class extends Migration
             $table->string('city')->nullable();
             $table->string('province')->nullable();
             $table->string('country')->nullable();
-            $table->string('timezone')->default('Asia/Karachi');
-            $table->string('locale', 20)->default('en');
+            $table->string('timezone')->nullable()->default('Asia/Karachi');
+            $table->string('locale', 20)->nullable()->default('en');
             $table->json('notification_preferences')->nullable();
             $table->string('emergency_contact_name')->nullable();
             $table->string('emergency_contact_phone', 30)->nullable();
