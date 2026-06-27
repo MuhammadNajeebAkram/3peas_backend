@@ -25,12 +25,23 @@ class LmsPermissionsSeeder extends Seeder
             'roles.delete',
             'roles.assign-permissions',
             'roles.assign-permission-scopes',
+            'roles.assign-dashboard-items',
             'permissions.view',
+            'dashboard-items.view',
 
             'admin-users.view',
             'admin-users.create',
             'admin-users.update',
             'admin-users.activate',
+            'admin-login-logs.view',
+
+            'data-entry-dashboard.view',
+            'data-entry-assignments.view',
+            'data-entry-assignments.create',
+            'data-entry-assignments.update',
+            'data-entry-assignments.submit',
+            'data-entry-assignments.review',
+            'data-entry-assignments.pay',
 
             'web-users.view',
             'web-users.create',

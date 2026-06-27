@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             LmsPermissionsSeeder::class,
+            DashboardItemsSeeder::class,
             SuperAdminRoleSeeder::class,
         ]);
 

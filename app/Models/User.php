@@ -43,6 +43,21 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Role::class, 'role_id');
     }
 
+    public function adminProfile()
+    {
+        return $this->hasOne(AdminUserProfile::class, 'user_id');
+    }
+
+    public function adminPreference()
+    {
+        return $this->hasOne(AdminUserPreference::class, 'user_id');
+    }
+
+    public function userDashboardItems()
+    {
+        return $this->hasMany(UserDashboardItem::class, 'user_id');
+    }
+
     public function createdWorkshops()
 {
     return $this->hasMany(Workshop::class, 'created_by');

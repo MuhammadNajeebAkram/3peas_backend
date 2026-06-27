@@ -3,6 +3,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AdminActivityLogController;
+use App\Http\Controllers\AdminLoginLogController;
+use App\Http\Controllers\AdminUserProfileController;
+use App\Http\Controllers\AdminUserPreferenceController;
 use App\Http\Controllers\AdminAuth\AuthController as AdminAuthController;
 use App\Http\Controllers\ClassesController;
 use App\Http\Controllers\SubjectsController;
@@ -27,7 +31,10 @@ use App\Http\Controllers\CognitiveDomainController;
 use App\Http\Middleware\RefreshAuthTokenMiddleware;
 use App\Http\Middleware\AttachJwtFromCookie;
 use App\Http\Middleware\AuthenticateJwtCookieGuard;
+use App\Http\Middleware\LogAdminActivity;
 use App\Http\Controllers\CurriculumBoardController;
+use App\Http\Controllers\DataEntryAssignmentController;
+use App\Http\Controllers\DashboardItemController;
 use App\Http\Controllers\DistrictController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\HeardAboutController;
@@ -58,9 +65,15 @@ Route::post('login', [AdminAuthController::class, 'login']);
 Route::prefix('admin/auth')->group(function () {
     Route::post('login', [AdminAuthController::class, 'login']);
 
-    Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin'])->group(function () {
+    Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin', LogAdminActivity::class])->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
         Route::post('logout', [AdminAuthController::class, 'logout']);
+        Route::get('profile', [AdminUserProfileController::class, 'show']);
+        Route::post('profile/update', [AdminUserProfileController::class, 'update']);
+        Route::get('preferences', [AdminUserPreferenceController::class, 'show']);
+        Route::post('preferences/update', [AdminUserPreferenceController::class, 'update']);
+        Route::get('preferences/dashboard-items', [AdminUserPreferenceController::class, 'getDashboardItems']);
+        Route::post('preferences/dashboard-items/sync', [AdminUserPreferenceController::class, 'syncDashboardItems']);
         Route::post('media/presign', [NewsController::class, 'presignMediaUpload'])->middleware('permission:admin.media.presign');
         Route::post('media/delete', [NewsController::class, 'deleteMediaUpload'])->middleware('permission:admin.media.delete');
 
@@ -71,10 +84,16 @@ Route::prefix('admin/auth')->group(function () {
             Route::delete('/delete/{id}', [RolePermissionController::class, 'deleteRole'])->middleware('permission:roles.delete');
             Route::post('/{id}/permissions', [RolePermissionController::class, 'syncRolePermissions'])->middleware('permission:roles.assign-permissions');
             Route::post('/{id}/permission-scopes', [RolePermissionController::class, 'syncRolePermissionScopes'])->middleware('permission:roles.assign-permission-scopes');
+            Route::post('/{id}/dashboard-items', [RolePermissionController::class, 'syncRoleDashboardItems'])->middleware('permission:roles.assign-dashboard-items');
         });
 
         Route::prefix('permissions')->group(function () {
             Route::get('/all', [RolePermissionController::class, 'getPermissions'])->middleware('permission:permissions.view');
+        });
+
+        Route::prefix('dashboard-items')->group(function () {
+            Route::get('/all', [DashboardItemController::class, 'getDashboardItems'])->middleware('permission:dashboard-items.view');
+            Route::get('/my', [DashboardItemController::class, 'getMyDashboardItems'])->middleware('permission:dashboard.view');
         });
 
         Route::prefix('admin-user')->group(function () {
@@ -82,6 +101,8 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/add', [AdminUserController::class, 'saveAdminUser'])->middleware('permission:admin-users.create');
             Route::post('/update/{id}', [AdminUserController::class, 'updateAdminUser'])->middleware('permission:admin-users.update');
             Route::post('/activate', [AdminUserController::class, 'activateAdminUser'])->middleware('permission:admin-users.activate');
+            Route::get('/profile/{id}', [AdminUserProfileController::class, 'showByUser'])->middleware('permission:admin-users.view');
+            Route::post('/profile/update/{id}', [AdminUserProfileController::class, 'updateByUser'])->middleware('permission:admin-users.update');
         });
 
         Route::prefix('admin-users')->group(function () {
@@ -89,6 +110,28 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/add', [AdminUserController::class, 'saveAdminUser'])->middleware('permission:admin-users.create');
             Route::post('/update/{id}', [AdminUserController::class, 'updateAdminUser'])->middleware('permission:admin-users.update');
             Route::post('/activate', [AdminUserController::class, 'activateAdminUser'])->middleware('permission:admin-users.activate');
+            Route::get('/profile/{id}', [AdminUserProfileController::class, 'showByUser'])->middleware('permission:admin-users.view');
+            Route::post('/profile/update/{id}', [AdminUserProfileController::class, 'updateByUser'])->middleware('permission:admin-users.update');
+        });
+
+        Route::prefix('admin-login-logs')->group(function () {
+            Route::get('/all', [AdminLoginLogController::class, 'getAdminLoginLogs'])->middleware('permission:admin-login-logs.view');
+        });
+
+        Route::prefix('admin-activity-logs')->group(function () {
+            Route::get('/my', [AdminActivityLogController::class, 'getMyActivityLogs'])->middleware('permission:dashboard.view');
+        });
+
+        Route::prefix('data-entry-assignments')->group(function () {
+            Route::get('/dashboard', [DataEntryAssignmentController::class, 'getOperatorDashboard'])->middleware('permission:data-entry-dashboard.view');
+            Route::get('/all', [DataEntryAssignmentController::class, 'getAssignments'])->middleware('permission:data-entry-assignments.view');
+            Route::post('/add', [DataEntryAssignmentController::class, 'saveAssignment'])->middleware('permission:data-entry-assignments.create');
+            Route::get('/{id}', [DataEntryAssignmentController::class, 'getAssignmentById'])->middleware('permission:data-entry-assignments.view');
+            Route::post('/update/{id}', [DataEntryAssignmentController::class, 'updateAssignment'])->middleware('permission:data-entry-assignments.update');
+            Route::post('/status/{id}', [DataEntryAssignmentController::class, 'updateAssignmentStatus'])->middleware('permission:data-entry-assignments.update');
+            Route::post('/{id}/items/add', [DataEntryAssignmentController::class, 'addAssignmentItem'])->middleware('permission:data-entry-assignments.submit');
+            Route::post('/items/{itemId}/review', [DataEntryAssignmentController::class, 'reviewAssignmentItem'])->middleware('permission:data-entry-assignments.review');
+            Route::post('/{id}/payments/add', [DataEntryAssignmentController::class, 'recordAssignmentPayment'])->middleware('permission:data-entry-assignments.pay');
         });
 
         Route::prefix('web-user')->group(function () {

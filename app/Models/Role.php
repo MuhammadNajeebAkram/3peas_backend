@@ -33,4 +33,16 @@ class Role extends Model
             return $this->hasMany(RolePermissionScope::class, 'role_id');
         }
 
+        public function dashboardItems()
+        {
+            return $this->belongsToMany(DashboardItem::class, 'role_dashboard_items', 'role_id', 'dashboard_item_id')
+                ->withPivot(['is_visible', 'sort_order', 'settings'])
+                ->withTimestamps();
+        }
+
+        public function roleDashboardItems()
+        {
+            return $this->hasMany(RoleDashboardItem::class, 'role_id');
+        }
+
 }
