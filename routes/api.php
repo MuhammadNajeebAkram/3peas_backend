@@ -94,6 +94,8 @@ Route::prefix('admin/auth')->group(function () {
         Route::prefix('dashboard-items')->group(function () {
             Route::get('/all', [DashboardItemController::class, 'getDashboardItems'])->middleware('permission:dashboard-items.view');
             Route::get('/my', [DashboardItemController::class, 'getMyDashboardItems'])->middleware('permission:dashboard.view');
+            Route::post('/question-types/by-book', [DashboardItemController::class, 'getQuestionTypeSummaryByBook'])->middleware('permission:dashboard-question-analytics.view');
+            Route::post('/question-types/by-creator', [DashboardItemController::class, 'getQuestionTypeSummaryByCreator'])->middleware('permission:dashboard-question-analytics.view');
         });
 
         Route::prefix('admin-user')->group(function () {

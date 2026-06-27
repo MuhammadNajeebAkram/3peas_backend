@@ -28,6 +28,7 @@ class LmsPermissionsSeeder extends Seeder
             'roles.assign-dashboard-items',
             'permissions.view',
             'dashboard-items.view',
+            'dashboard-question-analytics.view',
 
             'admin-users.view',
             'admin-users.create',
