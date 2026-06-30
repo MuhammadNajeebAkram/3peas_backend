@@ -148,6 +148,99 @@ class DashboardItemController extends Controller
         }
     }
 
+    public function getQuestionTypeSummaryByUnit(Request $request)
+    {
+        $validated = $request->validate([
+            'book_id' => ['required', 'integer', 'exists:book_tbl,id'],
+        ]);
+
+        try {
+            $book = DB::table('book_tbl')
+                ->select('id', 'book_name')
+                ->where('id', $validated['book_id'])
+                ->first();
+
+            $units = DB::table('book_unit_tbl')
+                ->select('id', 'unit_no', 'unit_name')
+                ->where('book_id', $validated['book_id'])
+                ->orderBy('unit_no')
+                ->orderBy('unit_name')
+                ->get();
+
+            $questionTypes = $this->questionTypes();
+            $unitIds = $units->pluck('id')->all();
+
+            $rows = collect();
+
+            if (!empty($unitIds)) {
+                $rows = $this->questionTypeCountsQuery()
+                    ->addSelect(DB::raw('COALESCE(q.unit_id, topics.unit_id) as unit_id'))
+                    ->leftJoin('book_unit_topic_tbl as topics', 'topics.id', '=', 'q.topic_id')
+                    ->whereIn(DB::raw('COALESCE(q.unit_id, topics.unit_id)'), $unitIds)
+                    ->groupBy(DB::raw('COALESCE(q.unit_id, topics.unit_id)'), 'q.question_type', 'question_types.type_name')
+                    ->get();
+            }
+
+            $countsByUnit = $rows
+                ->groupBy(fn ($row) => (int) $row->unit_id)
+                ->map(fn ($unitRows) => $unitRows->keyBy('question_type_id'));
+
+            $unitSummaries = $units
+                ->map(function ($unit) use ($countsByUnit, $questionTypes) {
+                    $summary = $this->questionTypeSummary(
+                        $countsByUnit->get((int) $unit->id, collect()),
+                        $questionTypes
+                    );
+
+                    return [
+                        'unit_id' => (int) $unit->id,
+                        'unit_no' => (int) $unit->unit_no,
+                        'unit_name' => $unit->unit_name,
+                        'total_questions' => (int) $summary->sum('total_questions'),
+                        'question_type_summary' => $summary->values(),
+                    ];
+                })
+                ->values();
+
+            $datasets = $questionTypes
+                ->map(fn ($type) => [
+                    'label' => $type->type_name,
+                    'question_type_id' => (int) $type->id,
+                    'data' => $unitSummaries
+                        ->map(function ($unit) use ($type) {
+                            $summary = collect($unit['question_type_summary'])
+                                ->firstWhere('question_type_id', (int) $type->id);
+
+                            return (int) ($summary['total_questions'] ?? 0);
+                        })
+                        ->values(),
+                ])
+                ->values();
+
+            return response()->json([
+                'success' => 1,
+                'book' => $book,
+                'total_questions' => (int) $unitSummaries->sum('total_questions'),
+                'units' => $unitSummaries,
+                'chart' => [
+                    'type' => 'bar',
+                    'labels' => $unitSummaries
+                        ->map(fn ($unit) => trim($unit['unit_no'] . '. ' . $unit['unit_name']))
+                        ->values(),
+                    'unit_ids' => $unitSummaries->pluck('unit_id')->values(),
+                    'unit_numbers' => $unitSummaries->pluck('unit_no')->values(),
+                    'datasets' => $datasets,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to retrieve unit question type summary.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function getQuestionTypeSummaryByCreator(Request $request)
     {
         $validated = $request->validate([

@@ -20,6 +20,7 @@ use App\Http\Controllers\BooksController;
 use App\Http\Controllers\UnitsController;
 use App\Http\Controllers\TopicsController;
 use App\Http\Controllers\QuestionTypesController;
+use App\Http\Controllers\QuestionPresentationTypeController;
 use App\Http\Controllers\QuestionsController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsCategoryController;
@@ -95,6 +96,7 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/all', [DashboardItemController::class, 'getDashboardItems'])->middleware('permission:dashboard-items.view');
             Route::get('/my', [DashboardItemController::class, 'getMyDashboardItems'])->middleware('permission:dashboard.view');
             Route::post('/question-types/by-book', [DashboardItemController::class, 'getQuestionTypeSummaryByBook'])->middleware('permission:dashboard-question-analytics.view');
+            Route::post('/question-types/by-unit', [DashboardItemController::class, 'getQuestionTypeSummaryByUnit'])->middleware('permission:dashboard-question-analytics.view');
             Route::post('/question-types/by-creator', [DashboardItemController::class, 'getQuestionTypeSummaryByCreator'])->middleware('permission:dashboard-question-analytics.view');
         });
 
@@ -239,6 +241,14 @@ Route::prefix('admin/auth')->group(function () {
 
         Route::prefix('question-type')->group(function () {
             Route::get('/all', [QuestionTypesController::class, 'getAllTypes'])->middleware('permission:question-types.view');
+        });
+
+        Route::prefix('question-presentation-type')->group(function () {
+            Route::get('/all', [QuestionPresentationTypeController::class, 'getAllPresentationTypes'])->middleware('permission:question-presentation-types.view');
+            Route::get('/active', [QuestionPresentationTypeController::class, 'getActivePresentationTypes'])->middleware('permission:question-presentation-types.view');
+            Route::post('/add', [QuestionPresentationTypeController::class, 'savePresentationType'])->middleware('permission:question-presentation-types.create');
+            Route::post('/update/{id}', [QuestionPresentationTypeController::class, 'updatePresentationType'])->middleware('permission:question-presentation-types.update');
+            Route::post('/activate', [QuestionPresentationTypeController::class, 'activatePresentationType'])->middleware('permission:question-presentation-types.activate');
         });
 
         Route::prefix('cognitive-domain')->group(function () {

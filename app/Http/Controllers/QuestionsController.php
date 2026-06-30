@@ -57,6 +57,7 @@ class QuestionsController extends Controller
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
     'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
+    'exam_question_tbl.question_presentation_type_id',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -143,6 +144,7 @@ class QuestionsController extends Controller
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
     'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
+    'exam_question_tbl.question_presentation_type_id',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -230,6 +232,7 @@ class QuestionsController extends Controller
     )
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
     'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
+    'exam_question_tbl.question_presentation_type_id',
     DB::raw("
             CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -300,7 +303,8 @@ class QuestionsController extends Controller
     ->join('book_tbl', 'book_unit_tbl.book_id', '=', 'book_tbl.id')
     ->join('exam_question_board_tbl', 'exam_question_tbl.id', '=', 'exam_question_board_tbl.question_id')
     ->select('exam_question_tbl.id', 'exam_question_tbl.question', 'book_unit_topic_tbl.topic_name', 
-    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram')
+    'question_type_tbl.type_name', 'exam_question_tbl.activate', 'exam_question_tbl.topic_id', 'exam_question_tbl.has_diagram',
+    'exam_question_tbl.question_presentation_type_id')
     ->where('book_tbl.subject_id', $request -> subject_id)
     ->where('book_tbl.class_id', $request -> class_id)
     ->where('exam_question_board_tbl.board_id', $request -> board_id)
@@ -341,6 +345,7 @@ class QuestionsController extends Controller
         'exam_question_tbl.activate', 
         'exam_question_tbl.topic_id',
         'exam_question_tbl.has_diagram',
+        'exam_question_tbl.question_presentation_type_id',
         DB::raw("
              CASE
             WHEN exam_question_tbl.question_type = 1 
@@ -397,7 +402,8 @@ class QuestionsController extends Controller
         'question_type_tbl.type_name', 
         'exam_question_tbl.activate', 
         'exam_question_tbl.topic_id',
-        'exam_question_tbl.has_diagram'
+        'exam_question_tbl.has_diagram',
+        'exam_question_tbl.question_presentation_type_id'
         
     )
     ->get();
@@ -422,8 +428,14 @@ class QuestionsController extends Controller
     public function getQuestionDataById(Request $request){
         try{
 
-            $questionData = DB::table('exam_question_tbl')
-            ->where('id', '=', $request -> id)
+            $questionData = DB::table('exam_question_tbl as questions')
+            ->leftJoin('question_presentation_type_tbl as presentation_types', 'questions.question_presentation_type_id', '=', 'presentation_types.id')
+            ->where('questions.id', '=', $request -> id)
+            ->select(
+                'questions.*',
+                'presentation_types.type_name as question_presentation_type_name',
+                'presentation_types.code as question_presentation_type_code'
+            )
             ->get();
 
             $question = $questionData -> first();
@@ -558,6 +570,7 @@ class QuestionsController extends Controller
                     $join->on('books.id', '=', DB::raw('COALESCE(q.book_id, units.book_id)'));
                 })
                 ->leftJoin('question_type_tbl as question_types', 'q.question_type', '=', 'question_types.id')
+                ->leftJoin('question_presentation_type_tbl as presentation_types', 'q.question_presentation_type_id', '=', 'presentation_types.id')
                 ->select(
                     'q.id',
                     'q.question',
@@ -587,6 +600,9 @@ class QuestionsController extends Controller
                     'q.activate',
                     'q.is_mcq',
                     'q.has_diagram',
+                    'q.question_presentation_type_id',
+                    'presentation_types.type_name as question_presentation_type_name',
+                    'presentation_types.code as question_presentation_type_code',
                     'q.is_alp_question',
                     'q.created_at',
                     'q.updated_at'
@@ -617,6 +633,7 @@ class QuestionsController extends Controller
             $applyFilter('q.activate', $request->input('activate'));
             $applyFilter('q.is_mcq', $request->input('is_mcq'));
             $applyFilter('q.has_diagram', $request->input('has_diagram'));
+            $applyFilter('q.question_presentation_type_id', $request->input('question_presentation_type_id'));
             $applyFilter('q.is_alp_question', $request->input('is_alp_question'));
             $applyFilter('books.class_id', $request->input('class_id'));
             $applyFilter('books.subject_id', $request->input('subject_id'));
@@ -651,7 +668,8 @@ class QuestionsController extends Controller
                         ->orWhere('topics.topic_name_um', 'like', $search)
                         ->orWhere('units.unit_name', 'like', $search)
                         ->orWhere('books.book_name', 'like', $search)
-                        ->orWhere('question_types.type_name', 'like', $search);
+                        ->orWhere('question_types.type_name', 'like', $search)
+                        ->orWhere('presentation_types.type_name', 'like', $search);
                 });
             }
 
@@ -796,6 +814,9 @@ class QuestionsController extends Controller
                     : ($status !== 'archived'),
                 'is_mcq' => $request -> is_mcq,
                 'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
+                'question_presentation_type_id' => $request->filled('question_presentation_type_id')
+                    ? $request->question_presentation_type_id
+                    : null,
                 'is_alp_question' => $request->is_alp_question,
                 'created_at' => now(),
                 'updated_at' => now(), 
@@ -951,6 +972,9 @@ class QuestionsController extends Controller
                         : ($status !== 'archived'),
                     'is_mcq' => $request -> is_mcq,
                     'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
+                    'question_presentation_type_id' => $request->filled('question_presentation_type_id')
+                        ? $request->question_presentation_type_id
+                        : null,
                     'updated_at' => now(),
                     'is_alp_question' => $request->is_alp_question,
                 ], $userId, false));

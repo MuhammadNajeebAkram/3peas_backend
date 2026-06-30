@@ -100,6 +100,11 @@ class LmsPermissionsSeeder extends Seeder
             'question-types.update',
             'question-types.activate',
 
+            'question-presentation-types.view',
+            'question-presentation-types.create',
+            'question-presentation-types.update',
+            'question-presentation-types.activate',
+
             'cognitive-domains.view',
 
             'questions.view',
