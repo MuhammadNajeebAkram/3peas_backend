@@ -75,6 +75,12 @@ class LmsPermissionsSeeder extends Seeder
             'exam-sessions.update',
             'exam-sessions.activate',
 
+            'tst-past-papers.view',
+            'tst-past-papers.create',
+            'tst-past-papers.update',
+            'tst-past-papers.activate',
+            'tst-past-papers.delete',
+
             'books.view',
             'books.create',
             'books.update',

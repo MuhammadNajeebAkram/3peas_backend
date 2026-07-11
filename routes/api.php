@@ -51,6 +51,7 @@ use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\OfferedProgramController;
 use App\Http\Controllers\RolePermissionController;
+use App\Http\Controllers\TstPastPaperController;
 use App\Http\Middleware\CheckFrontendApiKey;
 
 /*
@@ -237,6 +238,18 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/add', [ExamSessionController::class, 'saveSession'])->middleware('permission:exam-sessions.create');
             Route::post('/update', [ExamSessionController::class, 'editSession'])->middleware('permission:exam-sessions.update');
             Route::post('/activate', [ExamSessionController::class, 'activateSession'])->middleware('permission:exam-sessions.activate');
+        });
+
+        Route::prefix('tst-past-papers')->group(function () {
+            Route::get('/all', [TstPastPaperController::class, 'getAllPastPapersForAdmin'])->middleware('permission:tst-past-papers.view');
+            Route::post('/add', [TstPastPaperController::class, 'savePastPaperForAdmin'])->middleware('permission:tst-past-papers.create');
+            Route::get('/{id}', [TstPastPaperController::class, 'getPastPaperForAdminById'])->middleware('permission:tst-past-papers.view');
+            Route::post('/update/{id}', [TstPastPaperController::class, 'updatePastPaperForAdmin'])->middleware('permission:tst-past-papers.update');
+            Route::post('/activate/{id}', [TstPastPaperController::class, 'activatePastPaperForAdmin'])->middleware('permission:tst-past-papers.activate');
+            Route::delete('/delete/{id}', [TstPastPaperController::class, 'deletePastPaperForAdmin'])->middleware('permission:tst-past-papers.delete');
+            Route::post('/{pastPaperId}/pages/add', [TstPastPaperController::class, 'savePageForAdmin'])->middleware('permission:tst-past-papers.update');
+            Route::post('/pages/update/{pageId}', [TstPastPaperController::class, 'updatePageForAdmin'])->middleware('permission:tst-past-papers.update');
+            Route::delete('/pages/delete/{pageId}', [TstPastPaperController::class, 'deletePageForAdmin'])->middleware('permission:tst-past-papers.update');
         });
 
         Route::prefix('question-type')->group(function () {
@@ -496,9 +509,12 @@ Route::middleware(CheckFrontendApiKey::class)->group(function () {
     Route::get('/get_board_data', [BoardsController::class, 'getBoardData']);
     Route::get('/get_past_papers_search_result', [BoardsController::class, 'searchResult']);
     Route::get('/get_past_paper_by_slug', [PapersController::class, 'getPastPaperBySlug']);
+    Route::get('/tst-past-papers/search', [TstPastPaperController::class, 'searchActivePastPapers']);
+    Route::get('/tst-past-papers/{slug}', [TstPastPaperController::class, 'getActivePastPaperBySlug']);
 
 
     Route::get('/get_all_unique_past_papers_slugs', [PapersController::class, 'getAllSlugs']);
+    Route::get('/tst-past-papers-slugs', [TstPastPaperController::class, 'getAllActivePastPaperSlugs']);
     Route::get('/get_all_unique_news_slugs', [NewsController::class, 'getAllSlugs']);
 
     Route::prefix('news')->group(function () {
