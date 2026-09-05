@@ -430,11 +430,17 @@ class QuestionsController extends Controller
 
             $questionData = DB::table('exam_question_tbl as questions')
             ->leftJoin('question_presentation_type_tbl as presentation_types', 'questions.question_presentation_type_id', '=', 'presentation_types.id')
+            ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'questions.scenario_group_id', '=', 'scenario_groups.id')
             ->where('questions.id', '=', $request -> id)
             ->select(
                 'questions.*',
                 'presentation_types.type_name as question_presentation_type_name',
-                'presentation_types.code as question_presentation_type_code'
+                'presentation_types.code as question_presentation_type_code',
+                'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
+                'scenario_groups.title as scenario_title',
+                'scenario_groups.scenario_text',
+                'scenario_groups.scenario_text_um',
+                'scenario_groups.scenario_image'
             )
             ->get();
 
@@ -571,6 +577,7 @@ class QuestionsController extends Controller
                 })
                 ->leftJoin('question_type_tbl as question_types', 'q.question_type', '=', 'question_types.id')
                 ->leftJoin('question_presentation_type_tbl as presentation_types', 'q.question_presentation_type_id', '=', 'presentation_types.id')
+                ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'q.scenario_group_id', '=', 'scenario_groups.id')
                 ->select(
                     'q.id',
                     'q.question',
@@ -603,6 +610,10 @@ class QuestionsController extends Controller
                     'q.question_presentation_type_id',
                     'presentation_types.type_name as question_presentation_type_name',
                     'presentation_types.code as question_presentation_type_code',
+                    'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
+                    'q.scenario_group_id',
+                    'q.scenario_question_order',
+                    'scenario_groups.title as scenario_title',
                     'q.is_alp_question',
                     'q.created_at',
                     'q.updated_at'
@@ -767,6 +778,313 @@ class QuestionsController extends Controller
         }
     }
 
+    public function getQuestionScenarioGroups(Request $request)
+    {
+        try {
+            $query = DB::table('question_scenario_groups_tbl as scenario_groups')
+                ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id')
+                ->leftJoin('book_unit_topic_tbl as topics', 'scenario_groups.topic_id', '=', 'topics.id')
+                ->leftJoin('book_unit_tbl as units', function ($join) {
+                    $join->on('units.id', '=', DB::raw('COALESCE(scenario_groups.unit_id, topics.unit_id)'));
+                })
+                ->leftJoin('book_tbl as books', function ($join) {
+                    $join->on('books.id', '=', DB::raw('COALESCE(scenario_groups.book_id, units.book_id)'));
+                })
+                ->leftJoin('exam_question_tbl as questions', 'questions.scenario_group_id', '=', 'scenario_groups.id')
+                ->select(
+                    'scenario_groups.id',
+                    'scenario_groups.title',
+                    'scenario_groups.scenario_text',
+                    'scenario_groups.scenario_text_um',
+                    'scenario_groups.scenario_image',
+                    'scenario_groups.question_presentation_type_id',
+                    'presentation_types.type_name as question_presentation_type_name',
+                    'presentation_types.code as question_presentation_type_code',
+                    'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
+                    'scenario_groups.topic_id',
+                    'topics.topic_name',
+                    'topics.topic_name_um',
+                    DB::raw('COALESCE(scenario_groups.unit_id, topics.unit_id) as unit_id'),
+                    'units.unit_name',
+                    DB::raw('COALESCE(scenario_groups.book_id, units.book_id) as book_id'),
+                    'books.book_name',
+                    'books.class_id',
+                    'books.subject_id',
+                    'books.curriculum_board_id',
+                    'scenario_groups.activate',
+                    'scenario_groups.created_at',
+                    'scenario_groups.updated_at',
+                    DB::raw('COUNT(questions.id) as questions_count')
+                )
+                ->groupBy(
+                    'scenario_groups.id',
+                    'scenario_groups.title',
+                    'scenario_groups.scenario_text',
+                    'scenario_groups.scenario_text_um',
+                    'scenario_groups.scenario_image',
+                    'scenario_groups.question_presentation_type_id',
+                    'presentation_types.type_name',
+                    'presentation_types.code',
+                    'presentation_types.allows_multiple_mcqs',
+                    'scenario_groups.topic_id',
+                    'topics.topic_name',
+                    'topics.topic_name_um',
+                    'scenario_groups.unit_id',
+                    'topics.unit_id',
+                    'units.unit_name',
+                    'scenario_groups.book_id',
+                    'units.book_id',
+                    'books.book_name',
+                    'books.class_id',
+                    'books.subject_id',
+                    'books.curriculum_board_id',
+                    'scenario_groups.activate',
+                    'scenario_groups.created_at',
+                    'scenario_groups.updated_at'
+                );
+
+            foreach (['id', 'topic_id', 'unit_id', 'book_id', 'question_presentation_type_id'] as $field) {
+                if ($request->filled($field)) {
+                    $query->where('scenario_groups.' . $field, $request->input($field));
+                }
+            }
+
+            if ($request->filled('activate')) {
+                $query->where('scenario_groups.activate', $request->boolean('activate'));
+            }
+
+            $scenarioGroups = $query
+                ->orderBy('scenario_groups.updated_at', 'desc')
+                ->orderBy('scenario_groups.id', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => 1,
+                'scenario_groups' => $scenarioGroups,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to retrieve question scenario groups.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getQuestionScenarioGroupById(Request $request)
+    {
+        try {
+            $request->validate([
+                'id' => ['required', 'integer', 'exists:question_scenario_groups_tbl,id'],
+            ]);
+
+            $scenarioGroup = DB::table('question_scenario_groups_tbl as scenario_groups')
+                ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id')
+                ->where('scenario_groups.id', $request->id)
+                ->select(
+                    'scenario_groups.*',
+                    'presentation_types.type_name as question_presentation_type_name',
+                    'presentation_types.code as question_presentation_type_code',
+                    'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs'
+                )
+                ->first();
+
+            $questions = DB::table('exam_question_tbl as questions')
+                ->leftJoin('question_type_tbl as question_types', 'questions.question_type', '=', 'question_types.id')
+                ->where('questions.scenario_group_id', $request->id)
+                ->select(
+                    'questions.id',
+                    'questions.question',
+                    'questions.question_um',
+                    'questions.topic_id',
+                    'questions.question_type',
+                    'question_types.type_name',
+                    'questions.marks',
+                    'questions.difficulty',
+                    'questions.activate',
+                    'questions.scenario_question_order'
+                )
+                ->orderBy('questions.scenario_question_order')
+                ->orderBy('questions.id')
+                ->get();
+
+            $options = DB::table('exam_question_options_tbl')
+                ->whereIn('question_id', $questions->pluck('id'))
+                ->select('id', 'question_id', 'option as text', 'option_um as text_um', 'is_answer as is_correct')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('question_id');
+
+            $questions = $questions->map(function ($question) use ($options) {
+                $question->options = $options->get($question->id, collect())->values();
+
+                return $question;
+            });
+
+            return response()->json([
+                'success' => 1,
+                'scenario_group' => $scenarioGroup,
+                'questions' => $questions,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to retrieve question scenario group.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function saveQuestionScenarioGroup(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'scenario_text' => ['required', 'string'],
+            'scenario_text_um' => ['nullable', 'string'],
+            'scenario_image' => ['nullable', 'string', 'max:255'],
+            'question_presentation_type_id' => ['nullable', 'integer', 'exists:question_presentation_type_tbl,id'],
+            'topic_id' => ['nullable', 'integer', 'exists:book_unit_topic_tbl,id'],
+            'unit_id' => ['nullable', 'integer', 'exists:book_unit_tbl,id'],
+            'book_id' => ['nullable', 'integer', 'exists:book_tbl,id'],
+            'activate' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            if (!$this->canAccessQuestionScope($request, 'questions.create', $this->questionContextFromRequest($request))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not allowed to create scenario groups for the selected scope.',
+                ], 403);
+            }
+
+            $userId = $this->authenticatedUserId($request);
+
+            $scenarioGroupId = DB::table('question_scenario_groups_tbl')
+                ->insertGetId($this->withAuditColumns('question_scenario_groups_tbl', [
+                    'title' => $validated['title'] ?? null,
+                    'scenario_text' => $validated['scenario_text'],
+                    'scenario_text_um' => $validated['scenario_text_um'] ?? null,
+                    'scenario_image' => $validated['scenario_image'] ?? null,
+                    'question_presentation_type_id' => $validated['question_presentation_type_id'] ?? null,
+                    'topic_id' => $validated['topic_id'] ?? null,
+                    'unit_id' => $validated['unit_id'] ?? null,
+                    'book_id' => $validated['book_id'] ?? null,
+                    'activate' => $validated['activate'] ?? 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ], $userId));
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Question scenario group saved successfully.',
+                'scenario_group_id' => $scenarioGroupId,
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to save question scenario group.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateQuestionScenarioGroup(Request $request, $id = null)
+    {
+        $scenarioGroupId = $id ?? $request->id;
+
+        $validated = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'scenario_text' => ['required', 'string'],
+            'scenario_text_um' => ['nullable', 'string'],
+            'scenario_image' => ['nullable', 'string', 'max:255'],
+            'question_presentation_type_id' => ['nullable', 'integer', 'exists:question_presentation_type_tbl,id'],
+            'topic_id' => ['nullable', 'integer', 'exists:book_unit_topic_tbl,id'],
+            'unit_id' => ['nullable', 'integer', 'exists:book_unit_tbl,id'],
+            'book_id' => ['nullable', 'integer', 'exists:book_tbl,id'],
+            'activate' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $scenarioGroup = DB::table('question_scenario_groups_tbl')
+                ->where('id', $scenarioGroupId)
+                ->first();
+
+            if (!$scenarioGroup) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Question scenario group not found.',
+                ], 404);
+            }
+
+            if (!$this->canAccessQuestionScope($request, 'questions.update', $this->questionContextFromRequest($request))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not allowed to update scenario groups for the selected scope.',
+                ], 403);
+            }
+
+            $userId = $this->authenticatedUserId($request);
+
+            DB::table('question_scenario_groups_tbl')
+                ->where('id', $scenarioGroupId)
+                ->update($this->withAuditColumns('question_scenario_groups_tbl', [
+                    'title' => $validated['title'] ?? null,
+                    'scenario_text' => $validated['scenario_text'],
+                    'scenario_text_um' => $validated['scenario_text_um'] ?? null,
+                    'scenario_image' => $validated['scenario_image'] ?? null,
+                    'question_presentation_type_id' => $validated['question_presentation_type_id'] ?? null,
+                    'topic_id' => $validated['topic_id'] ?? null,
+                    'unit_id' => $validated['unit_id'] ?? null,
+                    'book_id' => $validated['book_id'] ?? null,
+                    'activate' => array_key_exists('activate', $validated)
+                        ? $validated['activate']
+                        : $scenarioGroup->activate,
+                    'updated_at' => now(),
+                ], $userId, false));
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Question scenario group updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to update question scenario group.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function activateQuestionScenarioGroup(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => ['required', 'integer', 'exists:question_scenario_groups_tbl,id'],
+            'activate' => ['required', 'boolean'],
+        ]);
+
+        try {
+            $userId = $this->authenticatedUserId($request);
+
+            DB::table('question_scenario_groups_tbl')
+                ->where('id', $validated['id'])
+                ->update($this->withAuditColumns('question_scenario_groups_tbl', [
+                    'activate' => $validated['activate'],
+                    'updated_at' => now(),
+                ], $userId, false));
+
+            return response()->json([
+                'success' => 1,
+                'message' => 'Question scenario group status updated successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Failed to update question scenario group status.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function saveQuestion(Request $request){
         try{
             $context = $this->questionContextFromRequest($request);
@@ -787,6 +1105,7 @@ class QuestionsController extends Controller
             $reviewedAt = $request->filled('reviewed_at')
                 ? $request->reviewed_at
                 : ($status === 'published' ? now() : null);
+            $scenarioData = $this->resolveQuestionScenarioData($request);
 
             $question = DB::table('exam_question_tbl')
             ->insertGetId($this->withAuditColumns('exam_question_tbl', [
@@ -814,9 +1133,9 @@ class QuestionsController extends Controller
                     : ($status !== 'archived'),
                 'is_mcq' => $request -> is_mcq,
                 'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
-                'question_presentation_type_id' => $request->filled('question_presentation_type_id')
-                    ? $request->question_presentation_type_id
-                    : null,
+                'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
+                'scenario_group_id' => $scenarioData['scenario_group_id'],
+                'scenario_question_order' => $scenarioData['scenario_question_order'],
                 'is_alp_question' => $request->is_alp_question,
                 'created_at' => now(),
                 'updated_at' => now(), 
@@ -906,7 +1225,13 @@ class QuestionsController extends Controller
 
             
 
-            return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => $e instanceof \InvalidArgumentException
+                    ? $e->getMessage()
+                    : 'Error saving question.',
+                'error' => $e->getMessage(),
+            ], $e instanceof \InvalidArgumentException ? 422 : 500);
 
         }
     }
@@ -939,10 +1264,25 @@ class QuestionsController extends Controller
 
             $existingQuestion = DB::table('exam_question_tbl')
                 ->where('id', '=', $request->id)
-                ->select('question')
+                ->select(
+                    'question',
+                    'question_presentation_type_id',
+                    'scenario_group_id',
+                    'scenario_question_order'
+                )
                 ->first();
 
+            if (! $existingQuestion) {
+                DB::rollBack();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Question not found.',
+                ], 404);
+            }
+
             $questionStatement = $this->resolveQuestionStatement($request, $existingQuestion?->question, $request->id);
+            $scenarioData = $this->resolveQuestionScenarioData($request, $existingQuestion);
     
             // Update the main question
             DB::table('exam_question_tbl')
@@ -972,9 +1312,9 @@ class QuestionsController extends Controller
                         : ($status !== 'archived'),
                     'is_mcq' => $request -> is_mcq,
                     'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
-                    'question_presentation_type_id' => $request->filled('question_presentation_type_id')
-                        ? $request->question_presentation_type_id
-                        : null,
+                    'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
+                    'scenario_group_id' => $scenarioData['scenario_group_id'],
+                    'scenario_question_order' => $scenarioData['scenario_question_order'],
                     'updated_at' => now(),
                     'is_alp_question' => $request->is_alp_question,
                 ], $userId, false));
@@ -1089,7 +1429,13 @@ if ($existingRecord) {
                 'request' => $request->all()
             ]);
     */
-            return response()->json(['success' => false, 'message' => 'Error updating question.', 'error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => $e instanceof \InvalidArgumentException
+                    ? $e->getMessage()
+                    : 'Error updating question.',
+                'error' => $e->getMessage(),
+            ], $e instanceof \InvalidArgumentException ? 422 : 500);
         }
     }
     
@@ -1502,6 +1848,144 @@ if ($existingRecord) {
         }
 
         return preg_match('#(^|/)questions/\d+/question_statement/#', $key) ? $key : null;
+    }
+
+    private function resolveQuestionScenarioData(Request $request, ?object $existingQuestion = null): array
+    {
+        $hasScenarioGroupInput = array_key_exists('scenario_group_id', $request->all());
+        $scenarioGroupId = null;
+
+        if ($hasScenarioGroupInput) {
+            $scenarioGroupId = $request->filled('scenario_group_id')
+                ? (int) $request->scenario_group_id
+                : null;
+        } elseif ($existingQuestion?->scenario_group_id) {
+            $scenarioGroupId = (int) $existingQuestion->scenario_group_id;
+        }
+
+        $hasPresentationTypeInput = array_key_exists('question_presentation_type_id', $request->all());
+        $presentationTypeId = null;
+
+        if ($hasPresentationTypeInput) {
+            $presentationTypeId = $request->filled('question_presentation_type_id')
+                ? (int) $request->question_presentation_type_id
+                : null;
+        } elseif ($existingQuestion?->question_presentation_type_id) {
+            $presentationTypeId = (int) $existingQuestion->question_presentation_type_id;
+        }
+
+        if (! $scenarioGroupId) {
+            return [
+                'question_presentation_type_id' => $presentationTypeId,
+                'scenario_group_id' => null,
+                'scenario_question_order' => 0,
+            ];
+        }
+
+        if (! $this->isMcqQuestionRequest($request)) {
+            throw new \InvalidArgumentException('Only MCQ questions can be attached to a scenario group.');
+        }
+
+        $scenarioGroup = DB::table('question_scenario_groups_tbl as scenario_groups')
+            ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id')
+            ->where('scenario_groups.id', $scenarioGroupId)
+            ->select(
+                'scenario_groups.id',
+                'scenario_groups.question_presentation_type_id',
+                'scenario_groups.topic_id',
+                'scenario_groups.unit_id',
+                'scenario_groups.book_id',
+                'scenario_groups.activate',
+                'presentation_types.allows_multiple_mcqs'
+            )
+            ->first();
+
+        if (! $scenarioGroup) {
+            throw new \InvalidArgumentException('Selected scenario group was not found.');
+        }
+
+        if (! (bool) $scenarioGroup->activate) {
+            throw new \InvalidArgumentException('Selected scenario group is inactive.');
+        }
+
+        $this->assertQuestionMatchesScenarioGroup($request, $scenarioGroup);
+
+        if ($scenarioGroup->question_presentation_type_id) {
+            $scenarioPresentationTypeId = (int) $scenarioGroup->question_presentation_type_id;
+
+            if ($presentationTypeId && $presentationTypeId !== $scenarioPresentationTypeId) {
+                throw new \InvalidArgumentException('Question presentation type must match the selected scenario group.');
+            }
+
+            $presentationTypeId = $scenarioPresentationTypeId;
+        }
+
+        if (! $presentationTypeId) {
+            throw new \InvalidArgumentException('Scenario questions require a presentation type that allows multiple MCQs.');
+        }
+
+        $presentationType = DB::table('question_presentation_type_tbl')
+            ->where('id', $presentationTypeId)
+            ->select('allows_multiple_mcqs', 'activate')
+            ->first();
+
+        if (! $presentationType) {
+            throw new \InvalidArgumentException('Selected question presentation type was not found.');
+        }
+
+        if (! (bool) $presentationType->activate) {
+            throw new \InvalidArgumentException('Selected question presentation type is inactive.');
+        }
+
+        if (! (bool) $presentationType->allows_multiple_mcqs) {
+            throw new \InvalidArgumentException('Selected question presentation type does not allow multiple MCQs.');
+        }
+
+        return [
+            'question_presentation_type_id' => $presentationTypeId,
+            'scenario_group_id' => $scenarioGroupId,
+            'scenario_question_order' => $this->resolveScenarioQuestionOrder($request, $scenarioGroupId, $existingQuestion),
+        ];
+    }
+
+    private function assertQuestionMatchesScenarioGroup(Request $request, object $scenarioGroup): void
+    {
+        $context = $this->questionContextFromRequest($request);
+
+        foreach (['topic_id', 'unit_id', 'book_id'] as $field) {
+            if (
+                $scenarioGroup->{$field}
+                && isset($context[$field])
+                && (int) $context[$field] !== (int) $scenarioGroup->{$field}
+            ) {
+                throw new \InvalidArgumentException('Question hierarchy must match the selected scenario group.');
+            }
+        }
+    }
+
+    private function isMcqQuestionRequest(Request $request): bool
+    {
+        return (int) $request->input('is_mcq', 0) === 1
+            || (int) $request->input('question_type', 0) === 1;
+    }
+
+    private function resolveScenarioQuestionOrder(Request $request, int $scenarioGroupId, ?object $existingQuestion = null): int
+    {
+        if ($request->filled('scenario_question_order')) {
+            return max(0, (int) $request->scenario_question_order);
+        }
+
+        if (
+            $existingQuestion
+            && (int) ($existingQuestion->scenario_group_id ?? 0) === $scenarioGroupId
+            && $existingQuestion->scenario_question_order !== null
+        ) {
+            return (int) $existingQuestion->scenario_question_order;
+        }
+
+        return ((int) DB::table('exam_question_tbl')
+            ->where('scenario_group_id', $scenarioGroupId)
+            ->max('scenario_question_order')) + 1;
     }
 
     private function managedStorageUrlPrefixes(): array

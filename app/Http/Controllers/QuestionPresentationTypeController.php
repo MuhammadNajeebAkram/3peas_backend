@@ -18,6 +18,7 @@ class QuestionPresentationTypeController extends Controller
                     'type_name',
                     'code',
                     'description',
+                    'allows_multiple_mcqs',
                     'activate',
                     'sort_order',
                 ]);
@@ -46,6 +47,7 @@ class QuestionPresentationTypeController extends Controller
                     'type_name',
                     'code',
                     'description',
+                    'allows_multiple_mcqs',
                     'sort_order',
                 ]);
 
@@ -68,6 +70,7 @@ class QuestionPresentationTypeController extends Controller
             'type_name' => ['required', 'string', 'max:255', 'unique:question_presentation_type_tbl,type_name'],
             'code' => ['nullable', 'string', 'max:100', 'unique:question_presentation_type_tbl,code'],
             'description' => ['nullable', 'string'],
+            'allows_multiple_mcqs' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'activate' => ['nullable', 'boolean'],
         ]);
@@ -77,6 +80,7 @@ class QuestionPresentationTypeController extends Controller
                 'type_name' => $validated['type_name'],
                 'code' => $validated['code'] ?? null,
                 'description' => $validated['description'] ?? null,
+                'allows_multiple_mcqs' => $validated['allows_multiple_mcqs'] ?? false,
                 'sort_order' => $validated['sort_order'] ?? 0,
                 'activate' => $validated['activate'] ?? 1,
             ]);
@@ -111,6 +115,7 @@ class QuestionPresentationTypeController extends Controller
                 Rule::unique('question_presentation_type_tbl', 'code')->ignore($id),
             ],
             'description' => ['nullable', 'string'],
+            'allows_multiple_mcqs' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'activate' => ['nullable', 'boolean'],
         ]);
@@ -129,6 +134,9 @@ class QuestionPresentationTypeController extends Controller
                 'type_name' => $validated['type_name'],
                 'code' => $validated['code'] ?? null,
                 'description' => $validated['description'] ?? null,
+                'allows_multiple_mcqs' => array_key_exists('allows_multiple_mcqs', $validated)
+                    ? $validated['allows_multiple_mcqs']
+                    : $presentationType->allows_multiple_mcqs,
                 'sort_order' => $validated['sort_order'] ?? 0,
                 'activate' => array_key_exists('activate', $validated)
                     ? $validated['activate']

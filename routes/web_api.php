@@ -257,6 +257,11 @@ Route::post('/get_questions_by_unit', [QuestionsController::class, 'getQuestions
 Route::post('/get_questions_by_book', [QuestionsController::class, 'getQuestionsByBook']);
 Route::post('/get_questions_by_board', [QuestionsController::class, 'getQuestionsByBoard']);
 Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestionDataById']);
+Route::post('/get_question_scenario_groups', [QuestionsController::class, 'getQuestionScenarioGroups']);
+Route::post('/get_question_scenario_group_by_id', [QuestionsController::class, 'getQuestionScenarioGroupById']);
+Route::post('/save_question_scenario_group', [QuestionsController::class, 'saveQuestionScenarioGroup']);
+Route::post('/update_question_scenario_group', [QuestionsController::class, 'updateQuestionScenarioGroup']);
+Route::post('/activate_question_scenario_group', [QuestionsController::class, 'activateQuestionScenarioGroup']);
 Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
 Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);

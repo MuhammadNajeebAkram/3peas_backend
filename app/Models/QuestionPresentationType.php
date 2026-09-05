@@ -15,7 +15,13 @@ class QuestionPresentationType extends Model
         'type_name',
         'code',
         'description',
+        'allows_multiple_mcqs',
         'activate',
         'sort_order',
+    ];
+
+    protected $casts = [
+        'allows_multiple_mcqs' => 'boolean',
+        'activate' => 'boolean',
     ];
 }

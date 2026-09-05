@@ -32,6 +32,10 @@ class ExamQuestion extends Model
 
     }
 
+    public function scenarioGroup(){
+        return $this->belongsTo(QuestionScenarioGroup::class, 'scenario_group_id');
+    }
+
 
 
 }

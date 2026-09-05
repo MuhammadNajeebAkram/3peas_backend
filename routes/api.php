@@ -289,6 +289,11 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/save', [QuestionsController::class, 'saveQuestion'])->middleware('permission:questions.create');
             Route::post('/update', [QuestionsController::class, 'updateQuestion'])->middleware('permission:questions.update');
             Route::post('/activate', [QuestionsController::class, 'activateQuestion'])->middleware('permission:questions.activate');
+            Route::post('/scenario-groups', [QuestionsController::class, 'getQuestionScenarioGroups'])->middleware('permission:questions.view');
+            Route::post('/scenario-groups/detail', [QuestionsController::class, 'getQuestionScenarioGroupById'])->middleware('permission:questions.view');
+            Route::post('/scenario-groups/save', [QuestionsController::class, 'saveQuestionScenarioGroup'])->middleware('permission:questions.create');
+            Route::post('/scenario-groups/update/{id}', [QuestionsController::class, 'updateQuestionScenarioGroup'])->middleware('permission:questions.update');
+            Route::post('/scenario-groups/activate', [QuestionsController::class, 'activateQuestionScenarioGroup'])->middleware('permission:questions.activate');
         });
 
         Route::prefix('offered-classes')->group(function () {
@@ -396,6 +401,11 @@ Route::post('/get_questions_by_unit', [QuestionsController::class, 'getQuestions
 Route::post('/get_questions_by_book', [QuestionsController::class, 'getQuestionsByBook']);
 Route::post('/get_questions_by_board', [QuestionsController::class, 'getQuestionsByBoard']);
 Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestionDataById']);
+Route::post('/get_question_scenario_groups', [QuestionsController::class, 'getQuestionScenarioGroups']);
+Route::post('/get_question_scenario_group_by_id', [QuestionsController::class, 'getQuestionScenarioGroupById']);
+Route::post('/save_question_scenario_group', [QuestionsController::class, 'saveQuestionScenarioGroup']);
+Route::post('/update_question_scenario_group', [QuestionsController::class, 'updateQuestionScenarioGroup']);
+Route::post('/activate_question_scenario_group', [QuestionsController::class, 'activateQuestionScenarioGroup']);
 Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
 Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
 Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
