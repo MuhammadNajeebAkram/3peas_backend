@@ -37,6 +37,7 @@ class PracticeSessionController extends Controller
             'unit_ids' => ['required', 'array', 'min:1'],
             'unit_ids.*' => ['integer', 'exists:book_unit_tbl,id'],
             'total_questions' => ['required', 'integer', 'min:1'],
+            'mcq_format' => ['nullable', 'string', 'in:all,straight,scenario'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'scope_type' => ['nullable', 'string', 'in:chapter,multiple_chapters,full_book'],
         ]);
@@ -54,7 +55,9 @@ class PracticeSessionController extends Controller
                 $unitIds,
                 $scopeType,
                 (int) $validated['total_questions'],
-                $validated['time_limit_minutes'] ?? null
+                $validated['time_limit_minutes'] ?? null,
+                null,
+                $validated['mcq_format'] ?? 'all'
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -71,6 +74,7 @@ class PracticeSessionController extends Controller
             'subject_id' => ['required', 'integer', 'exists:subject_tbl,id'],
             'book_id' => ['required', 'integer', 'exists:book_tbl,id'],
             'total_questions' => ['required', 'integer', 'min:1'],
+            'mcq_format' => ['nullable', 'string', 'in:all,straight,scenario'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -101,7 +105,8 @@ class PracticeSessionController extends Controller
                 'full_book',
                 (int) $validated['total_questions'],
                 $validated['time_limit_minutes'] ?? null,
-                (int) $validated['book_id']
+                (int) $validated['book_id'],
+                $validated['mcq_format'] ?? 'all'
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -119,13 +124,25 @@ class PracticeSessionController extends Controller
         string $scopeType,
         int $totalQuestions,
         ?int $timeLimitMinutes,
-        ?int $bookId = null
+        ?int $bookId = null,
+        string $mcqFormat = 'all'
     ) {
         $questions = DB::table('exam_question_tbl as questions')
             ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
             ->whereIn('topics.unit_id', $unitIds)
             ->where('questions.is_mcq', 1)
             ->where('questions.activate', 1)
+            ->when($mcqFormat === 'straight', function ($query) {
+                $query->whereNull('questions.scenario_group_id');
+            })
+            ->when($mcqFormat === 'scenario', function ($query) {
+                $query->whereExists(function ($scenarioQuery) {
+                    $scenarioQuery->selectRaw('1')
+                        ->from('question_scenario_groups_tbl as scenario_groups')
+                        ->whereColumn('scenario_groups.id', 'questions.scenario_group_id')
+                        ->where('scenario_groups.activate', 1);
+                });
+            })
             ->select('questions.id')
             ->distinct()
             ->inRandomOrder()
@@ -135,7 +152,7 @@ class PracticeSessionController extends Controller
         if ($questions->count() < $totalQuestions) {
             return response()->json([
                 'success' => 0,
-                'error' => 'Not enough active MCQs available for the selected scope.',
+                'error' => 'Not enough active MCQs available for the selected chapter and question type. Try fewer questions.',
             ], 422);
         }
 
@@ -194,6 +211,7 @@ class PracticeSessionController extends Controller
             DB::commit();
 
             $data = [
+                'mcq_format' => $mcqFormat,
                 'session_id' => $session->id,
                 'offered_program_id' => $offeredProgramId,
                 'subject_id' => $subjectId,

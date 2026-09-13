@@ -40,6 +40,7 @@ class TestController extends Controller
             'unit_ids' => ['required', 'array', 'min:1'],
             'unit_ids.*' => ['integer', 'exists:book_unit_tbl,id'],
             'total_questions' => ['required', 'integer', 'min:1'],
+            'mcq_format' => ['nullable', 'string', 'in:all,straight,scenario'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:255'],
@@ -61,7 +62,9 @@ class TestController extends Controller
                 $validated['time_limit_minutes'] ?? null,
                 $validated['title'] ?? null,
                 $validated['description'] ?? null,
-                isset($validated['marks_per_question']) ? (float) $validated['marks_per_question'] : 1.0
+                isset($validated['marks_per_question']) ? (float) $validated['marks_per_question'] : 1.0,
+                null,
+                $validated['mcq_format'] ?? 'all'
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -78,6 +81,7 @@ class TestController extends Controller
             'subject_id' => ['required', 'integer', 'exists:subject_tbl,id'],
             'book_id' => ['required', 'integer', 'exists:book_tbl,id'],
             'total_questions' => ['required', 'integer', 'min:1'],
+            'mcq_format' => ['nullable', 'string', 'in:all,straight,scenario'],
             'time_limit_minutes' => ['nullable', 'integer', 'min:1'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:255'],
@@ -111,7 +115,8 @@ class TestController extends Controller
                 $validated['title'] ?? null,
                 $validated['description'] ?? null,
                 isset($validated['marks_per_question']) ? (float) $validated['marks_per_question'] : 1.0,
-                (int) $validated['book_id']
+                (int) $validated['book_id'],
+                $validated['mcq_format'] ?? 'all'
             );
         } catch (\Exception $e) {
             return response()->json([
@@ -131,13 +136,25 @@ class TestController extends Controller
         ?string $title,
         ?string $description,
         float $marksPerQuestion,
-        ?int $bookId = null
+        ?int $bookId = null,
+        string $mcqFormat = 'all'
     ) {
         $questions = DB::table('exam_question_tbl as questions')
             ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
             ->whereIn('topics.unit_id', $unitIds)
             ->where('questions.is_mcq', 1)
             ->where('questions.activate', 1)
+            ->when($mcqFormat === 'straight', function ($query) {
+                $query->whereNull('questions.scenario_group_id');
+            })
+            ->when($mcqFormat === 'scenario', function ($query) {
+                $query->whereExists(function ($scenarioQuery) {
+                    $scenarioQuery->selectRaw('1')
+                        ->from('question_scenario_groups_tbl as scenario_groups')
+                        ->whereColumn('scenario_groups.id', 'questions.scenario_group_id')
+                        ->where('scenario_groups.activate', 1);
+                });
+            })
             ->select('questions.id')
             ->distinct()
             ->inRandomOrder()
@@ -147,7 +164,7 @@ class TestController extends Controller
         if ($questions->count() < $totalQuestions) {
             return response()->json([
                 'success' => 0,
-                'error' => 'Not enough active MCQs available for the selected scope.',
+                'error' => 'Not enough active MCQs available for the selected chapter and question type. Try fewer questions.',
             ], 422);
         }
 
@@ -201,6 +218,7 @@ class TestController extends Controller
             DB::commit();
 
             $data = [
+                'mcq_format' => $mcqFormat,
                 'test_id' => $test->id,
                 'offered_program_id' => $offeredProgramId,
                 'subject_id' => $subjectId,

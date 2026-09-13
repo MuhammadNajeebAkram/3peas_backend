@@ -21,6 +21,8 @@ class OfferedProgramController extends Controller
             },
             'programSubjects.subject',
             'offeredClass',
+            'offeredClass.userClass:id,class_name,slug',
+            'offeredClass.curriculumBoard:id,name',
         ])
             ->where('slug', $slug)
             ->firstOrFail();

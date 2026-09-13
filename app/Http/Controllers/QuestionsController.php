@@ -1672,7 +1672,7 @@ if ($existingRecord) {
 
     public function getQuestionsByTopicForLMS(Request $request, $topic_id){
         try{
-            $questions = ExamQuestion::with(['answers', 'answerOptions', 'questionType'])
+            $questions = ExamQuestion::with(['answers', 'answerOptions', 'questionType', 'scenarioGroup'])
                 ->where('topic_id', $topic_id)
                 ->where('activate', 1)
                 ->orderBy('question_type', 'asc')

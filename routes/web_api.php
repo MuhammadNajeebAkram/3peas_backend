@@ -49,6 +49,7 @@ use App\Http\Controllers\UserPaymentController;
 use App\Http\Controllers\NewsTickerController;
 use App\Http\Controllers\Stats\StudentSubjectProgressSummaryController;
 use App\Http\Controllers\Stats\StudentUnitProgressSummaryController;
+use App\Http\Controllers\Stats\StudentStudyTimeController;
 use App\Http\Controllers\Tests\PracticeSessionController;
 use App\Http\Controllers\Tests\TestController;
 use App\Http\Middleware\EnsurePaymentVerified;
@@ -70,6 +71,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/lms-login', [WebUserAuthController::class, 'login']);
 
     Route::get('/get-offered-classes', [OfferedClassesController::class, 'getOfferedClasses']); 
+    Route::get('/get-offered-boards', [OfferedClassesController::class, 'getOfferedBoards']);
 
     Route::post('/register_user', [WebUserAuthController::class, 'registerWebUser']);
 
@@ -80,12 +82,14 @@ Route::prefix('auth')->group(function () {
     ])->group(function () {
         Route::GET('me', [WebUserAuthController::class, 'me']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
+        Route::get('/get-user-offered-boards', [OfferedClassesController::class, 'getUserOfferedBoards']);
         Route::get('/get-user-subscribed-classes', [OfferedClassesController::class, 'getUserSubscribedClasses']);
         Route::get('/get-user-subscribed-programs', [OfferedProgramController::class, 'getUserSubscribedOfferedProgramsForLMS']);
         Route::get('/get-offered-class-details/{slug}', [OfferedClassesController::class, 'getOfferedClassDetails']);
         Route::get('/get-offered-program-details/{slug}', [OfferedProgramController::class, 'getOfferedProgramDetails']);
 
         Route::prefix('statistics')->group(function () {
+            Route::post('/get-student-study-time', [StudentStudyTimeController::class, 'getStudentStudyTimeForLms']);
             Route::post('/get-subject-preparation-scores', [StudentSubjectProgressSummaryController::class, 'getSubjectPreparationScoresForLms']);
             Route::post('/get-student-subject-performance-overview', [StudentSubjectProgressSummaryController::class, 'getStudentSubjectPerformanceOverviewForLms']);
             Route::post('/get-student-subject-mcq-stats', [StudentSubjectProgressSummaryController::class, 'getStudentSubjectMcqStatsForLms']);

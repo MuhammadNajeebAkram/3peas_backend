@@ -71,6 +71,50 @@ class OfferedClassesController extends Controller
         return response()->json($cls);
     }
 
+    public function getOfferedBoards()
+    {
+        return response()->json($this->offeredBoards());
+    }
+
+    public function getUserOfferedBoards()
+    {
+        $user = auth($this->guard)->user();
+        $subscribedProgramIds = UserSubscription::where('user_id', $user->id)
+            ->pluck('offered_program_id')
+            ->flip();
+
+        $boards = $this->offeredBoards();
+
+        foreach ($boards as $board) {
+            foreach ($board['offered_classes'] as $class) {
+                foreach ($class->offeredPrograms as $program) {
+                    $program->setAttribute('is_subscribed', $subscribedProgramIds->has($program->id));
+                }
+            }
+        }
+
+        return response()->json($boards);
+    }
+
+    private function offeredBoards()
+    {
+        return $this->offeredClassesQuery()
+            ->whereHas('curriculumBoard')
+            ->get()
+            ->groupBy('curriculum_board_id')
+            ->map(function ($classes) {
+                $board = $classes->first()->curriculumBoard;
+
+                return [
+                    'id' => $board->id,
+                    'name' => $board->name,
+                    'offered_classes' => $classes->values(),
+                ];
+            })
+            ->values();
+
+    }
+
     public function getUserSubscribedClasses(Request $request){
         $user = auth($this->guard)->user();
 
