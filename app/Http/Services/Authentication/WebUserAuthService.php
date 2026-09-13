@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Throwable;
@@ -58,6 +59,9 @@ class WebUserAuthService
                     $user = WebUser::create([
                         'name' => $name,
                         'email' => $email,
+                        // Google accounts still need a password value for the required database column.
+                        'password' => Hash::make(Str::random(64)),
+                        'role' => 'student',
                         'google_id' => $googleId,
                         'avatar' => $avatar,
                         'login_provider' => 'google',
