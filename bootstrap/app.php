@@ -13,6 +13,9 @@ use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\EnsureStudySessionVerified;
 use App\Http\Middleware\VerifyUserSession;
 use App\Http\Middleware\CheckPermission;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -44,5 +47,15 @@ return Application::configure(basePath: dirname(__DIR__))
        
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
+            // Only unmatched API routes; exclude model/resource 404s and browser noise.
+            if ($request->route() === null && $request->is('api/*', 'web_api/*')) {
+                Log::channel('route_errors')->warning('Route not found', [
+                    'method' => $request->method(),
+                    'path' => substr($request->path(), 0, 2048),
+                ]);
+            }
+
+            return null;
+        });
     })->create();

@@ -52,6 +52,13 @@ return [
 
     'channels' => [
 
+        'route_errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/route-errors.log'),
+            'level' => 'warning',
+            'days' => 7,
+        ],
+
         'stack' => [
             'driver' => 'stack',
             'channels' => explode(',', env('LOG_STACK', 'single')),
