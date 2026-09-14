@@ -114,6 +114,8 @@ class LmsPermissionsSeeder extends Seeder
             'cognitive-domains.view',
 
             'questions.view',
+            'questions.report.view',
+            'questions.report.export',
             'questions.create',
             'questions.update',
             'questions.activate',

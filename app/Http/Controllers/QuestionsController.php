@@ -566,6 +566,29 @@ class QuestionsController extends Controller
 
     public function getQuestionsByFilters(Request $request)
     {
+        return $this->questionFilterResponse($request);
+    }
+
+    public function exportQuestions(Request $request)
+    {
+        $rules = ['search' => ['nullable', 'string']];
+        foreach (['topic_id', 'question_type', 'cognitive_domain', 'topic_content', 'difficulty',
+            'activate', 'is_mcq', 'has_diagram', 'question_presentation_type_id', 'is_alp_question',
+            'class_id', 'subject_id', 'curriculum_board_id', 'board_id', 'session_id', 'year',
+            'group_id', 'unit_id', 'book_id', 'status'] as $field) {
+            $valueRule = $field === 'status' ? 'string' : 'integer';
+            $rules[$field] = ['nullable', is_array($request->input($field)) ? 'array' : $valueRule];
+            if (is_array($request->input($field))) {
+                $rules[$field . '.*'] = ['nullable', $valueRule];
+            }
+        }
+        $request->validate($rules);
+
+        return $this->questionFilterResponse($request, true);
+    }
+
+    private function questionFilterResponse(Request $request, bool $export = false)
+    {
         try {
             $query = DB::table('exam_question_tbl as q')
                 ->leftJoin('book_unit_topic_tbl as topics', 'q.topic_id', '=', 'topics.id')
@@ -712,22 +735,35 @@ class QuestionsController extends Controller
                 });
             }
 
-            $this->applyQuestionScopeFilter($query, $request, 'questions.view');
+            foreach ($export ? ['questions.report.view', 'questions.report.export'] : ['questions.view'] as $permission) {
+                $this->applyQuestionScopeFilter($query, $request, $permission);
+            }
+
+            if ($export) {
+                $query->leftJoin('curriculum_board_tbl as curriculum_boards', 'books.curriculum_board_id', '=', 'curriculum_boards.id')
+                    ->leftJoin('class_tbl as classes', 'books.class_id', '=', 'classes.id')
+                    ->leftJoin('subject_tbl as subjects', 'books.subject_id', '=', 'subjects.id')
+                    ->addSelect('curriculum_boards.name as curriculum_board_name',
+                        'classes.class_name', 'subjects.subject_name');
+                $query->addSelect('q.question_lang', 'q.question_um_lang',
+                    'scenario_groups.scenario_text', 'scenario_groups.scenario_text_um',
+                    'scenario_groups.scenario_image');
+            }
 
             $perPage = min((int) $request->input('per_page', 50), 200);
 
-            $questions = $query
-                ->orderByDesc('q.id')
-                ->paginate($perPage);
+            $query->orderByDesc('q.id');
+            $questions = $export ? $query->get() : $query->paginate($perPage);
+            $questionCollection = $export ? $questions : $questions->getCollection();
 
-            $questionIds = collect($questions->items())->pluck('id')->filter()->values();
+            $questionIds = $questionCollection->pluck('id')->filter()->values();
 
             if ($questionIds->isNotEmpty()) {
                 $boardLinks = DB::table('exam_question_board_tbl as question_boards')
                     ->leftJoin('board_tbl as boards', 'question_boards.board_id', '=', 'boards.id')
                     ->leftJoin('exam_session_tbl as sessions', 'question_boards.session_id', '=', 'sessions.id')
                     ->leftJoin('study_group_tbl as groups', 'question_boards.group_id', '=', 'groups.id')
-                    ->whereIn('question_boards.question_id', $questionIds->all())
+                    ->whereIntegerInRaw('question_boards.question_id', $questionIds->all())
                     ->select(
                         'question_boards.question_id',
                         'question_boards.board_id',
@@ -740,7 +776,9 @@ class QuestionsController extends Controller
                         'question_boards.activate'
                     );
 
-                $applyBoardFilters($boardLinks);
+                if (!$export) {
+                    $applyBoardFilters($boardLinks);
+                }
 
                 $boardLinksByQuestion = $boardLinks
                     ->orderByDesc('question_boards.year')
@@ -749,7 +787,7 @@ class QuestionsController extends Controller
                     ->get()
                     ->groupBy('question_id');
 
-                $questions->getCollection()->transform(function ($question) use ($boardLinksByQuestion) {
+                $questionCollection->transform(function ($question) use ($boardLinksByQuestion) {
                     $links = $boardLinksByQuestion->get($question->id, collect())->values();
                     $firstLink = $links->first();
 
@@ -764,6 +802,27 @@ class QuestionsController extends Controller
 
                     return $question;
                 });
+            }
+
+            if ($export) {
+                foreach ($questionCollection->chunk(500) as $chunk) {
+                    $ids = $chunk->pluck('id')->all();
+                    $answers = DB::table('exam_answer_tbl')->whereIn('question_id', $ids)
+                        ->orderBy('id')->get()->groupBy('question_id');
+                    $options = DB::table('exam_question_options_tbl')->whereIn('question_id', $ids)
+                        ->select('id', 'question_id', 'option as text', 'option_um as text_um', 'is_answer as is_correct')
+                        ->orderBy('id')->get()->groupBy('question_id');
+                    foreach ($chunk as $question) {
+                        $question->answers = $answers->get($question->id, collect())->values();
+                        $question->options = $options->get($question->id, collect())->values();
+                    }
+                }
+
+                return response()->json([
+                    'success' => 1,
+                    'total' => $questionCollection->count(),
+                    'questions' => $questionCollection->values(),
+                ]);
             }
 
             return response()->json([

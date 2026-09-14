@@ -81,6 +81,7 @@ Route::prefix('auth')->group(function () {
         AuthenticateJwtCookieGuard::class . ':lms',
     ])->group(function () {
         Route::GET('me', [WebUserAuthController::class, 'me']);
+        Route::post('/complete-profile', [WebUserAuthController::class, 'completeProfile']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
         Route::get('/get-user-offered-boards', [OfferedClassesController::class, 'getUserOfferedBoards']);
         Route::get('/get-user-subscribed-classes', [OfferedClassesController::class, 'getUserSubscribedClasses']);

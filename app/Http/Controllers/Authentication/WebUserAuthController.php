@@ -37,6 +37,36 @@ class WebUserAuthController extends Controller
     ]);
         return $this->webUserAuthService->googleLogin($request->idToken);
     }
+    public function completeProfile(Request $request)
+    {
+        $user = Auth::guard('web_api')->user();
+        abort_unless($user, 401);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:30', Rule::unique('web_users', 'phone')->ignore($user->id)],
+            'referral_code' => ['nullable', 'integer', 'min:0'],
+            'preferred_language' => ['required', Rule::in(['en', 'ur'])],
+        ]);
+
+        DB::transaction(function () use ($user, $data) {
+            $user->update([
+                'name' => $data['name'],
+                'phone' => $data['phone'],
+            ]);
+            WebUserProfile::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'referral_code' => $data['referral_code'] ?? null,
+                    'preferred_language' => $data['preferred_language'],
+                    'profile_completed' => true,
+                ]
+            );
+        });
+
+        return $this->webUserAuthService->me();
+    }
+
     public function me()  {
         return $this->webUserAuthService->me();
         

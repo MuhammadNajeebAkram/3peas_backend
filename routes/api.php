@@ -284,6 +284,7 @@ Route::prefix('admin/auth')->group(function () {
         });
 
         Route::prefix('question')->group(function () {
+            Route::post('/export', [QuestionsController::class, 'exportQuestions'])->middleware(['permission:questions.report.view', 'permission:questions.report.export']);
             Route::post('/filter', [QuestionsController::class, 'getQuestionsByFilters'])->middleware('permission:questions.view');
             Route::post('/detail', [QuestionsController::class, 'getQuestionDataById'])->middleware('permission:questions.view');
             Route::post('/save', [QuestionsController::class, 'saveQuestion'])->middleware('permission:questions.create');
