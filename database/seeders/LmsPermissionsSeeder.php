@@ -16,6 +16,16 @@ class LmsPermissionsSeeder extends Seeder
         $permissions = [
             'dashboard.view',
 
+            'ai-models.view',
+            'ai-models.create',
+            'ai-models.update',
+            'ai-models.delete',
+            'ai-requests.view',
+            'ai-requests.create',
+            'ai-requests.update',
+            'ai-requests.delete',
+            'questions.generate-explanation',
+
             'admin.media.presign',
             'admin.media.delete',
 

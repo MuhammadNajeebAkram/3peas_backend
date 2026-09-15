@@ -2,6 +2,12 @@
 
 return [
 
+    'openai' => [
+        'api_key' => env('OPEN_AI_API_KEY', env('OPENAI_API_KEY')),
+        'timeout' => (int) env('OPENAI_TIMEOUT', 45),
+        'max_output_tokens' => (int) env('OPENAI_MAX_OUTPUT_TOKENS', 1800),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

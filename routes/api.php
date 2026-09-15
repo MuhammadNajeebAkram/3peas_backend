@@ -3,6 +3,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AiModelController;
+use App\Http\Controllers\AiRequestController;
+use App\Http\Controllers\QuestionExplanationController;
 use App\Http\Controllers\AdminActivityLogController;
 use App\Http\Controllers\AdminLoginLogController;
 use App\Http\Controllers\AdminUserProfileController;
@@ -69,6 +72,22 @@ Route::prefix('admin/auth')->group(function () {
 
     Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin', LogAdminActivity::class])->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
+        Route::prefix('ai-models')->group(function () {
+            Route::get('/all', [AiModelController::class, 'index'])->middleware('permission:ai-models.view');
+            Route::get('/active', [AiModelController::class, 'active'])->middleware('permission:ai-models.view');
+            Route::post('/add', [AiModelController::class, 'store'])->middleware('permission:ai-models.create');
+            Route::get('/{id}', [AiModelController::class, 'show'])->whereNumber('id')->middleware('permission:ai-models.view');
+            Route::post('/update/{id}', [AiModelController::class, 'update'])->whereNumber('id')->middleware('permission:ai-models.update');
+            Route::delete('/delete/{id}', [AiModelController::class, 'destroy'])->whereNumber('id')->middleware('permission:ai-models.delete');
+        });
+
+        Route::prefix('ai-requests')->group(function () {
+            Route::get('/all', [AiRequestController::class, 'index'])->middleware('permission:ai-requests.view');
+            Route::post('/add', [AiRequestController::class, 'store'])->middleware('permission:ai-requests.create');
+            Route::get('/{id}', [AiRequestController::class, 'show'])->whereNumber('id')->middleware('permission:ai-requests.view');
+            Route::post('/update/{id}', [AiRequestController::class, 'update'])->whereNumber('id')->middleware('permission:ai-requests.update');
+            Route::delete('/delete/{id}', [AiRequestController::class, 'destroy'])->whereNumber('id')->middleware('permission:ai-requests.delete');
+        });
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::get('profile', [AdminUserProfileController::class, 'show']);
         Route::post('profile/update', [AdminUserProfileController::class, 'update']);
@@ -284,6 +303,9 @@ Route::prefix('admin/auth')->group(function () {
         });
 
         Route::prefix('question')->group(function () {
+            Route::post('/generate-explanation', [QuestionExplanationController::class, 'generate'])
+                ->middleware(['permission:questions.view', 'permission:questions.generate-explanation', 'throttle:10,1']);
+            Route::post('/save-explanation', [QuestionExplanationController::class, 'save'])->middleware('permission:questions.update');
             Route::post('/export', [QuestionsController::class, 'exportQuestions'])->middleware(['permission:questions.report.view', 'permission:questions.report.export']);
             Route::post('/filter', [QuestionsController::class, 'getQuestionsByFilters'])->middleware('permission:questions.view');
             Route::post('/detail', [QuestionsController::class, 'getQuestionDataById'])->middleware('permission:questions.view');
