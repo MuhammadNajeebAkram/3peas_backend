@@ -27,10 +27,18 @@ class SubscriptionPaymentRequest extends Model
         'rejected_by',
         'rejection_reason',
         'admin_remarks',
+        'payment_method',
+        'teacher_profile_id',
+        'collection_code_snapshot',
+        'confirmed_by_web_user_id',
+        'confirmed_at',
+        'rejected_by_web_user_id',
+        'receipt_number',
 
     ];
 
     protected $casts = [
+        'confirmed_at' => 'datetime',
         'price' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'discount_percentage' => 'decimal:2',
@@ -39,6 +47,10 @@ class SubscriptionPaymentRequest extends Model
     ];
     public function userApproved(){
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function teacherProfile(){
+        return $this->belongsTo(TeacherProfile::class);
     }
     public function userRejected(){
         return $this->belongsTo(User::class, 'rejected_by');

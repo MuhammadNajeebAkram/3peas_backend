@@ -15,6 +15,10 @@ class LmsPermissionsSeeder extends Seeder
     {
         $permissions = [
             'dashboard.view',
+            'teachers.view',
+            'teachers.approve',
+            'teacher-settlements.view',
+            'teacher-settlements.review',
 
             'ai-models.view',
             'questions.generate',

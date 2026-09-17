@@ -4,6 +4,7 @@
 namespace App\Http\Services\Authentication;
 
 use App\Models\WebUser;
+use App\Models\TeacherProfile;
 use App\Models\WebUserProfile;
 use Google\Client as GoogleClient;
 use Illuminate\Auth\Events\Registered;
@@ -24,7 +25,7 @@ class WebUserAuthService
 {
     private string $guard = 'web_api';
 
-    public function googleLogin(string $idToken)
+    public function googleLogin(string $idToken, string $role = 'student')
     {
         try {
             $payload = $this->verifyGoogleIdToken($idToken);
@@ -48,7 +49,7 @@ class WebUserAuthService
                 ], 422);
             }
 
-            $user = DB::transaction(function () use ($googleId, $email, $name, $avatar, $locale) {
+            $user = DB::transaction(function () use ($googleId, $email, $name, $avatar, $locale, $role) {
                 $user = WebUser::where('google_id', $googleId)->first();
 
                 if (!$user) {
@@ -61,13 +62,26 @@ class WebUserAuthService
                         'email' => $email,
                         // Google accounts still need a password value for the required database column.
                         'password' => Hash::make(Str::random(64)),
-                        'role' => 'student',
+                        'role' => $role,
+                        'email_verified_at' => now(),
                         'google_id' => $googleId,
                         'avatar' => $avatar,
                         'login_provider' => 'google',
                         'status' => 'active',
                     ]);
                 } else {
+                    if (($user->status ?? 'active') !== 'active') {
+                        throw new HttpResponseException(response()->json([
+                            'message' => 'Your account is inactive.',
+                        ], 403));
+                    }
+
+                    if ($role === 'teacher' && $user->role !== 'teacher') {
+                        throw new HttpResponseException(response()->json([
+                            'message' => 'This Google account is already registered with a different account type. Please use your teacher account.',
+                        ], 409));
+                    }
+
                     $conflict = WebUser::where('google_id', $googleId)
                         ->where('id', '!=', $user->id)
                         ->exists();
@@ -85,20 +99,20 @@ class WebUserAuthService
                         'google_id' => $googleId,
                         'avatar' => $avatar,
                         'login_provider' => $user->login_provider ?: 'google',
-                        'status' => 'active',
                         'email_verified_at' => $user->email_verified_at ?: now(),
                     ]);
                 }
 
-                WebUserProfile::firstOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'preferred_language' => $locale,
-                        'profile_completed' => false,
-                    ]
-                );
+                if ($user->role === 'teacher') {
+                    TeacherProfile::firstOrCreate(['web_user_id' => $user->id]);
+                } else {
+                    WebUserProfile::firstOrCreate(
+                        ['user_id' => $user->id],
+                        ['preferred_language' => $locale, 'profile_completed' => false]
+                    );
+                }
 
-                return $user->fresh(['profile']);
+                return $user;
             });
 
             $token = Auth::guard($this->guard)->login($user);
@@ -163,9 +177,11 @@ class WebUserAuthService
                 ], 403);
             }
 
-            $user->load(['profile']);
+            $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
 
             return $this->authResponse($user, $token, 'Login successful.');
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable $e) {
             Log::error('Email login failed', [
                 'message' => $e->getMessage(),
@@ -200,11 +216,11 @@ class WebUserAuthService
                 ], 401);
             }
 
-            $user->load(['profile']);
+            $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
 
             return response()->json([
                 'user' => $this->userPayload($user),
-                'profile_complete' => (bool) optional($user->profile)->profile_completed,
+                'profile_complete' => $this->profileComplete($user),
             ]);
         } catch (Throwable $e) {
             Log::error('Fetch current user failed', [
@@ -243,7 +259,7 @@ class WebUserAuthService
         );
     }
 
-    private function verifyGoogleIdToken(string $idToken): array
+    protected function verifyGoogleIdToken(string $idToken): array
     {
         $client = new GoogleClient([
             'client_id' => config('services.google.client_id'),
@@ -264,14 +280,14 @@ class WebUserAuthService
 
     private function authResponse(WebUser $user, string $token, string $message = 'Authenticated successfully.')
     {
-        $user->load(['profile']);
+        $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
 
         return response()->json([
             'message' => $message,
             'token' => $token,
             'expires_in' => (int) config('jwt.ttl') * 60,
             'user' => $this->userPayload($user),
-            'profile_complete' => (bool) optional($user->profile)->profile_completed,
+            'profile_complete' => $this->profileComplete($user),
         ])->cookie(
             $this->cookieName(),
             $token,
@@ -310,6 +326,11 @@ class WebUserAuthService
 
     private function userPayload(WebUser $user): array
     {
+        if ($user->role === 'teacher') {
+            return array_merge($user->only(['id', 'name', 'email', 'phone', 'avatar', 'login_provider', 'role']), [
+                'teacher_profile' => $user->teacherProfile,
+            ]);
+        }
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -327,6 +348,13 @@ class WebUserAuthService
         ];
     }
 
+    private function profileComplete(WebUser $user): bool
+    {
+        return $user->role === 'teacher'
+            ? filled($user->phone) && $user->teacherProfile !== null
+            : (bool) optional($user->profile)->profile_completed;
+    }
+
    public function registerWebUser(Request $request)
     {
         try {
@@ -334,8 +362,10 @@ class WebUserAuthService
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'email', 'max:255', 'unique:web_users,email'],
                 'password' => ['required', 'string', 'min:8', 'confirmed'],
-                'role' => ['required', 'string'],               
-                'phone' => ['required', 'string'],               
+                'role' => ['required', 'in:student,teacher'],
+                'phone' => ['required', 'string', 'max:30', 'unique:web_users,phone'],
+                'institute_id' => ['nullable', 'integer', 'exists:institute_tbl,id'],
+                'city_id' => ['nullable', 'integer', 'exists:city_tbl,id'],
                // 'gender_id' => ['nullable', 'integer'],
                // 'dob' => ['required', 'date'],
                // 'designation' => ['nullable', 'string'],
@@ -354,19 +384,17 @@ class WebUserAuthService
                     'phone' => $validatedData['phone'] ?? null,
                 ]);
 
-                WebUserProfile::create([
-                    'user_id' => $user->id,                  
-                    
-                    //'gender_id' => $validatedData['gender_id'] ?? null,
-                    //'dob' => $validatedData['dob'] ?? null,
-                   // 'designation' => $validatedData['designation'] ?? null,
-                   // 'heard_about_id' => $validatedData['heard_about_id'],                    
-                    'profile_completed' => true,
-                ]);
+                if ($user->role === 'teacher') {
+                    TeacherProfile::create(['web_user_id' => $user->id,
+                        'institute_id' => $validatedData['institute_id'] ?? null,
+                        'city_id' => $validatedData['city_id'] ?? null]);
+                } else {
+                    WebUserProfile::create(['user_id' => $user->id, 'profile_completed' => true]);
+                }
 
                // event(new Registered($user));
 
-                return $user->fresh(['profile']);
+                return $user;
             });
 
             $token = Auth::guard($this->guard)->login($user);
@@ -408,4 +436,3 @@ class WebUserAuthService
         }
     }
 }
-

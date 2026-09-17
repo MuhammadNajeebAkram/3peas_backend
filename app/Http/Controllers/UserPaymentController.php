@@ -18,6 +18,10 @@ class UserPaymentController extends Controller
     }
 
     public function submitPaymentRequest(Request $request){
+        if ($request->input('payment_method') === 'teacher') {
+            return app(TeacherPaymentController::class)->store($request);
+        }
+        $request->validate(['payment_method' => 'sometimes|in:account,bank,jazzcash']);
         $userId = auth('web_api')->id();
 
         try {

@@ -74,6 +74,19 @@ Route::prefix('admin/auth')->group(function () {
 
     Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin', LogAdminActivity::class])->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
+        Route::prefix('teachers')->group(function () {
+            Route::get('/', [\App\Http\Controllers\AdminTeacherController::class, 'index'])->middleware('permission:teachers.view');
+            Route::get('/{id}', [\App\Http\Controllers\AdminTeacherController::class, 'show'])->whereNumber('id')->middleware('permission:teachers.view');
+            Route::post('/{id}/status', [\App\Http\Controllers\AdminTeacherController::class, 'status'])->whereNumber('id')->middleware('permission:teachers.approve');
+            Route::post('/{id}/collection-code', [\App\Http\Controllers\AdminTeacherController::class, 'code'])->whereNumber('id')->middleware('permission:teachers.approve');
+            Route::get('/{id}/collections', [\App\Http\Controllers\TeacherSettlementController::class, 'adminCollections'])->whereNumber('id')->middleware('permission:teacher-settlements.view');
+        });
+        Route::prefix('teacher-settlements')->group(function () {
+            Route::get('/', [\App\Http\Controllers\TeacherSettlementController::class, 'adminIndex'])->middleware('permission:teacher-settlements.view');
+            Route::get('/{id}/proof', [\App\Http\Controllers\TeacherSettlementController::class, 'adminProof'])->whereNumber('id')->middleware('permission:teacher-settlements.view');
+            Route::post('/{id}/confirm', [\App\Http\Controllers\TeacherSettlementController::class, 'confirm'])->whereNumber('id')->middleware('permission:teacher-settlements.review');
+            Route::post('/{id}/reject', [\App\Http\Controllers\TeacherSettlementController::class, 'reject'])->whereNumber('id')->middleware('permission:teacher-settlements.review');
+        });
         Route::prefix('ai-providers')->group(function () {
             Route::get('/all', [AiProviderController::class, 'index'])->middleware('permission:ai-providers.view');
             Route::post('/add', [AiProviderController::class, 'store'])->middleware('permission:ai-providers.create');
@@ -606,4 +619,3 @@ Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlo
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);
 Route::post('/save_test', [QuestionsController::class, 'saveTest']);
-

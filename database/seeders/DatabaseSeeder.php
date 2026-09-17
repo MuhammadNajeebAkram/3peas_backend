@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             LmsPermissionsSeeder::class,
             DashboardItemsSeeder::class,
             SuperAdminRoleSeeder::class,
+            TeacherPermissionsSeeder::class,
             AiProviderSeeder::class,
         ]);
 

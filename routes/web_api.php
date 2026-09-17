@@ -66,6 +66,8 @@ Route::get('/user', function (Request $request) {
 */
 
 Route::prefix('auth')->group(function () {
+    Route::post('/teacher/register', [\App\Http\Controllers\TeacherAccountController::class, 'register'])->middleware('throttle:5,1');
+    Route::post('/teacher/google-login', [\App\Http\Controllers\TeacherAccountController::class, 'google'])->middleware('throttle:10,1');
     
     Route::post('google-login', [WebUserAuthController::class, 'googleLogin']);
     Route::post('/lms-login', [WebUserAuthController::class, 'login']);
@@ -81,6 +83,13 @@ Route::prefix('auth')->group(function () {
         AuthenticateJwtCookieGuard::class . ':lms',
     ])->group(function () {
         Route::GET('me', [WebUserAuthController::class, 'me']);
+        Route::get('/teacher/profile', [\App\Http\Controllers\TeacherAccountController::class, 'show']);
+        Route::post('/teacher/profile', [\App\Http\Controllers\TeacherAccountController::class, 'update']);
+        Route::get('/teacher/dashboard', [\App\Http\Controllers\TeacherAccountController::class, 'dashboard']);
+        Route::get('/teacher/collections', [\App\Http\Controllers\TeacherSettlementController::class, 'collections']);
+        Route::get('/teacher/settlements', [\App\Http\Controllers\TeacherSettlementController::class, 'index']);
+        Route::post('/teacher/settlements', [\App\Http\Controllers\TeacherSettlementController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('/teacher/settlements/{id}/proof', [\App\Http\Controllers\TeacherSettlementController::class, 'proof'])->whereNumber('id');
         Route::post('/complete-profile', [WebUserAuthController::class, 'completeProfile']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
         Route::get('/get-user-offered-boards', [OfferedClassesController::class, 'getUserOfferedBoards']);
@@ -116,7 +125,13 @@ Route::prefix('auth')->group(function () {
             Route::get('/get-student-activities', [StudentActivityController::class, 'getStudentActivitiesForLms']);
         });
         
-        Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest']);
+        Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest'])->middleware('throttle:10,1');
+        Route::get('/payments/methods', [\App\Http\Controllers\TeacherPaymentController::class, 'methods']);
+        Route::post('/payments/teacher/lookup', [\App\Http\Controllers\TeacherPaymentController::class, 'lookup'])->middleware('throttle:20,1');
+        Route::get('/payments/teacher/requests', [\App\Http\Controllers\TeacherPaymentController::class, 'mine']);
+        Route::get('/teacher/payment-requests', [\App\Http\Controllers\TeacherPaymentController::class, 'index']);
+        Route::post('/teacher/payment-requests/{id}/approve', [\App\Http\Controllers\TeacherPaymentController::class, 'approve'])->whereNumber('id');
+        Route::post('/teacher/payment-requests/{id}/reject', [\App\Http\Controllers\TeacherPaymentController::class, 'reject'])->whereNumber('id');
 
         Route::prefix('my-classes')->group(function () {
             Route::get('/get-books/{program_id}/{subject_id}', [BooksController::class, 'getBooksByProgram']);

@@ -34,13 +34,18 @@ class WebUserAuthController extends Controller
     public function googleLogin(Request $request){
          $request->validate([
         'idToken' => ['required', 'string'],
+        'role' => ['sometimes', Rule::in(['student', 'teacher'])],
     ]);
-        return $this->webUserAuthService->googleLogin($request->idToken);
+        return $this->webUserAuthService->googleLogin($request->idToken, $request->input('role', 'student'));
     }
     public function completeProfile(Request $request)
     {
         $user = Auth::guard('web_api')->user();
         abort_unless($user, 401);
+
+        if ($user->role === 'teacher') {
+            return app(\App\Http\Controllers\TeacherAccountController::class)->update($request);
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -472,6 +477,9 @@ class WebUserAuthController extends Controller
             'started_at' => ['nullable', 'date'],
             'admin_remarks' => ['nullable', 'string'],
         ]);
+
+        abort_if(SubscriptionPaymentRequest::whereKey($validatedData['subscription_payment_request_id'])
+            ->where('payment_method', 'teacher')->exists(), 409, 'Teacher payments must be confirmed by the assigned teacher.');
 
         DB::beginTransaction();
 
