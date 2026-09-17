@@ -2,6 +2,12 @@
 
 return [
 
+    'gemini' => [
+        'api_key' => env('GOOGLE_AI_API_KEY', env('GEMINI_API_KEY')),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 45),
+        'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 1800),
+    ],
+
     'openai' => [
         'api_key' => env('OPEN_AI_API_KEY', env('OPENAI_API_KEY')),
         'timeout' => (int) env('OPENAI_TIMEOUT', 45),

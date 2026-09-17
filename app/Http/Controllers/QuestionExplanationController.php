@@ -18,11 +18,12 @@ class QuestionExplanationController extends Controller
         $data = $request->validate([
             'question_id' => ['required', 'integer', 'min:1'],
             'model_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'ai_provider_id' => ['sometimes', 'nullable', 'integer', 'min:1', 'exists:ai_providers,id'],
             'language' => ['required', Rule::in(['en', 'ur', 'both'])],
         ]);
         $context = $service->context($data['question_id']);
         $service->authorize($request, $context, 'questions.view', 'questions.generate-explanation');
-        $model = $service->model($data['model_id'] ?? null);
+        $model = $service->model($data['model_id'] ?? null, $data['ai_provider_id'] ?? null);
         // Shared cache locks protect concurrent clicks while keeping deliberate regeneration possible.
         $lock = Cache::lock('question-explanation:'.$request->user()->id.':'.$data['question_id'], 210);
         abort_unless($lock->get(), 409, 'An explanation is already being generated for this question.');
@@ -32,6 +33,7 @@ class QuestionExplanationController extends Controller
             return response()->json(['success' => 1, 'data' => array_merge([
                 'ai_request_id' => $record->id, 'question_id' => $data['question_id'],
                 'model_id' => $model->id, 'language' => $data['language'],
+                'ai_provider_id' => $model->ai_provider_id, 'provider' => $record->provider,
             ], $record->response_payload)]);
         } catch (AiGenerationException $exception) {
             return response()->json(['success' => 0, 'message' => $exception->getMessage(),

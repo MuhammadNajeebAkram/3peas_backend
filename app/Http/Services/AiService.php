@@ -3,45 +3,46 @@
 namespace App\Http\Services;
 
 use App\Exceptions\AiGenerationException;
+use App\Http\Services\Ai\ProviderRegistry;
 use App\Models\AiModel;
 use App\Models\AiRequest;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class AiService
 {
+    public function __construct(private ProviderRegistry $providers) {}
+
     /** Each outbound attempt gets its own row, including retries and unknown usage. */
     public function generate(AiModel $model, array $payload, array $context, callable $validate): AiRequest
     {
-        abort_unless(filled(config('services.openai.api_key')), 503, 'The OpenAI API key is not configured.');
+        $outputName = ($context['purpose'] ?? null) === 'question_generation' ? 'question draft' : 'explanation';
+        $model->load('provider');
+        abort_unless($model->is_active && $model->provider->is_active, 422, 'The model and provider must be active.');
+        abort_unless($model->provider->is_configured, 503, 'The AI provider adapter or API key is not configured.');
+        $adapter = $this->providers->for($model->provider);
         $operationId = (string) Str::uuid();
-        $payload = array_merge($payload, ['model' => $model->model_key, 'store' => false]);
         for ($attempt = 1; $attempt <= 2; $attempt++) {
             $record = AiRequest::create(array_merge($context, [
-                'ai_model_id' => $model->id, 'provider' => $model->provider,
+                'ai_model_id' => $model->id, 'provider' => $model->provider->key,
                 'requested_model' => $model->model_key, 'operation_id' => $operationId,
                 'attempt_number' => $attempt, 'record_source' => 'provider',
                 'trigger_type' => 'user', 'environment' => app()->environment(),
                 'status' => 'pending', 'pricing_snapshot' => $model->pricingSnapshot(),
                 // No key, headers, or question/image contents are persisted here.
-                'request_parameters' => collect($payload)->except(['input', 'instructions'])->all(),
+                'request_parameters' => ['model' => $model->model_key, 'max_output_tokens' => $payload['max_output_tokens'], 'schema' => $payload['schema']],
             ]));
             $start = hrtime(true);
             try {
-                $response = Http::withToken(config('services.openai.api_key'))
-                    ->acceptJson()->asJson()->connectTimeout(10)
-                    ->timeout(max(1, min(90, config('services.openai.timeout', 45))))
-                    ->withOptions(['allow_redirects' => false])
-                    ->post('https://api.openai.com/v1/responses', $payload);
+                $response = $adapter->generate($model, $payload);
             } catch (ConnectionException $exception) {
                 $record->update([
                     'status' => 'failed', 'error_code' => 'connection_error',
-                    'error_message' => 'OpenAI could not be reached or the request timed out. Usage is unknown.',
+                    'error_message' => 'The AI provider could not be reached or the request timed out. Usage is unknown.',
                     'duration_ms' => $this->elapsed($start), 'completed_at' => now(),
                 ]);
                 // Never retry an ambiguous timeout: the provider may have processed it.
-                throw new AiGenerationException('OpenAI could not be reached or timed out. Please try again.', $record->id, 504);
+                throw new AiGenerationException('The AI provider could not be reached or timed out. Please try again.', $record->id, 504);
             } catch (\Throwable $exception) {
                 $record->update([
                     'status' => 'failed', 'error_code' => 'transport_error',
@@ -51,7 +52,14 @@ class AiService
                 throw new AiGenerationException('The provider request could not be completed.', $record->id);
             }
             $body = $response->json();
-            $body = is_array($body) ? $body : [];
+            try {
+                $body = $adapter->normalize(is_array($body) ? $body : []);
+            } catch (\Throwable $exception) {
+                $record->update(['status' => 'failed', 'error_code' => 'invalid_response',
+                    'error_message' => 'The provider returned an invalid response. Usage is unknown.',
+                    'http_status' => $response->status(), 'duration_ms' => $this->elapsed($start), 'completed_at' => now()]);
+                throw new AiGenerationException('The provider returned an invalid response.', $record->id);
+            }
             $usage = is_array($body['usage'] ?? null) ? $body['usage'] : [];
             $record->fill([
                 'http_status' => $response->status(), 'duration_ms' => $this->elapsed($start),
@@ -70,14 +78,17 @@ class AiService
             // Preserve usage detail (including any future provider fields) for audit.
             $record->metadata = array_merge($record->metadata ?? [], ['usage' => $usage]);
             if (! $response->successful()) {
+                $message = $response->status() === 404
+                    ? 'The selected AI model is unavailable for this API account or endpoint. Select another model or update its model key in AI model settings.'
+                    : 'The AI provider could not generate a valid '.$outputName.'. Check the request log and model access.';
                 $record->fill(['status' => 'failed', 'error_code' => 'provider_http_'.$response->status(),
-                    'error_message' => 'OpenAI returned HTTP '.$response->status().'.'])->save();
+                    'error_message' => $response->status() === 404 ? $message : 'The AI provider returned HTTP '.$response->status().'.'])->save();
                 if ($attempt < 2 && ($response->status() === 429 || $response->serverError())) {
                     usleep(500000);
 
                     continue;
                 }
-                throw new AiGenerationException('OpenAI could not generate an explanation. Check the request log and model access.', $record->id);
+                throw new AiGenerationException($message, $record->id);
             }
             $text = '';
             $refused = false;
@@ -95,16 +106,16 @@ class AiService
             if ($refused || ($body['status'] ?? null) !== 'completed') {
                 $status = $refused ? 'refused' : 'incomplete';
                 $record->fill(['status' => $status, 'error_code' => $status,
-                    'error_message' => 'OpenAI did not return a complete explanation.'])->save();
-                throw new AiGenerationException('OpenAI did not return a complete explanation. Please try again.', $record->id);
+                    'error_message' => 'The AI provider did not return a complete '.$outputName.'.'])->save();
+                throw new AiGenerationException('The AI provider did not return a complete '.$outputName.'. Please try again.', $record->id);
             }
             try {
                 $draft = json_decode($text, true, 512, JSON_THROW_ON_ERROR);
                 $validate($draft);
             } catch (\JsonException|\Illuminate\Validation\ValidationException $exception) {
                 $record->fill(['status' => 'failed', 'error_code' => 'invalid_output',
-                    'error_message' => 'The response did not satisfy the explanation format or length limits.'])->save();
-                throw new AiGenerationException('The generated explanation did not meet the format or length limits. Please regenerate.', $record->id);
+                    'error_message' => 'The response did not satisfy the '.$outputName.' format or length limits.'])->save();
+                throw new AiGenerationException('The generated '.$outputName.' did not meet the format or length limits. Please regenerate.', $record->id);
             }
             $record->fill(['status' => 'successful', 'response_payload' => $draft])->save();
 

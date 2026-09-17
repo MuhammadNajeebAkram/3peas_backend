@@ -56,7 +56,7 @@ class AiRequestController extends Controller
         $data = $this->validated($request);
         $model = AiModel::where('is_active', true)->findOrFail($data['ai_model_id']);
         $data['user_id'] = $request->user()->id;
-        $data['provider'] = $model->provider;
+        $data['provider'] = $model->provider->key;
         $data['requested_model'] = $model->model_key;
         $data['pricing_snapshot'] = $model->pricingSnapshot();
         $data['environment'] = app()->environment();
@@ -136,7 +136,7 @@ class AiRequestController extends Controller
     {
         foreach ($payload as $key => $value) {
             $normalized = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $key));
-            if (in_array($normalized, ['apikey', 'openaiapikey', 'authorization', 'password', 'secret', 'accesstoken', 'refreshtoken', 'headers'], true)) {
+            if (in_array($normalized, ['apikey', 'openaiapikey', 'geminiapikey', 'anthropicapikey', 'authorization', 'password', 'secret', 'accesstoken', 'refreshtoken', 'headers'], true)) {
                 throw ValidationException::withMessages([$path => 'Credentials and HTTP headers must not be stored in AI records.']);
             }
             if (is_array($value)) {

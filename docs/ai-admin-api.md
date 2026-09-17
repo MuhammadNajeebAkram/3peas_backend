@@ -1,13 +1,22 @@
 # AI administration API
 
 Base URL: `/api/admin/auth`. All endpoints use the existing admin JWT cookie or
-bearer token and role permission middleware. The CRUD endpoints below do not call
-OpenAI. See [Question explanations](question-explanation-api.md) for generation and saving.
+bearer token and role permission middleware. CRUD does not call external AI APIs.
+The connection-test endpoint contacts the selected provider's model-list API.
+See [Question explanations](question-explanation-api.md) for generation and saving.
+See [AI question creation](ai-question-generation-api.md) for reviewed question and
+answer drafts from text, images, PDFs and ZIP sources.
 
 ## Routes and permissions
 
 | Method | Path | Permission |
 | --- | --- | --- |
+| GET | `/ai-providers/all` | `ai-providers.view` |
+| GET | `/ai-providers/{id}` | `ai-providers.view` |
+| POST | `/ai-providers/add` | `ai-providers.create` |
+| POST | `/ai-providers/update/{id}` | `ai-providers.update` |
+| DELETE | `/ai-providers/delete/{id}` | `ai-providers.delete` |
+| POST | `/ai-providers/test/{id}` | `ai-providers.test` |
 | GET | `/ai-models/all` | `ai-models.view` |
 | GET | `/ai-models/active` | `ai-models.view` |
 | GET | `/ai-models/{id}` | `ai-models.view` |
@@ -20,10 +29,49 @@ OpenAI. See [Question explanations](question-explanation-api.md) for generation 
 | POST | `/ai-requests/update/{id}` | `ai-requests.update` |
 | DELETE | `/ai-requests/delete/{id}` | `ai-requests.delete` |
 
-Success responses contain `success: 1` and `ai_model` or `ai_request`.
+Success detail responses contain `success: 1` and `ai_provider`, `ai_model` or `ai_request`.
 Create returns HTTP 201; other successful operations return 200. Validation
 returns 422, missing/deleted records 404, missing authentication 401, and missing
 permissions 403. Updates are partial: omitted fields retain their values.
+
+## Providers
+
+The migration creates OpenAI (enabled) and Gemini (disabled), maps existing models
+including soft-deleted rows to provider IDs, and preserves request-history snapshots.
+Unknown legacy providers are preserved disabled, without an adapter.
+
+Example POST `/ai-providers/update/{id}`:
+
+```json
+{
+  "name": "Google Gemini",
+  "is_active": true,
+  "settings": {"timeout": 45, "max_output_tokens": 1800}
+}
+```
+
+Create requires `key` (`openai` or `gemini`, unique) and `name`. The key is immutable.
+Only installed adapters may be created; a database row does not install an integration.
+`settings` allows only `timeout` (1–90 seconds) and `max_output_tokens` (500–4000).
+Supplying settings replaces the settings object; null resets to environment defaults.
+API keys and arbitrary API URLs are not accepted. Configure `OPENAI_API_KEY` (or
+the existing `OPEN_AI_API_KEY`) and `GEMINI_API_KEY` through `config/services.php`.
+Responses include `is_supported` and `is_configured` booleans, never credentials.
+
+`GET /ai-providers/all` supports `search` (name/key), `is_active`, `page` and
+`per_page` (1–100, default 25). It returns an `ai_providers` paginator and
+`supported_providers` keys. List/detail responses include `models_count`.
+
+Disabling the provider of the default model returns 422: first switch or clear
+the default model. Deletion returns 409 if any models, including soft-deleted
+ones, reference the provider; the foreign key also restricts deletion.
+
+`POST /ai-providers/test/{id}` is limited to 10 requests per minute and has its
+own permission. It works on disabled providers so admins can test before enabling.
+Missing credentials/adapter returns 422; upstream failures return 502 with a
+sanitized message and, when available, `http_status`. Success verifies model-list
+access only, not generation access to a particular model. It does not create a
+generation usage record or incur a generation request.
 
 ## Models
 
@@ -31,7 +79,7 @@ Example POST `/ai-models/add`:
 
 ```json
 {
-  "provider": "openai",
+  "ai_provider_id": 1,
   "name": "GPT-5.4 Mini",
   "model_key": "gpt-5.4-mini",
   "description": "Default explanation model",
@@ -41,10 +89,12 @@ Example POST `/ai-models/add`:
 }
 ```
 
-Required fields: `provider`, `name`, `model_key`. Optional prices are
+Required fields: `ai_provider_id`, `name`, `model_key`. Obtain the provider ID
+from `/ai-providers/all`; do not assume IDs. The old `provider` input is rejected.
+Responses include the nested `provider` relationship. Optional prices are
 `input_price_per_million`, `cached_input_price_per_million`, and
 `output_price_per_million`. Enter verified prices; null means unknown, not free.
-Provider identifiers use lowercase letters, digits, underscores, and hyphens.
+`supports_images` is a boolean (default true); set false for text-only models.
 Currency is three uppercase letters. Prices and costs serialize as decimal strings.
 
 Provider/model-key pairs are unique, including soft-deleted models. Adding a
@@ -54,9 +104,11 @@ database constraint prevents multiple defaults. The default must be active; to
 deactivate it, submit both `is_active: false` and `is_default: false`. No default
 is also allowed. Deleting a default clears its default flag.
 
-GET `/ai-models/all` accepts `search` (name/key), `provider`, `is_active` (0/1),
+GET `/ai-models/all` accepts `search` (name/key), `ai_provider_id`, `is_active` (0/1),
 `page`, and `per_page` (1–100, default 25). The response's `ai_models` property
-is a Laravel paginator. `/active` returns an array for the model dropdown.
+is a Laravel paginator. `/active` returns an array of active models whose providers
+are enabled, supported and configured. A default model requires an active supported
+provider. Missing credentials prevent generation even if the model is default.
 
 ## Request records
 
@@ -137,15 +189,23 @@ estimation, and saving reviewed explanations are described in the
 Run only these feature migrations if other pending project migrations should wait:
 
 ```sh
-php artisan migrate --path=database/migrations/2026_09_15_000001_create_ai_models_table.php --path=database/migrations/2026_09_15_000002_create_ai_requests_table.php
+php artisan migrate --path=database/migrations/2026_09_15_000001_create_ai_models_table.php --path=database/migrations/2026_09_15_000002_create_ai_requests_table.php --path=database/migrations/2026_09_16_000001_create_ai_providers_table.php --path=database/migrations/2026_09_16_000002_add_ai_model_image_capability.php
 php artisan db:seed --class=AiPermissionsSeeder
 ```
 
-The targeted seeder is idempotent and grants the eight CRUD permissions plus
-`questions.generate-explanation` to `super_admin`
+The targeted seeder is idempotent and grants twelve CRUD permissions plus
+`ai-providers.test`, `questions.generate-explanation` and `questions.generate` to `super_admin`
 without removing existing grants. `LmsPermissionsSeeder` also includes these
 permissions for normal project setup. Assign other roles through the existing
 role-permission API. Model records/prices are managed by the admin CRUD API.
+
+Deploy the API and admin client change together: model writes now require
+`ai_provider_id`, and the `provider` response is an object. The migration preserves
+existing models and the selected default; it does not run `AiModelSeeder` or change
+model pricing. `AiProviderSeeder` can restore missing supported provider entries
+without changing existing settings. Gemini starts disabled with no seeded models:
+configure its key, enable the provider, and add model IDs available to your account
+with verified pricing. There is no automatic cross-provider fallback.
 
 Provider-generated records cannot be edited through CRUD (409). Generation now
 records provider attempts automatically. The seeder also adds

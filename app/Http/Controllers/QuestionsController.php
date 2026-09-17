@@ -1273,7 +1273,7 @@ class QuestionsController extends Controller
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Question and options saved successfully.']);
+            return response()->json(['success' => true, 'message' => 'Question and options saved successfully.', 'question_id' => $question]);
 
 
 

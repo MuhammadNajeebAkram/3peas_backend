@@ -9,9 +9,13 @@ class AiModelSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(AiProviderSeeder::class);
+        $provider = \App\Models\AiProvider::where('key', 'openai')->firstOrFail();
+        $useOpenAiDefault = $provider->is_active && ! DB::table('ai_models')
+            ->where('ai_provider_id', '!=', $provider->id)->where('is_default', true)->exists();
         // Prevent conflict with the generated unique default_slot column.
         DB::table('ai_models')
-            ->where('provider', 'openai')
+            ->where('ai_provider_id', \App\Models\AiProvider::where('key', 'openai')->value('id'))
             ->update([
                 'is_default' => false,
                 'updated_at' => now(),
@@ -19,7 +23,7 @@ class AiModelSeeder extends Seeder
 
         $models = [
             [
-                'provider' => 'openai',
+                'ai_provider_id' => \App\Models\AiProvider::where('key', 'openai')->value('id'),
                 'name' => 'GPT-5.6 Luna',
                 'model_key' => 'gpt-5.6-luna',
                 'description' => 'Economical model for straightforward, high-volume MCQ explanations.',
@@ -34,12 +38,12 @@ class AiModelSeeder extends Seeder
                 'deleted_at' => null,
             ],
             [
-                'provider' => 'openai',
+                'ai_provider_id' => \App\Models\AiProvider::where('key', 'openai')->value('id'),
                 'name' => 'GPT-5.4 Mini',
                 'model_key' => 'gpt-5.4-mini',
                 'description' => 'Recommended default for reliable English and Urdu MCQ explanations at moderate cost.',
                 'is_active' => true,
-                'is_default' => true,
+                'is_default' => $useOpenAiDefault,
                 'input_price_per_million' => 0.750000,
                 'cached_input_price_per_million' => 0.075000,
                 'output_price_per_million' => 4.500000,
@@ -49,7 +53,7 @@ class AiModelSeeder extends Seeder
                 'deleted_at' => null,
             ],
             [
-                'provider' => 'openai',
+                'ai_provider_id' => \App\Models\AiProvider::where('key', 'openai')->value('id'),
                 'name' => 'GPT-5.6 Terra',
                 'model_key' => 'gpt-5.6-terra',
                 'description' => 'Higher-quality model for difficult mathematics, science and scenario-based questions.',
@@ -67,7 +71,7 @@ class AiModelSeeder extends Seeder
 
         DB::table('ai_models')->upsert(
             $models,
-            ['provider', 'model_key'],
+            ['ai_provider_id', 'model_key'],
             [
                 'name',
                 'description',

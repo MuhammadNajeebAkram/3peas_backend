@@ -49,7 +49,7 @@ class QuestionExplanationTest extends TestCase
             });
         }
         foreach (['2026_04_01_191541_create_permissions_table.php', '2026_04_01_191631_create_role_permissions_table.php',
-            '2026_09_15_000001_create_ai_models_table.php', '2026_09_15_000002_create_ai_requests_table.php'] as $file) {
+            '2026_09_15_000001_create_ai_models_table.php', '2026_09_15_000002_create_ai_requests_table.php', '2026_09_16_000001_create_ai_providers_table.php', '2026_09_16_000002_add_ai_model_image_capability.php'] as $file) {
             (require database_path('migrations/'.$file))->up();
         }
         $this->seed(AiPermissionsSeeder::class);
@@ -57,7 +57,7 @@ class QuestionExplanationTest extends TestCase
         Permission::firstOrCreate(['name' => 'questions.update']);
         $this->withoutMiddleware([AttachJwtFromCookie::class, AuthenticateJwtCookieGuard::class]);
         $this->actingAs(User::create(['name' => 'Admin', 'role_id' => Role::where('name', 'super_admin')->value('id')]), 'api');
-        AiModel::create(['provider' => 'openai', 'name' => 'Mini', 'model_key' => 'gpt-5.4-mini',
+        AiModel::create(['ai_provider_id' => \App\Models\AiProvider::where('key', 'openai')->value('id'), 'name' => 'Mini', 'model_key' => 'gpt-5.4-mini',
             'is_active' => true, 'is_default' => true, 'input_price_per_million' => '0.75',
             'cached_input_price_per_million' => '0.075', 'output_price_per_million' => '4.5']);
         DB::table('subject_tbl')->insert(['id' => 1, 'subject_name' => 'Physics']);
@@ -73,6 +73,177 @@ class QuestionExplanationTest extends TestCase
             ['id' => 2, 'question_id' => 1, 'option' => '3 N', 'option_um' => '3 نیوٹن', 'is_answer' => 0],
         ]);
         Http::preventStrayRequests();
+    }
+
+    private function geminiModel(): AiModel
+    {
+        config(['services.gemini.api_key' => 'gemini-test-key']);
+        $provider = \App\Models\AiProvider::where('key', 'gemini')->firstOrFail();
+        $provider->update(['is_active' => true, 'settings' => ['max_output_tokens' => 2000]]);
+
+        return AiModel::create(['ai_provider_id' => $provider->id, 'name' => 'Gemini test', 'model_key' => 'gemini-test',
+            'is_active' => true, 'supports_images' => true, 'input_price_per_million' => 1,
+            'cached_input_price_per_million' => 0.1, 'output_price_per_million' => 2]);
+    }
+
+    public function test_explicit_provider_routes_matching_model_and_returns_provider_identity(): void
+    {
+        $gemini = $this->geminiModel();
+        $openai = AiModel::where('is_default', true)->firstOrFail();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse()),
+            'api.openai.com/v1/responses' => Http::response($this->response($this->draft())),
+        ]);
+        foreach ([$gemini, $openai] as $model) {
+            $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en',
+                'model_id' => $model->id, 'ai_provider_id' => $model->ai_provider_id])->assertOk()
+                ->assertJsonPath('data.ai_provider_id', $model->ai_provider_id)
+                ->assertJsonPath('data.provider', $model->provider->key);
+        }
+        Http::assertSentCount(2);
+        $this->assertSame(['gemini', 'openai'], AiRequest::orderBy('id')->pluck('provider')->all());
+    }
+
+    public function test_provider_mismatch_invalid_or_disabled_provider_never_calls_ai(): void
+    {
+        $gemini = $this->geminiModel();
+        $openai = AiModel::where('is_default', true)->firstOrFail();
+        foreach ([
+            ['model_id' => $openai->id, 'ai_provider_id' => $gemini->ai_provider_id],
+            ['model_id' => $gemini->id, 'ai_provider_id' => $openai->ai_provider_id],
+            ['ai_provider_id' => $gemini->ai_provider_id],
+            ['ai_provider_id' => 999], ['ai_provider_id' => 'gemini'], ['ai_provider_id' => 0],
+        ] as $selection) {
+            $this->postJson(self::GENERATE, $selection + ['question_id' => 1, 'language' => 'en'])->assertUnprocessable();
+        }
+        $gemini->provider->update(['is_active' => false]);
+        $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en',
+            'model_id' => $gemini->id, 'ai_provider_id' => $gemini->ai_provider_id])->assertUnprocessable();
+        Http::assertNothingSent();
+        $this->assertSame(0, AiRequest::count());
+    }
+
+    public function test_provider_only_selection_uses_matching_global_default(): void
+    {
+        $model = AiModel::where('is_default', true)->firstOrFail();
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->response($this->draft()))]);
+        $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en',
+            'ai_provider_id' => $model->ai_provider_id])->assertOk()->assertJsonPath('data.model_id', $model->id);
+        Http::assertSentCount(1);
+    }
+
+    public function test_unavailable_model_returns_actionable_error_without_raw_provider_details(): void
+    {
+        $model = $this->geminiModel();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'error' => ['message' => 'Model no longer available to new users. private-account-detail'],
+        ], 404)]);
+        $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en',
+            'model_id' => $model->id, 'ai_provider_id' => $model->ai_provider_id])->assertStatus(502)
+            ->assertJsonPath('message', 'The selected AI model is unavailable for this API account or endpoint. Select another model or update its model key in AI model settings.')
+            ->assertDontSee('private-account-detail');
+        $record = AiRequest::latest('id')->firstOrFail();
+        $this->assertSame('provider_http_404', $record->error_code);
+        $this->assertStringContainsString('Select another model', $record->error_message);
+        $this->assertStringNotContainsString('private-account-detail', $record->toJson());
+        Http::assertSentCount(1);
+    }
+
+    private function geminiResponse(string $language = 'en'): array
+    {
+        return ['responseId' => 'gemini-response', 'modelVersion' => 'gemini-test',
+            'candidates' => [['finishReason' => 'STOP', 'content' => ['parts' => [
+                ['thought' => true, 'text' => 'private reasoning'], ['text' => json_encode($this->draft($language))],
+            ]]]],
+            'usageMetadata' => ['promptTokenCount' => 100, 'cachedContentTokenCount' => 20,
+                'candidatesTokenCount' => 40, 'thoughtsTokenCount' => 10, 'totalTokenCount' => 150]];
+    }
+
+    public function test_gemini_generates_each_language_and_normalizes_usage_without_saving(): void
+    {
+        $model = $this->geminiModel();
+        foreach (['en', 'ur', 'both'] as $language) {
+            Http::swap((new Factory)->preventStrayRequests());
+            Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse($language))]);
+            $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => $language, 'model_id' => $model->id])->assertOk();
+            $record = AiRequest::latest('id')->firstOrFail();
+            $this->assertSame('gemini', $record->provider);
+            $this->assertSame('gemini-response', $record->provider_response_id);
+            $this->assertSame(50, $record->output_tokens);
+            $this->assertSame(10, $record->reasoning_tokens);
+            $this->assertSame('0.00018200', $record->estimated_cost);
+            $this->assertSame($this->draft($language), $record->response_payload);
+            $this->assertStringNotContainsString('private reasoning', $record->toJson());
+            $this->assertStringNotContainsString('gemini-test-key', $record->toJson());
+            Http::assertSent(fn ($request) => $request->hasHeader('x-goog-api-key', 'gemini-test-key')
+                && $request['generationConfig']['maxOutputTokens'] === 2000
+                && $request['generationConfig']['responseMimeType'] === 'application/json'
+                && isset($request['generationConfig']['responseJsonSchema'])
+                && json_decode($request['contents'][0]['parts'][0]['text'], true)['correct_option_id'] === 1);
+        }
+        $this->assertSame('Existing English', DB::table('exam_question_tbl')->value('explanation'));
+    }
+
+    public function test_gemini_images_and_disabled_or_unconfigured_provider_checks(): void
+    {
+        $model = $this->geminiModel();
+        DB::table('exam_question_tbl')->where('id', 1)->update(['question' => '<p>Find the force.</p><img src="https://example.com/force.png">']);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse())]);
+        $body = ['question_id' => 1, 'language' => 'en', 'model_id' => $model->id];
+        $model->update(['supports_images' => false]);
+        $this->postJson(self::GENERATE, $body)->assertUnprocessable();
+        Http::assertNothingSent();
+        $model->update(['supports_images' => true]);
+        $model->provider->update(['is_active' => false]);
+        $this->postJson(self::GENERATE, $body)->assertUnprocessable();
+        Http::assertNothingSent();
+        $model->provider->update(['is_active' => true]);
+        config(['services.gemini.api_key' => null]);
+        $this->postJson(self::GENERATE, $body)->assertStatus(503);
+        Http::assertNothingSent();
+        config(['services.gemini.api_key' => 'gemini-test-key']);
+        $this->postJson(self::GENERATE, $body)->assertOk();
+        Http::assertSent(fn ($request) => $request['contents'][0]['parts'][1]['fileData'] === [
+            'fileUri' => 'https://example.com/force.png', 'mimeType' => 'image/png',
+        ]);
+    }
+
+    public function test_gemini_refusal_incomplete_invalid_output_and_unknown_usage(): void
+    {
+        $model = $this->geminiModel();
+        foreach ([
+            [['promptFeedback' => ['blockReason' => 'SAFETY']], 'refused'],
+            [['candidates' => [['finishReason' => 'MAX_TOKENS']]], 'incomplete'],
+            [['candidates' => [['finishReason' => 'STOP', 'content' => ['parts' => [['text' => 'bad json']]]]]], 'failed'],
+            [['usageMetadata' => ['candidatesTokenCount' => [], 'thoughtsTokenCount' => 'invalid']], 'failed'],
+        ] as [$response, $status]) {
+            Http::swap((new Factory)->preventStrayRequests());
+            Http::fake(['generativelanguage.googleapis.com/*' => Http::response($response)]);
+            $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en', 'model_id' => $model->id])->assertStatus(502);
+            $record = AiRequest::latest('id')->firstOrFail();
+            $this->assertSame($status, $record->status);
+            $this->assertNull($record->estimated_cost);
+            $this->assertNull($record->input_tokens);
+            Http::assertSentCount(1);
+        }
+    }
+
+    public function test_gemini_retry_and_timeout_keep_attempts_on_selected_provider(): void
+    {
+        $model = $this->geminiModel();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::sequence()->push([], 429)->push($this->geminiResponse())]);
+        $body = ['question_id' => 1, 'language' => 'en', 'model_id' => $model->id];
+        $this->postJson(self::GENERATE, $body)->assertOk();
+        $records = AiRequest::orderBy('id')->get();
+        $this->assertCount(2, $records);
+        $this->assertSame($records[0]->operation_id, $records[1]->operation_id);
+        $this->assertSame(2, $records[1]->attempt_number);
+        $this->assertSame('gemini', $records[1]->provider);
+        Http::swap((new Factory)->preventStrayRequests());
+        Http::fake(fn () => throw new ConnectionException('private transport detail'));
+        $this->postJson(self::GENERATE, $body)->assertStatus(504)->assertDontSee('private transport detail');
+        $this->assertSame(3, AiRequest::count());
+        $this->assertSame('connection_error', AiRequest::latest('id')->first()->error_code);
     }
 
     private function draft(string $language = 'en'): array

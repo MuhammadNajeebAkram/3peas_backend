@@ -20,7 +20,7 @@ php artisan db:seed --class=AiPermissionsSeeder
 ```
 
 It is granted to Super Admin; assign it to other roles through the permission API.
-No additional database migration is needed for explanations.
+Apply the provider/model migrations listed in the [AI administration guide](ai-admin-api.md).
 
 ## Configuration
 
@@ -28,9 +28,13 @@ No additional database migration is needed for explanations.
 OPEN_AI_API_KEY=your-server-side-key
 OPENAI_TIMEOUT=45
 OPENAI_MAX_OUTPUT_TOKENS=1800
+GEMINI_API_KEY=your-server-side-key
+GEMINI_TIMEOUT=45
+GEMINI_MAX_OUTPUT_TOKENS=1800
 ```
 
-`OPENAI_API_KEY` is also accepted if `OPEN_AI_API_KEY` is absent. Keys are read
+`OPENAI_API_KEY` is also accepted if `OPEN_AI_API_KEY` is absent.
+For Gemini, `GOOGLE_AI_API_KEY` takes precedence when present; otherwise `GEMINI_API_KEY` is used. Keys are read
 through `config/services.php`, never returned or stored in AI request logs.
 Rebuild Laravel's config cache after changing environment settings in deployments
 that use cached configuration.
@@ -41,12 +45,20 @@ that use cached configuration.
 {
   "question_id": 123,
   "model_id": 1,
+  "ai_provider_id": 1,
   "language": "both"
 }
 ```
 
 - `language` is required: `en`, `ur`, or `both`.
-- `model_id` is optional: omitted/null uses the active default OpenAI model.
+- `model_id` is optional: omitted/null uses the active default model. Its provider
+  must be enabled, supported and configured. OpenAI and Gemini adapters are installed.
+- Send `ai_provider_id` with `model_id` when the user selects a provider and model.
+  The model must belong to that provider; mismatches return 422 before any AI call.
+  If only the provider is supplied, the global default must belong to it; otherwise
+  select a model explicitly. The backend never falls back to another provider.
+  Omitting/null `ai_provider_id` preserves the existing model/default selection.
+  Successful responses include the resolved `ai_provider_id` and provider key (`provider`).
 - The backend loads the saved question, options, marked answer, subject, class,
   topic, and shared scenario. Save edits to the question/options before generating.
 - Editor equations stored in `data-latex`/`data-tex` attributes or Quill's
@@ -56,7 +68,7 @@ that use cached configuration.
 - Only MCQs with at least two nonempty options and exactly one correct answer
   are accepted. Missing required context is rejected before an API call.
 - Statement/scenario/option images in HTTPS URLs or HTML `<img src>` are sent
-  as image inputs. URLs must be accessible to OpenAI. SVG and relative paths are
+  as image inputs. URLs must be accessible to the selected provider. SVG and relative paths are
   rejected. Questions marked as requiring diagrams need an available image.
 
 Example successful response (illustrative IDs):
@@ -68,6 +80,8 @@ Example successful response (illustrative IDs):
     "ai_request_id": 456,
     "question_id": 123,
     "model_id": 1,
+    "ai_provider_id": 1,
+    "provider": "openai",
     "language": "both",
     "explanation": "Using \\(F = ma\\), the force is \\(2 \\times 3 = 6\\,\\text{N}\\).",
     "explanation_um": "فارمولے \\(F = ma\\) کے مطابق قوت \\(6\\,\\text{N}\\) ہے۔",
@@ -107,7 +121,7 @@ Backend validation checks paired delimiters; the frontend renders the equations.
 
 ### Request logging and failures
 
-Every outbound attempt creates an `ai_requests` row before contacting OpenAI:
+Every outbound generation attempt creates an `ai_requests` row before contacting the selected provider:
 
 - `purpose: question_explanation`, `subject_type: exam_question`, related question ID.
 - Authenticated `user_id`, selected model, language, prompt version, pricing snapshot.
@@ -117,7 +131,16 @@ Every outbound attempt creates an `ai_requests` row before contacting OpenAI:
 
 The generation uses the Responses API with strict JSON schema and `store: false`.
 No API authorization headers or raw question/image inputs are saved in the log.
-The log stores the generated draft and usage, not OpenAI's full raw response.
+The log stores the generated draft and usage, not the provider's full raw response.
+Gemini output tokens include response and thinking tokens; thinking tokens are also
+recorded separately as reasoning tokens. Raw Gemini usage is retained under
+`metadata.usage.provider_usage`. Prices must reflect the chosen model's applicable
+rates; missing prices/usage leave estimated cost null. There is no automatic fallback.
+
+Gemini images use direct HTTPS `fileData.fileUri` inputs with MIME hints for known
+extensions, following the [Gemini file-input API](https://ai.google.dev/gemini-api/docs/generate-content/file-input-methods).
+Choose a model supporting external image URLs (Gemini 2.0 does not). Models marked
+`supports_images: false` reject image questions before any provider request.
 
 Generation is limited to 10 requests per minute per authenticated user. A shared
 cache lock rejects concurrent generation for the same user/question. Configure a

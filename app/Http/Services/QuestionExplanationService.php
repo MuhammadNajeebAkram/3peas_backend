@@ -66,12 +66,18 @@ class QuestionExplanationService
         }
     }
 
-    public function model(?int $id): AiModel
+    public function model(?int $id, ?int $providerId = null): AiModel
     {
-        $query = AiModel::where('is_active', true)->where('provider', 'openai');
+        $query = AiModel::with('provider')->where('is_active', true)
+            ->whereHas('provider', fn ($q) => $q->where('is_active', true)->whereIn('key', \App\Models\AiProvider::SUPPORTED));
+        if ($providerId !== null) {
+            $query->where('ai_provider_id', $providerId);
+        }
         $model = $id ? $query->find($id) : $query->where('is_default', true)->first();
         if (! $model) {
-            throw ValidationException::withMessages(['model_id' => 'Select an active OpenAI model or configure an active default.']);
+            throw ValidationException::withMessages(['model_id' => $providerId !== null
+                ? 'Select an active model belonging to the selected enabled provider. Omitting model_id requires the default model to belong to that provider.'
+                : 'Select an active model with an enabled supported provider or configure an active default.']);
         }
 
         return $model;
@@ -121,8 +127,11 @@ class QuestionExplanationService
         if ((bool) ($question['has_diagram'] ?? false) && $images === []) {
             throw ValidationException::withMessages(['question_id' => 'This question requires a diagram, but no image is available in its statement or scenario.']);
         }
-        $input = [['type' => 'input_text', 'text' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]];
-        if (strlen($input[0]['text']) > 40000 || count($images) > 8) {
+        $text = json_encode($content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($images !== [] && ! $model->supports_images) {
+            throw ValidationException::withMessages(['model_id' => 'Select a model that supports images for this question.']);
+        }
+        if (strlen($text) > 40000 || count($images) > 8) {
             throw ValidationException::withMessages(['question_id' => 'Question context is too large for a short explanation.']);
         }
         foreach (array_unique($images) as $image) {
@@ -130,7 +139,6 @@ class QuestionExplanationService
                 || preg_match('/\.svg(?:\?|$)/i', $image)) {
                 throw ValidationException::withMessages(['question_id' => 'Question images must be accessible HTTPS raster images (PNG, JPEG, WebP, or GIF).']);
             }
-            $input[] = ['type' => 'input_image', 'image_url' => $image];
         }
         $fields = $this->fields($language);
         $properties = [];
@@ -155,10 +163,9 @@ PROMPT;
 
         return $this->ai->generate($model, [
             'instructions' => $instructions."\nRequested language: ".$language,
-            'input' => [['role' => 'user', 'content' => $input]],
-            'max_output_tokens' => max(500, min(4000, config('services.openai.max_output_tokens', 1800))),
-            'text' => ['format' => ['type' => 'json_schema', 'name' => 'question_explanation', 'strict' => true,
-                'schema' => ['type' => 'object', 'properties' => $properties, 'required' => array_keys($properties), 'additionalProperties' => false]]],
+            'text' => $text, 'images' => array_values(array_unique($images)),
+            'max_output_tokens' => max(500, min(4000, $model->provider->setting('max_output_tokens', 1800))),
+            'schema' => ['type' => 'object', 'properties' => $properties, 'required' => array_keys($properties), 'additionalProperties' => false],
         ], [
             'user_id' => $request->user()->id, 'purpose' => 'question_explanation',
             'subject_type' => 'exam_question', 'subject_id' => $question['id'],

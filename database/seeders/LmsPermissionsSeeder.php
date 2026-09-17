@@ -17,6 +17,12 @@ class LmsPermissionsSeeder extends Seeder
             'dashboard.view',
 
             'ai-models.view',
+            'questions.generate',
+            'ai-providers.view',
+            'ai-providers.create',
+            'ai-providers.update',
+            'ai-providers.delete',
+            'ai-providers.test',
             'ai-models.create',
             'ai-models.update',
             'ai-models.delete',

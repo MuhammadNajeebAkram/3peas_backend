@@ -4,8 +4,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AiModelController;
+use App\Http\Controllers\AiProviderController;
 use App\Http\Controllers\AiRequestController;
 use App\Http\Controllers\QuestionExplanationController;
+use App\Http\Controllers\AiQuestionGenerationController;
 use App\Http\Controllers\AdminActivityLogController;
 use App\Http\Controllers\AdminLoginLogController;
 use App\Http\Controllers\AdminUserProfileController;
@@ -72,6 +74,14 @@ Route::prefix('admin/auth')->group(function () {
 
     Route::middleware([AttachJwtFromCookie::class . ':admin', AuthenticateJwtCookieGuard::class . ':admin', LogAdminActivity::class])->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
+        Route::prefix('ai-providers')->group(function () {
+            Route::get('/all', [AiProviderController::class, 'index'])->middleware('permission:ai-providers.view');
+            Route::post('/add', [AiProviderController::class, 'store'])->middleware('permission:ai-providers.create');
+            Route::get('/{id}', [AiProviderController::class, 'show'])->whereNumber('id')->middleware('permission:ai-providers.view');
+            Route::post('/update/{id}', [AiProviderController::class, 'update'])->whereNumber('id')->middleware('permission:ai-providers.update');
+            Route::delete('/delete/{id}', [AiProviderController::class, 'destroy'])->whereNumber('id')->middleware('permission:ai-providers.delete');
+            Route::post('/test/{id}', [AiProviderController::class, 'testConnection'])->whereNumber('id')->middleware(['permission:ai-providers.test', 'throttle:10,1']);
+        });
         Route::prefix('ai-models')->group(function () {
             Route::get('/all', [AiModelController::class, 'index'])->middleware('permission:ai-models.view');
             Route::get('/active', [AiModelController::class, 'active'])->middleware('permission:ai-models.view');
@@ -303,6 +313,12 @@ Route::prefix('admin/auth')->group(function () {
         });
 
         Route::prefix('question')->group(function () {
+            Route::post('/generate', [AiQuestionGenerationController::class, 'generate'])->middleware(['permission:questions.generate', 'throttle:5,1']);
+            Route::get('/generations/{id}', [AiQuestionGenerationController::class, 'show'])->whereNumber('id')->middleware('permission:questions.generate');
+            Route::post('/generations/{id}/update', [AiQuestionGenerationController::class, 'update'])->whereNumber('id')->middleware('permission:questions.generate');
+            Route::post('/generations/{id}/save', [AiQuestionGenerationController::class, 'save'])->whereNumber('id')->middleware('permission:questions.create');
+            Route::get('/generations/{id}/sources/{sourceId}', [AiQuestionGenerationController::class, 'source'])->whereNumber('id')->where('sourceId', 'source-[0-9]+')->middleware('permission:questions.generate');
+            Route::post('/generations/{id}/diagram-preview', [AiQuestionGenerationController::class, 'previewDiagram'])->whereNumber('id')->middleware(['permission:questions.generate', 'throttle:30,1']);
             Route::post('/generate-explanation', [QuestionExplanationController::class, 'generate'])
                 ->middleware(['permission:questions.view', 'permission:questions.generate-explanation', 'throttle:10,1']);
             Route::post('/save-explanation', [QuestionExplanationController::class, 'save'])->middleware('permission:questions.update');
@@ -590,5 +606,4 @@ Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlo
 
 Route::get('/get_test', [QuestionsController::class, 'getTest']);
 Route::post('/save_test', [QuestionsController::class, 'saveTest']);
-
 
