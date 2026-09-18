@@ -99,6 +99,28 @@ class TeacherBackendTest extends TeacherPaymentTest
         $this->assertDatabaseHas('teacher_profile_events', ['teacher_profile_id' => $profile->id, 'action' => 'status_changed']);
     }
 
+    public function test_admin_activate_endpoint_supports_both_route_formats(): void
+    {
+        $profile = TeacherProfile::where('web_user_id', 2)->first();
+        $profile->forceFill(['status' => 'pending', 'collection_code' => null, 'approved_at' => null])->save();
+        $this->actingAs(User::first(), 'api');
+
+        // Test POST /teachers/{id}/activate with is_active flag
+        $this->postJson('/api/admin/auth/teachers/'.$profile->id.'/activate', ['is_active' => true])
+            ->assertOk()
+            ->assertJsonPath('teacher.status', 'active');
+        $this->assertNotNull($profile->fresh()->approved_at);
+        $this->assertNotNull($profile->fresh()->collection_code);
+
+        // Test POST /teachers/activate with id in body
+        $this->postJson('/api/admin/auth/teachers/activate', [
+            'id' => $profile->id,
+            'status' => 'suspended',
+            'admin_note' => 'Temporarily suspended by admin',
+        ])->assertOk()->assertJsonPath('teacher.status', 'suspended');
+        $this->assertEquals('suspended', $profile->fresh()->status);
+    }
+
     public function test_admin_permissions_are_required(): void
     {
         $role = Role::create(['name' => 'unprivileged']);

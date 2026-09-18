@@ -215,6 +215,16 @@ class WebUserAuthController extends Controller
 
             WebUserProfile::create($profileData);
 
+            if ($user->role === 'teacher') {
+                \App\Models\TeacherProfile::firstOrCreate(
+                    ['web_user_id' => $user->id],
+                    [
+                        'city_id' => $profile['city_id'] ?? null,
+                        'institute_id' => $profile['institute_id'] ?? null,
+                    ]
+                );
+            }
+
             foreach ($subscriptions as $subscription) {
                 UserSubscription::create([
                     'user_id' => $user->id,
@@ -341,6 +351,16 @@ class WebUserAuthController extends Controller
 
             $userProfile->update($profileData);
 
+            if ($user->role === 'teacher') {
+                \App\Models\TeacherProfile::firstOrCreate(
+                    ['web_user_id' => $user->id],
+                    [
+                        'city_id' => $profile['city_id'] ?? null,
+                        'institute_id' => $profile['institute_id'] ?? null,
+                    ]
+                );
+            }
+
             if ($subscriptions !== null) {
                 $submittedSubscriptionIds = [];
 
@@ -451,7 +471,7 @@ class WebUserAuthController extends Controller
     public function getAllUsersDataByAdmin()
     {
         try {
-            $users = WebUser::with(['profile', 'subscriptions', 'subscriptionPaymentRequests',
+            $users = WebUser::with(['profile', 'teacherProfile', 'subscriptions', 'subscriptionPaymentRequests',
             'subscriptionPaymentRequests.offeredProgram'])->get();
 
             return response()->json([

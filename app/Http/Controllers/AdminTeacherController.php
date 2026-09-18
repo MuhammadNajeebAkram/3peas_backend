@@ -14,10 +14,20 @@ class AdminTeacherController extends Controller
     public function index(Request $request)
     {
         $data = $request->validate(['status' => 'sometimes|in:pending,active,rejected,suspended', 'search' => 'sometimes|string|max:100']);
+
+        // Auto-provision teacher profiles for any teacher web users that lack one
+        \App\Models\WebUser::where('role', 'teacher')->whereNull('deleted_at')
+            ->whereNotIn('id', TeacherProfile::select('web_user_id'))
+            ->each(function ($user) {
+                TeacherProfile::create(['web_user_id' => $user->id]);
+            });
+
         $query = TeacherProfile::with(['webUser:id,name,email,phone,status', 'city:id,name', 'institute:id,name']);
         if (isset($data['status'])) $query->where('status', $data['status']);
         if (isset($data['search'])) {
-            $query->whereHas('webUser', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$data['search'].'%')->orWhere('email', 'like', '%'.$data['search'].'%')));
+            $query->whereHas('webUser', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$data['search'].'%')
+                ->orWhere('email', 'like', '%'.$data['search'].'%')
+                ->orWhere('phone', 'like', '%'.$data['search'].'%')));
         }
         return response()->json($query->latest('id')->paginate(20));
     }
@@ -27,6 +37,19 @@ class AdminTeacherController extends Controller
         $teacher = TeacherProfile::with(['webUser:id,name,email,phone,status', 'city:id,name', 'institute:id,name'])->findOrFail($id);
         return response()->json(['teacher' => $teacher->makeVisible('admin_note'), 'summary' => $settlements->summary($id),
             'events' => DB::table('teacher_profile_events')->where('teacher_profile_id', $id)->orderByDesc('id')->get()]);
+    }
+
+    public function activate(Request $request, ?int $id = null)
+    {
+        $id = $id ?? $request->input('id') ?? $request->input('teacher_id') ?? $request->input('teacher_profile_id');
+        abort_unless($id, 422, 'Teacher ID is required.');
+
+        if (!$request->has('status')) {
+            $isActive = $request->boolean('activate', true) && $request->boolean('is_active', true);
+            $request->merge(['status' => $isActive ? 'active' : 'suspended']);
+        }
+
+        return $this->status($request, (int) $id);
     }
 
     public function status(Request $request, int $id)
