@@ -33,7 +33,7 @@ class FederalStudyTest extends TestCase
         $this->table('book_unit_tbl', ['book_id', 'unit_no', 'unit_name', 'activate']);
         $this->table('book_unit_topic_tbl', ['unit_id']);
         $this->table('question_scenario_groups_tbl', ['activate']);
-        $this->table('exam_question_tbl', ['topic_id', 'is_mcq', 'activate', 'scenario_group_id']);
+        $this->table('exam_question_tbl', ['topic_id', 'is_mcq', 'activate', 'scenario_group_id', 'scenario_question_order']);
         $this->table('practice_sessions', (new PracticeSession)->getFillable());
         $this->table('practice_session_questions', (new PracticeSessionQuestion)->getFillable());
         $this->table('practice_session_scopes', ['session_id', 'unit_id']);

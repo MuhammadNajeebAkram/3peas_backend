@@ -36,6 +36,10 @@ class ExamQuestion extends Model
         return $this->belongsTo(QuestionScenarioGroup::class, 'scenario_group_id');
     }
 
+    public function aiQuestionGeneration(){
+        return $this->belongsTo(AiQuestionGeneration::class, 'ai_question_generation_id');
+    }
+
 
 
 }

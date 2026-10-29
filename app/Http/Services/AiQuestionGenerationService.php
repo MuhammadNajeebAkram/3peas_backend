@@ -53,7 +53,7 @@ class AiQuestionGenerationService
             'question_type' => (int) $type->id, 'question_type_name' => $type->type_name, 'is_mcq' => (bool) $type->is_mcq,
             'question_presentation_type_id' => $presentation?->id, 'scenario_based' => $scenario,
             'count' => (int) $data['count'], 'language' => $data['language'],
-            'difficulty' => (int) ($data['difficulty'] ?? 3), 'marks' => (int) ($data['marks'] ?? ($type->is_mcq ? 1 : 2)),
+            'difficulty' => (int) ($data['difficulty'] ?? 3), 'marks' => round((float) ($data['marks'] ?? ($type->is_mcq ? 1 : 2)), 2),
             'cognitive_domain' => (int) ($data['cognitive_domain'] ?? 1), 'topic_content' => $data['topic_content'] ?? null,
             'include_diagrams' => (bool) ($data['include_diagrams'] ?? false),
         ]);
@@ -202,6 +202,12 @@ class AiQuestionGenerationService
                         throw ValidationException::withMessages(['draft' => $body['message'] ?? 'Question could not be saved.']);
                     }
                     $saved[$index] = $body['question_id'];
+                    // Record AI provenance. Set here (not via the request payload) so
+                    // the normal question editor can never claim a question is AI-made.
+                    DB::table('exam_question_tbl')->where('id', $body['question_id'])->update([
+                        'source' => 'ai',
+                        'ai_question_generation_id' => $generation->id,
+                    ]);
                 }
                 $generation->saved_questions = $saved;
                 $generation->save();

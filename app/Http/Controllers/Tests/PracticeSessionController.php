@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tests;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tests\Concerns\SelectsLmsMcqQuestions;
 use App\Models\PracticeSession;
 use App\Models\PracticeSessionQuestion;
 use App\Models\PracticeSessionScope;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\DB;
 
 class PracticeSessionController extends Controller
 {
+    use SelectsLmsMcqQuestions;
+
     private const MASTERED_MIN_ATTEMPTS = 3;
     private const MASTERED_MIN_ACCURACY = 80;
 
@@ -127,34 +130,23 @@ class PracticeSessionController extends Controller
         ?int $bookId = null,
         string $mcqFormat = 'all'
     ) {
-        $questions = DB::table('exam_question_tbl as questions')
-            ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
-            ->whereIn('topics.unit_id', $unitIds)
-            ->where('questions.is_mcq', 1)
-            ->where('questions.activate', 1)
-            ->when($mcqFormat === 'straight', function ($query) {
-                $query->whereNull('questions.scenario_group_id');
-            })
-            ->when($mcqFormat === 'scenario', function ($query) {
-                $query->whereExists(function ($scenarioQuery) {
-                    $scenarioQuery->selectRaw('1')
-                        ->from('question_scenario_groups_tbl as scenario_groups')
-                        ->whereColumn('scenario_groups.id', 'questions.scenario_group_id')
-                        ->where('scenario_groups.activate', 1);
-                });
-            })
-            ->select('questions.id')
-            ->distinct()
-            ->inRandomOrder()
-            ->limit($totalQuestions)
-            ->get();
+        $requestedQuestions = $totalQuestions;
+        $selection = $this->selectLmsMcqQuestions($unitIds, $requestedQuestions, $mcqFormat);
 
-        if ($questions->count() < $totalQuestions) {
+        if ($selection === null) {
             return response()->json([
                 'success' => 0,
-                'error' => 'Not enough active MCQs available for the selected chapter and question type. Try fewer questions.',
+                'error' => $mcqFormat === 'scenario'
+                    ? 'Not enough active scenarios available for the selected chapter. Try fewer scenarios.'
+                    : 'Not enough active MCQs available for the selected chapter and question type. Try fewer questions.',
             ], 422);
         }
+
+        $questions = $selection['questions'];
+        $scenarioGroupIds = $selection['scenario_group_ids'];
+        // In scenario mode, the requested count is the number of scenarios;
+        // the session contains every MCQ attached to those scenarios.
+        $totalQuestions = $questions->count();
 
         DB::beginTransaction();
 
@@ -219,6 +211,9 @@ class PracticeSessionController extends Controller
                 'question_type' => 'mcq',
                 'time_limit_minutes' => $session->time_limit_minutes,
                 'total_questions' => $session->total_questions,
+                'requested_questions' => $requestedQuestions,
+                'total_scenarios' => count($scenarioGroupIds),
+                'scenario_group_ids' => $scenarioGroupIds,
                 'unit_ids' => array_values($unitIds),
                 'question_ids' => $questions->pluck('id')->values(),
                 'status' => $session->status,

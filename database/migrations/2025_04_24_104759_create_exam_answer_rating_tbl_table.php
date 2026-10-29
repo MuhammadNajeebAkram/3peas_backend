@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('exam_answer_rating_tbl', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('question_id');
-            $table->unsignedBigInteger('answer_id');
-            $table->tinyInteger('rating')->unsigned()->checkBetween(1, 3);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('exam_answer_rating_tbl')) {
+            Schema::create('exam_answer_rating_tbl', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedBigInteger('question_id');
+                $table->unsignedBigInteger('answer_id');
+                $table->tinyInteger('rating')->unsigned()->checkBetween(1, 3);
+                $table->timestamps();
+            });
+        }
     }
 
     /**

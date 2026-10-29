@@ -8,6 +8,7 @@ use App\Http\Services\AwsUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -622,6 +623,8 @@ class QuestionsController extends Controller
                     'q.difficulty',
                     'q.marks',
                     'q.status',
+                    'q.source',
+                    'q.ai_question_generation_id',
                     'q.reviewed_by',
                     'q.reviewed_at',
                     'q.explanation',
@@ -660,6 +663,7 @@ class QuestionsController extends Controller
 
             $applyFilter('q.topic_id', $request->input('topic_id'));
             $applyFilter('q.status', $request->input('status'));
+            $applyFilter('q.source', $request->input('source'));
             $applyFilter('q.question_type', $request->input('question_type'));
             $applyFilter('q.cognitive_domain', $request->input('cognitive_domain'));
             $applyFilter('q.topic_content', $request->input('topic_content'));
@@ -1172,13 +1176,15 @@ class QuestionsController extends Controller
                 'question_um' => $request -> question_um,
                 'topic_id' => $request -> topic_id,
                 'question_type' => $request -> question_type,
-                'exercise_question' => $request -> exercise_question,
-                'marks' => $request -> marks,
+                'exercise_question' => $request->has('exercise_question') ? ($request->exercise_question ? 1 : 0) : 0,
+                'marks' => $request->marks !== null && $request->marks !== ''
+                    ? round((float) $request->marks, 2)
+                    : ($request->is_mcq ? 1.00 : 3.00),
                 'difficulty' => $request->difficulty ?? 3,
-                'question_lang' => $request->question_lang,
-                'question_um_lang' => $request->question_um_lang,
-                'cognitive_domain' => $request->cognitive_domain,
-                'topic_content' => $request -> topic_content,
+                'question_lang' => $request->has('question_lang') ? ($request->question_lang ? 1 : 0) : 0,
+                'question_um_lang' => $request->has('question_um_lang') ? ($request->question_um_lang ? 1 : 0) : 1,
+                'cognitive_domain' => $request->cognitive_domain ?? 1,
+                'topic_content' => $request->topic_content ?? 1,
                 'status' => $status,
                 'reviewed_by' => $reviewedBy,
                 'reviewed_at' => $reviewedAt,
@@ -1188,14 +1194,14 @@ class QuestionsController extends Controller
                 'book_id' => $request->book_id,
                 'unit_id' => $request->unit_id,
                 'activate' => $request->has('activate')
-                    ? $request->activate
-                    : ($status !== 'archived'),
-                'is_mcq' => $request -> is_mcq,
-                'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
+                    ? ($request->activate ? 1 : 0)
+                    : ($status !== 'archived' ? 1 : 0),
+                'is_mcq' => $request -> is_mcq ? 1 : 0,
+                'has_diagram' => $request->has('has_diagram') ? ($request->has_diagram ? 1 : 0) : 0,
                 'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
                 'scenario_group_id' => $scenarioData['scenario_group_id'],
-                'scenario_question_order' => $scenarioData['scenario_question_order'],
-                'is_alp_question' => $request->is_alp_question,
+                'scenario_question_order' => $scenarioData['scenario_question_order'] ?? 0,
+                'is_alp_question' => $request->has('is_alp_question') ? ($request->is_alp_question ? 1 : 0) : 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
 
@@ -1218,8 +1224,8 @@ class QuestionsController extends Controller
                     'question_id' => $question,
                     'answer' => $request -> answer,
                     'answer_um' => $request -> answer_um,                    
-                    'answer_lang' => $request->answer_lang,
-                    'answer_um_lang' => $request->answer_um_lang,
+                    'answer_lang' => $request->answer_lang ?? 0,
+                    'answer_um_lang' => $request->answer_um_lang ?? 1,
                     'created_at' => now(),
                     'updated_at' => now(), 
                 ], $userId));
@@ -1295,6 +1301,557 @@ class QuestionsController extends Controller
         }
     }
 
+    public function validateImportPackage(Request $request)
+    {
+        $request->validate([
+            'package' => ['nullable', 'file', 'max:25600'], // max 25MB
+            'json_content' => ['nullable', 'string', 'max:2000000'],
+        ]);
+
+        try {
+            $questions = [];
+            $stimulus = null;
+            $archiveImages = [];
+
+            if ($request->hasFile('package')) {
+                $zipFile = $request->file('package');
+                $zip = new \ZipArchive();
+                $res = $zip->open($zipFile->getRealPath());
+
+                if ($res !== true) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unable to open ZIP archive. Please ensure it is a valid zip file.',
+                    ], 422);
+                }
+
+                $jsonFileContent = null;
+
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $entryName = $zip->getNameIndex($i);
+
+                    // Path traversal protection
+                    if (
+                        str_contains($entryName, '..')
+                        || str_starts_with($entryName, '/')
+                        || str_starts_with($entryName, '\\')
+                        || str_contains($entryName, "\0")
+                    ) {
+                        $zip->close();
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Unsafe entry path detected in archive: {$entryName}",
+                        ], 422);
+                    }
+
+                    // Ignore macOS / hidden metadata files
+                    if (str_contains($entryName, '__MACOSX') || basename($entryName) === '.DS_Store' || str_starts_with(basename($entryName), '._')) {
+                        continue;
+                    }
+
+                    if (basename($entryName) === 'questions.json') {
+                        $jsonFileContent = $zip->getFromIndex($i);
+                    } elseif (preg_match('/\.(png|jpe?g|webp|gif|svg)$/i', $entryName)) {
+                        $archiveImages[] = $entryName;
+                    }
+                }
+
+                $zip->close();
+
+                if (!$jsonFileContent) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Archive must contain a 'questions.json' file.",
+                    ], 422);
+                }
+
+                $decoded = json_decode($jsonFileContent, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Malformed questions.json: ' . json_last_error_msg(),
+                    ], 422);
+                }
+
+                if (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
+                    $questions = $decoded['questions'];
+                    $stimulus = $decoded['stimulus'] ?? $decoded['scenario'] ?? null;
+                } elseif (is_array($decoded) && array_is_list($decoded)) {
+                    $questions = $decoded;
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'questions.json must contain an array of questions or an object with a "questions" array.',
+                    ], 422);
+                }
+            } elseif ($request->filled('json_content')) {
+                $decoded = json_decode($request->json_content, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Malformed JSON: ' . json_last_error_msg(),
+                    ], 422);
+                }
+
+                if (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
+                    $questions = $decoded['questions'];
+                    $stimulus = $decoded['stimulus'] ?? $decoded['scenario'] ?? null;
+                } elseif (is_array($decoded) && array_is_list($decoded)) {
+                    $questions = $decoded;
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'JSON must be an array of questions or an object with a "questions" array.',
+                    ], 422);
+                }
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Either a package ZIP file or json_content is required.',
+                ], 422);
+            }
+
+            if (empty($questions)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The questions list cannot be empty.',
+                ], 422);
+            }
+
+            if (count($questions) > 100) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A single import package may contain at most 100 questions.',
+                ], 422);
+            }
+
+            // Extract relative image references
+            $referencedImages = [];
+            $collectImageRefs = function ($text) use (&$referencedImages) {
+                if (!is_string($text) || empty($text)) return;
+                if (preg_match_all('/(?:src=["\']|[\'"\s(])(images\/[a-zA-Z0-9_\-\.\/]+)(?:["\'\s)]|$)/i', $text, $matches)) {
+                    foreach ($matches[1] as $ref) {
+                        $referencedImages[] = trim($ref);
+                    }
+                } elseif (preg_match('/^images\/[a-zA-Z0-9_\-\.\/]+$/i', trim($text))) {
+                    $referencedImages[] = trim($text);
+                }
+            };
+
+            foreach ($questions as $q) {
+                $collectImageRefs($q['question'] ?? null);
+                $collectImageRefs($q['question_um'] ?? null);
+                $collectImageRefs($q['explanation'] ?? null);
+                $collectImageRefs($q['explanation_um'] ?? null);
+                $collectImageRefs($q['diagram'] ?? null);
+                $collectImageRefs($q['diagram_url'] ?? null);
+                $collectImageRefs($q['image'] ?? null);
+                $collectImageRefs($q['question_diagram'] ?? null);
+                if (!empty($q['options']) && is_array($q['options'])) {
+                    foreach ($q['options'] as $opt) {
+                        if (is_array($opt)) {
+                            $collectImageRefs($opt['text'] ?? null);
+                            $collectImageRefs($opt['option'] ?? null);
+                            $collectImageRefs($opt['image'] ?? null);
+                        }
+                    }
+                }
+            }
+
+            if ($stimulus) {
+                $collectImageRefs($stimulus['passage'] ?? null);
+                $collectImageRefs($stimulus['scenario_text'] ?? null);
+                $collectImageRefs($stimulus['diagram_url'] ?? null);
+                $collectImageRefs($stimulus['scenario_image'] ?? null);
+                $collectImageRefs($stimulus['image_url'] ?? null);
+            }
+
+            $referencedImages = array_values(array_unique($referencedImages));
+            $cleanArchiveImages = array_values(array_unique(array_map(fn ($img) => ltrim(str_replace('\\', '/', $img), './'), $archiveImages)));
+
+            $missingImages = [];
+            foreach ($referencedImages as $ref) {
+                $cleanRef = ltrim(str_replace('\\', '/', $ref), './');
+                if (!in_array($cleanRef, $cleanArchiveImages, true)) {
+                    $missingImages[] = $ref;
+                }
+            }
+
+            $unusedImages = [];
+            foreach ($cleanArchiveImages as $archImg) {
+                if (!in_array($archImg, $referencedImages, true) && !in_array('images/' . basename($archImg), $referencedImages, true)) {
+                    $unusedImages[] = $archImg;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'valid' => empty($missingImages),
+                'question_count' => count($questions),
+                'images_count' => count($archiveImages),
+                'referenced_images' => $referencedImages,
+                'missing_images' => $missingImages,
+                'unused_images' => $unusedImages,
+                'has_stimulus' => !empty($stimulus),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Package validation error: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function bulkImportQuestions(Request $request)
+    {
+        $validated = $request->validate([
+            'questions' => ['required', 'array', 'min:1', 'max:100'],
+            'book_id' => ['nullable', 'integer', 'exists:book_tbl,id'],
+            'unit_id' => ['nullable', 'integer', 'exists:book_unit_tbl,id'],
+            'topic_id' => ['nullable', 'integer', 'exists:book_unit_topic_tbl,id'],
+            'default_marks' => ['nullable', 'numeric', 'min:0.1', 'max:100'],
+            'default_status' => ['nullable', 'string', 'in:draft,published,under_review,archived'],
+            'default_presentation_type_id' => ['nullable', 'integer'],
+            'question_presentation_type_id' => ['nullable', 'integer'],
+            'auto_create_topics' => ['nullable', 'boolean'],
+            'stimulus' => ['nullable', 'array'],
+            'scenario' => ['nullable', 'array'],
+            'scenarios' => ['nullable', 'array'],
+            'import_batch_id' => ['nullable', 'string', 'max:128'],
+        ]);
+
+        $defaultBookId = $validated['book_id'] ?? null;
+        $defaultUnitId = $validated['unit_id'] ?? null;
+        $defaultTopicId = $validated['topic_id'] ?? null;
+        $defaultMarks = isset($validated['default_marks']) && is_numeric($validated['default_marks'])
+            ? (float) $validated['default_marks']
+            : null;
+        $defaultStatus = $validated['default_status'] ?? 'draft';
+        $defaultPresentationTypeId = !empty($validated['default_presentation_type_id'])
+            ? (int) $validated['default_presentation_type_id']
+            : (!empty($validated['question_presentation_type_id']) ? (int) $validated['question_presentation_type_id'] : null);
+        $autoCreateTopics = $request->boolean('auto_create_topics', true);
+        $userId = $this->authenticatedUserId($request);
+
+        // Resolve or create Stimulus / Scenario Group(s)
+        $defaultPassagePresTypeId = DB::table('question_presentation_type_tbl')
+            ->where('activate', 1)
+            ->where('allows_multiple_mcqs', 1)
+            ->value('id') ?? 1;
+
+        $createdScenarioGroupsMap = [];
+
+        $resolveScenarioGroup = function ($stimData, $groupKey) use (
+            &$createdScenarioGroupsMap,
+            $defaultPresentationTypeId,
+            $defaultPassagePresTypeId,
+            $defaultBookId,
+            $defaultUnitId,
+            $defaultTopicId,
+            $userId
+        ) {
+            if (empty($stimData) || !is_array($stimData)) {
+                return null;
+            }
+
+            if (!empty($stimData['scenario_group_id'])) {
+                return (int) $stimData['scenario_group_id'];
+            }
+
+            if (isset($createdScenarioGroupsMap[$groupKey])) {
+                return $createdScenarioGroupsMap[$groupKey];
+            }
+
+            $scenarioText = $stimData['scenario_text'] ?? $stimData['passage'] ?? '';
+            $scenarioTitle = $stimData['title'] ?? ('Imported Scenario ' . now()->format('Y-m-d H:i'));
+
+            if (empty($scenarioText) && empty($scenarioTitle)) {
+                return null;
+            }
+
+            $presTypeId = $stimData['question_presentation_type_id']
+                ?? $defaultPresentationTypeId
+                ?? $defaultPassagePresTypeId;
+
+            $newGroupId = DB::table('question_scenario_groups_tbl')->insertGetId($this->withAuditColumns('question_scenario_groups_tbl', [
+                'title' => $scenarioTitle,
+                'scenario_text' => $scenarioText,
+                'scenario_text_um' => $stimData['scenario_text_um'] ?? $stimData['passage_um'] ?? null,
+                'scenario_image' => $stimData['scenario_image'] ?? $stimData['diagram_url'] ?? $stimData['image_url'] ?? null,
+                'question_presentation_type_id' => $presTypeId,
+                'topic_id' => $defaultTopicId,
+                'unit_id' => $defaultUnitId,
+                'book_id' => $defaultBookId,
+                'activate' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $userId));
+
+            $createdScenarioGroupsMap[$groupKey] = $newGroupId;
+            return $newGroupId;
+        };
+
+        // If top-level single stimulus is present
+        $singleStimulus = $request->input('stimulus') ?: $request->input('scenario');
+        $singleScenarioGroupId = null;
+        if ($singleStimulus && is_array($singleStimulus)) {
+            $singleScenarioGroupId = $resolveScenarioGroup($singleStimulus, 'root_stimulus');
+        }
+
+        // If scenarios array was passed
+        $scenariosInput = $request->input('scenarios');
+        if (is_array($scenariosInput)) {
+            foreach ($scenariosInput as $scIdx => $scItem) {
+                $scData = $scItem['stimulus'] ?? $scItem;
+                $resolveScenarioGroup($scData, 'sc_' . $scIdx);
+            }
+        }
+
+        $results = [];
+        $importedCount = 0;
+        $failedCount = 0;
+        $createdTopicsMap = [];
+        $newlyCreatedTopicNames = [];
+
+        foreach ($request->questions as $index => $qData) {
+            try {
+                if (empty($qData['question']) && empty($qData['question_um'])) {
+                    throw new \InvalidArgumentException('Question statement cannot be empty.');
+                }
+
+                // Idempotency check: if client_id was provided, check if already imported in this session
+                $clientId = !empty($qData['client_id']) ? (string) $qData['client_id'] : null;
+                if ($clientId) {
+                    $cacheKey = 'bulk_q_import_' . $userId . '_' . md5($clientId);
+                    $existingQuestionId = Cache::get($cacheKey);
+                    if ($existingQuestionId && DB::table('exam_question_tbl')->where('id', $existingQuestionId)->exists()) {
+                        $importedCount++;
+                        $results[] = [
+                            'index' => $index,
+                            'status' => 'success',
+                            'question_id' => (int) $existingQuestionId,
+                            'already_imported' => true,
+                        ];
+                        continue;
+                    }
+                }
+
+                $bookId = !empty($qData['book_id']) ? (int) $qData['book_id'] : $defaultBookId;
+                $unitId = !empty($qData['unit_id']) ? (int) $qData['unit_id'] : $defaultUnitId;
+                $rawTopicName = trim((string) ($qData['new_topic_name'] ?? $qData['topic_name'] ?? $qData['topic'] ?? ''));
+                $topicId = !empty($qData['topic_id']) ? (int) $qData['topic_id'] : null;
+
+                if (!empty($rawTopicName) && $unitId) {
+                    $normName = strtolower($rawTopicName);
+
+                    if (isset($createdTopicsMap[$normName])) {
+                        $topicId = $createdTopicsMap[$normName];
+                    } else {
+                        $existingTopic = DB::table('book_unit_topic_tbl')
+                            ->where('unit_id', $unitId)
+                            ->where(function ($query) use ($rawTopicName, $normName) {
+                                $query->where('topic_name', $rawTopicName)
+                                      ->orWhereRaw('LOWER(topic_name) = ?', [$normName]);
+                            })
+                            ->first();
+
+                        if ($existingTopic) {
+                            $topicId = $existingTopic->id;
+                            $createdTopicsMap[$normName] = $topicId;
+                        } elseif ($autoCreateTopics) {
+                            $maxTopicNo = (int) (DB::table('book_unit_topic_tbl')
+                                ->where('unit_id', $unitId)
+                                ->max('topic_no') ?? 0);
+
+                            $newTopicId = DB::table('book_unit_topic_tbl')->insertGetId([
+                                'unit_id' => $unitId,
+                                'topic_name' => $rawTopicName,
+                                'topic_name_um' => $qData['topic_name_um'] ?? null,
+                                'topic_no' => $maxTopicNo + 1,
+                                'slo_no' => null,
+                                'activate' => 1,
+                                'is_alp' => 1,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+
+                            $topicId = $newTopicId;
+                            $createdTopicsMap[$normName] = $newTopicId;
+                            $newlyCreatedTopicNames[] = $rawTopicName;
+                        }
+                    }
+                }
+
+                if (!$topicId) {
+                    $topicId = $defaultTopicId;
+                }
+
+                $isMcq = (!empty($qData['options']) && is_array($qData['options']) && count($qData['options']) >= 2)
+                    || (!empty($qData['is_mcq']) && $qData['is_mcq'] !== 'false' && $qData['is_mcq'] !== 0)
+                    || ((int) ($qData['question_type'] ?? 0) === 1 && !empty($qData['options']));
+
+                $isStimulus = !empty($qData['scenario_group_id'])
+                    || isset($qData['scenario_group_index'])
+                    || !empty($qData['stimulus'])
+                    || !empty($singleScenarioGroupId);
+
+                $defaultQuestionMarks = $defaultMarks !== null
+                    ? (float) $defaultMarks
+                    : ($isMcq ? ($isStimulus ? 0.5 : 1.0) : 3.0);
+
+                $resolvedMarks = isset($qData['marks']) && is_numeric($qData['marks'])
+                    ? round((float) $qData['marks'], 2)
+                    : $defaultQuestionMarks;
+
+                // If stimulus MCQ and defaultMarks is omitted, ensure it defaults to 0.5 even if raw marks was 1
+                if ($isStimulus && $isMcq && $defaultMarks === null && isset($qData['marks']) && (float) $qData['marks'] === 1.0) {
+                    $resolvedMarks = 0.5;
+                }
+
+                $subData = array_merge($qData, [
+                    'book_id' => $bookId,
+                    'unit_id' => $unitId,
+                    'topic_id' => $topicId,
+                    'status' => $qData['status'] ?? $defaultStatus,
+                    'is_mcq' => $isMcq ? 1 : 0,
+                    'question_type' => $qData['question_type'] ?? ($isMcq ? 1 : 2),
+                    'exercise_question' => !empty($qData['exercise_question']) ? 1 : 0,
+                    'is_alp_question' => isset($qData['is_alp_question']) ? ($qData['is_alp_question'] ? 1 : 0) : 1,
+                    'marks' => $resolvedMarks,
+                    'difficulty' => !empty($qData['difficulty']) ? (int) $qData['difficulty'] : 3,
+                    'cognitive_domain' => !empty($qData['cognitive_domain']) ? (int) $qData['cognitive_domain'] : 1,
+                    'topic_content' => !empty($qData['topic_content']) ? (int) $qData['topic_content'] : ($isMcq ? 1 : 2),
+                    'question_lang' => !empty($qData['question_lang']) ? 1 : 0,
+                    'question_um_lang' => isset($qData['question_um_lang']) ? ($qData['question_um_lang'] ? 1 : 0) : 1,
+                ]);
+
+                $qPresTypeId = !empty($qData['question_presentation_type_id'])
+                    ? (int) $qData['question_presentation_type_id']
+                    : $defaultPresentationTypeId;
+
+                if ($qPresTypeId) {
+                    $subData['question_presentation_type_id'] = $qPresTypeId;
+                }
+
+                // Attach stimulus / scenario group if present
+                $qScenarioGroupId = null;
+                if (!empty($qData['scenario_group_id'])) {
+                    $qScenarioGroupId = (int) $qData['scenario_group_id'];
+                } elseif (isset($qData['scenario_group_index']) && isset($createdScenarioGroupsMap['sc_' . $qData['scenario_group_index']])) {
+                    $qScenarioGroupId = $createdScenarioGroupsMap['sc_' . $qData['scenario_group_index']];
+                } elseif (!empty($qData['stimulus']) && is_array($qData['stimulus'])) {
+                    $scKey = 'q_stimulus_' . md5($qData['stimulus']['title'] ?? $qData['stimulus']['passage'] ?? (string) $index);
+                    $qScenarioGroupId = $resolveScenarioGroup($qData['stimulus'], $scKey);
+                } elseif ($singleScenarioGroupId) {
+                    $qScenarioGroupId = $singleScenarioGroupId;
+                }
+
+                if ($qScenarioGroupId) {
+                    $subData['scenario_group_id'] = $qScenarioGroupId;
+                    $subData['scenario_question_order'] = $qData['scenario_question_order'] ?? ($index + 1);
+                    if ($presentationTypeId = $subData['question_presentation_type_id'] ?? $defaultPresentationTypeId ?? $defaultPassagePresTypeId) {
+                        $subData['question_presentation_type_id'] = $presentationTypeId;
+                    }
+
+                    if ($topicId) {
+                        DB::table('question_scenario_groups_tbl')
+                            ->where('id', $qScenarioGroupId)
+                            ->where(function ($q) use ($defaultTopicId) {
+                                $q->whereNull('topic_id');
+                                if ($defaultTopicId) {
+                                    $q->orWhere('topic_id', $defaultTopicId);
+                                }
+                            })
+                            ->update(['topic_id' => $topicId]);
+                    }
+                }
+
+                // Set diagram flag
+                if (!empty($qData['diagram']) || !empty($qData['diagram_url']) || !empty($qData['question_diagram']) || preg_match('/<img/i', (string) ($qData['question'] ?? ''))) {
+                    $subData['has_diagram'] = 1;
+                }
+
+                // Model answer for non-MCQ
+                if (!$isMcq && (!empty($qData['answer']) || !empty($qData['answer_um']))) {
+                    $subData['answer'] = $qData['answer'] ?? '';
+                    $subData['answer_um'] = $qData['answer_um'] ?? null;
+                }
+
+                // Normalize options
+                if (!empty($subData['options']) && is_array($subData['options'])) {
+                    $formattedOptions = [];
+                    foreach ($subData['options'] as $opt) {
+                        if (is_string($opt)) {
+                            $formattedOptions[] = [
+                                'text' => $opt,
+                                'text_um' => null,
+                                'is_correct' => false,
+                            ];
+                        } elseif (is_array($opt)) {
+                            $formattedOptions[] = [
+                                'text' => $opt['text'] ?? $opt['option'] ?? '',
+                                'text_um' => $opt['text_um'] ?? $opt['option_um'] ?? null,
+                                'is_correct' => !empty($opt['is_correct']) || !empty($opt['is_answer']),
+                            ];
+                        }
+                    }
+                    $subData['options'] = $formattedOptions;
+                }
+
+                $subRequest = new Request();
+                $subRequest->merge($subData);
+                $subRequest->setUserResolver(fn () => $request->user());
+
+                $res = $this->saveQuestion($subRequest);
+                $resData = $res->getData(true);
+
+                if (!empty($resData['success']) && !empty($resData['question_id'])) {
+                    if (Schema::hasColumn('exam_question_tbl', 'source')) {
+                        DB::table('exam_question_tbl')
+                            ->where('id', $resData['question_id'])
+                            ->update(['source' => 'import']);
+                    }
+                    if ($clientId) {
+                        Cache::put('bulk_q_import_' . $userId . '_' . md5($clientId), $resData['question_id'], now()->addHours(6));
+                    }
+                    $importedCount++;
+                    $results[] = [
+                        'index' => $index,
+                        'status' => 'success',
+                        'question_id' => $resData['question_id'],
+                    ];
+                } else {
+                    $failedCount++;
+                    $results[] = [
+                        'index' => $index,
+                        'status' => 'failed',
+                        'error' => !empty($resData['error']) ? $resData['error'] : ($resData['message'] ?? 'Question could not be saved.'),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $failedCount++;
+                $results[] = [
+                    'index' => $index,
+                    'status' => 'failed',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        $uniqueCreatedTopics = array_values(array_unique($newlyCreatedTopicNames));
+
+        return response()->json([
+            'success' => $importedCount > 0,
+            'message' => "Import completed: {$importedCount} saved, {$failedCount} failed." . (count($uniqueCreatedTopics) > 0 ? " (" . count($uniqueCreatedTopics) . " new topic(s) created)" : ""),
+            'total' => count($request->questions),
+            'imported' => $importedCount,
+            'failed' => $failedCount,
+            'created_topics' => $uniqueCreatedTopics,
+            'scenario_group_id' => $singleScenarioGroupId ?? (!empty($createdScenarioGroupsMap) ? reset($createdScenarioGroupsMap) : null),
+            'results' => $results,
+        ]);
+    }
+
     public function updateQuestion(Request $request){
         try {
             $existingContext = $this->questionContextById($request->id);
@@ -1351,13 +1908,13 @@ class QuestionsController extends Controller
                     'question_um' => $request->question_um,
                     'topic_id' => $request->topic_id,
                     'question_type' => $request->question_type,
-                    'exercise_question' => $request->exercise_question,
-                    'marks' => $request -> marks,
-                    'difficulty' => $request->difficulty ?? 3,
-                    'question_lang' => $request->question_lang,
-                    'question_um_lang' => $request->question_um_lang,
-                    'cognitive_domain' => $request->cognitive_domain,
-                    'topic_content' => $request -> topic_content,
+                    'exercise_question' => $request->has('exercise_question') ? ($request->exercise_question ? 1 : 0) : ($existingQuestion->exercise_question ?? 0),
+                    'marks' => $request->marks !== null && $request->marks !== '' ? round((float) $request->marks, 2) : ($existingQuestion->marks ?? 1.00),
+                    'difficulty' => $request->difficulty ?? ($existingQuestion->difficulty ?? 3),
+                    'question_lang' => $request->has('question_lang') ? ($request->question_lang ? 1 : 0) : ($existingQuestion->question_lang ?? 0),
+                    'question_um_lang' => $request->has('question_um_lang') ? ($request->question_um_lang ? 1 : 0) : ($existingQuestion->question_um_lang ?? 1),
+                    'cognitive_domain' => $request->cognitive_domain ?? ($existingQuestion->cognitive_domain ?? 1),
+                    'topic_content' => $request->topic_content ?? ($existingQuestion->topic_content ?? 1),
                     'status' => $status,
                     'reviewed_by' => $reviewedBy,
                     'reviewed_at' => $reviewedAt,
@@ -1367,15 +1924,15 @@ class QuestionsController extends Controller
                     'book_id' => $request->book_id,
                     'unit_id' => $request->unit_id,
                     'activate' => $request->has('activate')
-                        ? $request->activate
-                        : ($status !== 'archived'),
-                    'is_mcq' => $request -> is_mcq,
-                    'has_diagram' => $request->has('has_diagram') ? $request->has_diagram : 0,
+                        ? ($request->activate ? 1 : 0)
+                        : ($status !== 'archived' ? 1 : 0),
+                    'is_mcq' => $request->is_mcq ? 1 : 0,
+                    'has_diagram' => $request->has('has_diagram') ? ($request->has_diagram ? 1 : 0) : 0,
                     'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
                     'scenario_group_id' => $scenarioData['scenario_group_id'],
-                    'scenario_question_order' => $scenarioData['scenario_question_order'],
+                    'scenario_question_order' => $scenarioData['scenario_question_order'] ?? 0,
                     'updated_at' => now(),
-                    'is_alp_question' => $request->is_alp_question,
+                    'is_alp_question' => $request->has('is_alp_question') ? ($request->is_alp_question ? 1 : 0) : ($existingQuestion->is_alp_question ?? 1),
                 ], $userId, false));
 
                
@@ -1941,9 +2498,8 @@ if ($existingRecord) {
             ];
         }
 
-        if (! $this->isMcqQuestionRequest($request)) {
-            throw new \InvalidArgumentException('Only MCQ questions can be attached to a scenario group.');
-        }
+        // Both MCQs and subjective / short questions can be attached to scenario groups
+        $isMcq = $this->isMcqQuestionRequest($request);
 
         $scenarioGroup = DB::table('question_scenario_groups_tbl as scenario_groups')
             ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id')
@@ -2158,7 +2714,7 @@ if ($existingRecord) {
     {
         $user = $request->user() ?: auth()->user();
 
-        if (!$user || !$user->role_id) {
+        if (!$user || empty($user->role_id)) {
             return collect();
         }
 

@@ -24,7 +24,7 @@ class AiQuestionGenerationController extends Controller
             'count' => ['required', 'integer', 'between:1,'.config('ai_questions.max_questions')],
             'language' => ['required', Rule::in(['en', 'ur', 'both'])],
             'difficulty' => ['sometimes', 'integer', 'between:1,5'],
-            'marks' => ['sometimes', 'integer', 'between:1,100'],
+            'marks' => ['sometimes', 'numeric', 'min:0.01', 'max:9999.99', 'decimal:0,2'],
             'cognitive_domain' => ['sometimes', 'integer', 'exists:cognitive_domain_tbl,id'],
             'topic_content' => ['sometimes', 'nullable', 'integer', 'exists:topic_content_type_tbl,id'],
             'ai_provider_id' => ['sometimes', 'nullable', 'integer', 'exists:ai_providers,id'],

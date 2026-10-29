@@ -13,7 +13,11 @@ class SuperAdminRoleSeeder extends Seeder
      */
     public function run(): void
     {
-        $role = Role::firstOrCreate(['name' => 'super_admin', 'display_name' => 'Super Admin']);
+        $role = Role::firstOrCreate(['name' => 'super_admin'], ['display_name' => 'Super Admin']);
+        if (!$role->display_name) {
+            $role->display_name = 'Super Admin';
+            $role->save();
+        }
 
         $role->permissions()->sync(
             Permission::query()->pluck('id')->all()

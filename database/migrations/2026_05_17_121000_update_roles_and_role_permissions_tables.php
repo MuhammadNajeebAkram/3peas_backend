@@ -32,9 +32,11 @@ return new class extends Migration
                         ->delete();
                 });
 
-            Schema::table('role_permissions', function (Blueprint $table) {
-                $table->unique(['role_id', 'permission_id'], 'role_permissions_role_id_permission_id_unique');
-            });
+            try {
+                Schema::table('role_permissions', function (Blueprint $table) {
+                    $table->unique(['role_id', 'permission_id'], 'role_permissions_role_id_permission_id_unique');
+                });
+            } catch (\Throwable $e) {}
         }
     }
 

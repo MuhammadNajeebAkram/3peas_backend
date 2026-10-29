@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('study_group_tbl', function (Blueprint $table) {
-            //
-            $table->unique(['name', 'class_id', 'curriculum_board_id'], 'unique_name_class_curriculum');
-        });
+        try {
+            Schema::table('study_group_tbl', function (Blueprint $table) {
+                $table->unique(['name', 'class_id', 'curriculum_board_id'], 'unique_name_class_curriculum');
+            });
+        } catch (\Throwable $e) {
+            // already exists
+        }
     }
 
     /**

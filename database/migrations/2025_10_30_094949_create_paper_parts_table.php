@@ -11,6 +11,22 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('model_papers')) {
+            Schema::create('model_papers', function (Blueprint $table) {
+                $table->id();
+                $table->string('title');
+                $table->string('total_marks');
+                $table->string('time_allowed');
+                $table->text('instructions')->nullable();
+                $table->foreignId('class_id')->constrained('class_tbl')->onDelete('cascade');
+                $table->foreignId('subject_id')->constrained('subject_tbl')->onDelete('cascade'); 
+                $table->boolean('activate')->default(1);
+                $table->boolean('urdu_lang')->default(0);
+                $table->integer('total_questions')->default(1);
+                $table->timestamps();
+            });
+        }
+
         Schema::create('paper_parts', function (Blueprint $table) {
             $table->id();            
             $table->string('name');

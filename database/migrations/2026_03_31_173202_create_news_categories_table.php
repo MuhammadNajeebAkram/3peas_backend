@@ -11,17 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('news_categories', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('slug')->unique();
-            $table->string('description')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->integer('display_order')->default(0);
-            $table->foreignId('created_by')->constrained('users')->noActionOnDelete();
-            $table->foreignId('updated_by')->nullable()->constrained('users')->noActionOnDelete();
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('news_categories')) {
+            Schema::create('news_categories', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->string('slug')->unique();
+                $table->string('description')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->integer('display_order')->default(0);
+                $table->foreignId('created_by')->constrained('users')->noActionOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->noActionOnDelete();
+                $table->timestamps();
+            });
+        }
     }
 
     /**

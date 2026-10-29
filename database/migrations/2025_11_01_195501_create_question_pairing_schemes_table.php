@@ -13,10 +13,14 @@ return new class extends Migration
     {
         Schema::create('question_pairing_schemes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('sub_section_id')->constrained('paper_question_section_sub_sections')->onDelete('cascade');
+            $table->unsignedBigInteger('sub_section_id');
             $table->foreignId('unit_id')->constrained('book_unit_tbl')->onDelete('cascade');
             $table->integer('no_of_questions')->default(0);
             $table->timestamps();
+
+            if (Schema::hasTable('paper_question_section_sub_sections')) {
+                $table->foreign('sub_section_id')->references('id')->on('paper_question_section_sub_sections')->onDelete('cascade');
+            }
         });
     }
 

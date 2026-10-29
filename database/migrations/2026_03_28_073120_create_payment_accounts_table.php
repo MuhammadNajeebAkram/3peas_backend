@@ -11,25 +11,27 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_accounts', function (Blueprint $table) {
-            $table->id();
-            $table->string('title');
-            $table->enum('method', ['jazzcash', 'bank_deposit', 'cash']);
-            $table->string('account_title')->nullable();
-            $table->string('account_number')->nullable();
-            $table->string('iban')->nullable();
-            $table->string('bank_name')->nullable();
-            $table->string('branch_name')->nullable();
-            $table->string('branch_city')->nullable();
+        if (!Schema::hasTable('payment_accounts')) {
+            Schema::create('payment_accounts', function (Blueprint $table) {
+                $table->id();
+                $table->string('title');
+                $table->enum('method', ['jazzcash', 'bank_deposit', 'cash']);
+                $table->string('account_title')->nullable();
+                $table->string('account_number')->nullable();
+                $table->string('iban')->nullable();
+                $table->string('bank_name')->nullable();
+                $table->string('branch_name')->nullable();
+                $table->string('branch_city')->nullable();
 
-            $table->text('instructions')->nullable();
+                $table->text('instructions')->nullable();
 
-            $table->boolean('is_active')->default(true);
-            $table->integer('display_order')->default(0);
-            $table->timestamps();
+                $table->boolean('is_active')->default(true);
+                $table->integer('display_order')->default(0);
+                $table->timestamps();
 
-            $table->index(['method', 'is_active']);
-        });
+                $table->index(['method', 'is_active']);
+            });
+        }
     }
 
     /**

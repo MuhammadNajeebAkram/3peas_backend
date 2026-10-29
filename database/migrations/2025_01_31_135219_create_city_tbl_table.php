@@ -11,12 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('city_tbl', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->boolean('activate')->default(true);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('city_tbl')) {
+            Schema::create('city_tbl', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->boolean('activate')->default(true);
+                $table->timestamps();
+            });
+        }
     }
 
     /**

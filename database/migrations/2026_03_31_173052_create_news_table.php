@@ -11,6 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('news_categories')) {
+            Schema::create('news_categories', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->string('slug')->unique();
+                $table->string('description')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->integer('display_order')->default(0);
+                $table->foreignId('created_by')->constrained('users')->noActionOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->noActionOnDelete();
+                $table->timestamps();
+            });
+        }
+
         Schema::create('news', function (Blueprint $table) {
             $table->id();
             $table->foreignId('category_id')->constrained('news_categories')->onDelete('cascade');
@@ -55,6 +69,14 @@ $table->index('display_order');
 $table->index('created_by');
 $table->index('updated_by');
         });
+
+        if (Schema::hasTable('news_tickers')) {
+            try {
+                Schema::table('news_tickers', function (Blueprint $table) {
+                    $table->foreign('news_id')->references('id')->on('news')->onDelete('cascade');
+                });
+            } catch (\Throwable $e) {}
+        }
     }
 
     /**

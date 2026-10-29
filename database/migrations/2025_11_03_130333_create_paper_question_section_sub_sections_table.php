@@ -20,6 +20,14 @@ return new class extends Migration
             $table->boolean('activate')->default(1);
             $table->timestamps();
         });
+
+        if (Schema::hasTable('question_pairing_schemes')) {
+            try {
+                Schema::table('question_pairing_schemes', function (Blueprint $table) {
+                    $table->foreign('sub_section_id')->references('id')->on('paper_question_section_sub_sections')->onDelete('cascade');
+                });
+            } catch (\Throwable $e) {}
+        }
     }
 
     /**

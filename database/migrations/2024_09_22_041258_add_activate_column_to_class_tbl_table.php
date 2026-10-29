@@ -12,8 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('class_tbl', function (Blueprint $table) {
-            //
-            $table->boolean('activate')->default(true)->after('class_name');
+            if (!Schema::hasColumn('class_tbl', 'activate')) {
+                $table->boolean('activate')->default(true)->after('class_name');
+            }
         });
     }
 

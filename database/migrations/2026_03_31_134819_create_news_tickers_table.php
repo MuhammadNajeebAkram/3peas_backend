@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('news_tickers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('news_id')->nullable()->constrained('news')->onDelete('cascade');
+            $table->unsignedBigInteger('news_id')->nullable();
             $table->string('ticker_text');
             $table->string('ticker_link')->nullable();
             $table->boolean('is_active')->default(true);
@@ -23,6 +23,10 @@ return new class extends Migration
             $table->foreignId('created_by')->constrained('users')->noActionOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->noActionOnDelete();
             $table->timestamps();
+
+            if (Schema::hasTable('news')) {
+                $table->foreign('news_id')->references('id')->on('news')->onDelete('cascade');
+            }
         });
     }
 

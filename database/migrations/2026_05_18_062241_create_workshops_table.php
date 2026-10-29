@@ -11,7 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('workshops', function (Blueprint $table) {
+        if (!Schema::hasTable('workshops')) {
+            Schema::create('workshops', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->string('slug')->unique();
@@ -26,7 +27,7 @@ return new class extends Migration
 
             $table->foreignId('institute_id')
                 ->nullable()
-                ->constrained('institutes')
+                ->constrained('institute_tbl')
                 ->nullOnDelete();
 
             $table->string('speaker_name')->nullable();
@@ -79,6 +80,7 @@ return new class extends Migration
             $table->index('registration_deadline', 'wrk_reg_deadline_idx');
             $table->index('created_by', 'wrk_created_by_idx');
         });
+        }
     }
 
     /**

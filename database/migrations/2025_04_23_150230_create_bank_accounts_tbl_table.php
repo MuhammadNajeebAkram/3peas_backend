@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('bank_accounts_tbl', function (Blueprint $table) {
-            $table->id();
-            $table->string('bank_name');
-            $table->string('account_name');
-            $table->string('account_no');
-            $table->boolean('activate')->default(true);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('bank_accounts_tbl')) {
+            Schema::create('bank_accounts_tbl', function (Blueprint $table) {
+                $table->id();
+                $table->string('bank_name');
+                $table->string('account_name');
+                $table->string('account_no');
+                $table->boolean('activate')->default(true);
+                $table->timestamps();
+            });
+        }
     }
 
     /**

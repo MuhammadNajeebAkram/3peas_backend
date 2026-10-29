@@ -341,6 +341,8 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/filter', [QuestionsController::class, 'getQuestionsByFilters'])->middleware('permission:questions.view');
             Route::post('/detail', [QuestionsController::class, 'getQuestionDataById'])->middleware('permission:questions.view');
             Route::post('/save', [QuestionsController::class, 'saveQuestion'])->middleware('permission:questions.create');
+            Route::post('/bulk-import', [QuestionsController::class, 'bulkImportQuestions'])->middleware('permission:questions.create');
+            Route::post('/validate-import-package', [QuestionsController::class, 'validateImportPackage'])->middleware('permission:questions.create');
             Route::post('/update', [QuestionsController::class, 'updateQuestion'])->middleware('permission:questions.update');
             Route::post('/activate', [QuestionsController::class, 'activateQuestion'])->middleware('permission:questions.activate');
             Route::post('/scenario-groups', [QuestionsController::class, 'getQuestionScenarioGroups'])->middleware('permission:questions.view');
