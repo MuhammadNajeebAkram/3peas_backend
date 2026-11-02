@@ -1533,7 +1533,16 @@ class QuestionsController extends Controller
             foreach ($referencedImages as $ref) {
                 $cleanRef = ltrim(str_replace('\\', '/', $ref), './');
                 $refBase = basename($cleanRef);
-                if (!in_array($cleanRef, $cleanArchiveImages, true) && !in_array($refBase, $archiveBasenames, true)) {
+                $matched = in_array($cleanRef, $cleanArchiveImages, true) || in_array($refBase, $archiveBasenames, true);
+                if (!$matched) {
+                    foreach ($cleanArchiveImages as $archImg) {
+                        if (str_ends_with($archImg, '/' . $cleanRef) || str_ends_with($archImg, $cleanRef)) {
+                            $matched = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$matched) {
                     $missingImages[] = $ref;
                 }
             }
@@ -1608,6 +1617,13 @@ class QuestionsController extends Controller
 
         $createdScenarioGroupsMap = [];
 
+        $sanitizeCorruptImageUrl = function ($val) {
+            if (!is_string($val) || empty($val)) {
+                return $val;
+            }
+            return preg_replace('/(?:images\/[a-zA-Z0-9_\-\.\/]*|images\/)(https?:\/\/[^"\'\s>]+)/i', '$1', $val);
+        };
+
         $resolveScenarioGroup = function ($stimData, $groupKey) use (
             &$createdScenarioGroupsMap,
             $defaultPresentationTypeId,
@@ -1615,7 +1631,8 @@ class QuestionsController extends Controller
             $defaultBookId,
             $defaultUnitId,
             $defaultTopicId,
-            $userId
+            $userId,
+            $sanitizeCorruptImageUrl
         ) {
             if (empty($stimData) || !is_array($stimData)) {
                 return null;
@@ -1629,7 +1646,7 @@ class QuestionsController extends Controller
                 return $createdScenarioGroupsMap[$groupKey];
             }
 
-            $scenarioText = $stimData['scenario_text'] ?? $stimData['passage'] ?? '';
+            $scenarioText = $sanitizeCorruptImageUrl($stimData['scenario_text'] ?? $stimData['passage'] ?? '');
             $scenarioTitle = $stimData['title'] ?? ('Imported Scenario ' . now()->format('Y-m-d H:i'));
 
             if (empty($scenarioText) && empty($scenarioTitle)) {
@@ -1643,8 +1660,8 @@ class QuestionsController extends Controller
             $newGroupId = DB::table('question_scenario_groups_tbl')->insertGetId($this->withAuditColumns('question_scenario_groups_tbl', [
                 'title' => $scenarioTitle,
                 'scenario_text' => $scenarioText,
-                'scenario_text_um' => $stimData['scenario_text_um'] ?? $stimData['passage_um'] ?? null,
-                'scenario_image' => $stimData['scenario_image'] ?? $stimData['diagram_url'] ?? $stimData['image_url'] ?? null,
+                'scenario_text_um' => $sanitizeCorruptImageUrl($stimData['scenario_text_um'] ?? $stimData['passage_um'] ?? null),
+                'scenario_image' => $sanitizeCorruptImageUrl($stimData['scenario_image'] ?? $stimData['diagram_url'] ?? $stimData['image_url'] ?? null),
                 'question_presentation_type_id' => $presTypeId,
                 'topic_id' => $defaultTopicId,
                 'unit_id' => $defaultUnitId,
@@ -1856,13 +1873,29 @@ class QuestionsController extends Controller
                             ];
                         } elseif (is_array($opt)) {
                             $formattedOptions[] = [
-                                'text' => $opt['text'] ?? $opt['option'] ?? '',
-                                'text_um' => $opt['text_um'] ?? $opt['option_um'] ?? null,
+                                'text' => $sanitizeCorruptImageUrl($opt['text'] ?? $opt['option'] ?? ''),
+                                'text_um' => $sanitizeCorruptImageUrl($opt['text_um'] ?? $opt['option_um'] ?? null),
                                 'is_correct' => !empty($opt['is_correct']) || !empty($opt['is_answer']),
                             ];
                         }
                     }
                     $subData['options'] = $formattedOptions;
+                }
+
+                if (!empty($subData['question'])) {
+                    $subData['question'] = $sanitizeCorruptImageUrl($subData['question']);
+                }
+                if (!empty($subData['question_um'])) {
+                    $subData['question_um'] = $sanitizeCorruptImageUrl($subData['question_um']);
+                }
+                if (!empty($subData['explanation'])) {
+                    $subData['explanation'] = $sanitizeCorruptImageUrl($subData['explanation']);
+                }
+                if (!empty($subData['explanation_um'])) {
+                    $subData['explanation_um'] = $sanitizeCorruptImageUrl($subData['explanation_um']);
+                }
+                if (!empty($subData['diagram'])) {
+                    $subData['diagram'] = $sanitizeCorruptImageUrl($subData['diagram']);
                 }
 
                 $subRequest = new Request();
