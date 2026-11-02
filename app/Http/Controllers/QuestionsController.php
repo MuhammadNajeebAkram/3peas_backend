@@ -1373,12 +1373,37 @@ class QuestionsController extends Controller
                     ], 422);
                 }
 
-                if (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
-                    $questions = $decoded['questions'];
-                    $stimulus = $decoded['stimulus'] ?? $decoded['scenario'] ?? null;
-                } elseif (is_array($decoded) && array_is_list($decoded)) {
-                    $questions = $decoded;
-                } else {
+                $normalizePackage = function ($decoded) {
+                    $questions = [];
+                    $stimuli = [];
+                    if (is_array($decoded) && isset($decoded['scenarios']) && is_array($decoded['scenarios'])) {
+                        foreach ($decoded['scenarios'] as $sc) {
+                            if (!empty($sc['stimulus'])) $stimuli[] = $sc['stimulus'];
+                            elseif (!empty($sc['scenario'])) $stimuli[] = $sc['scenario'];
+                            if (!empty($sc['questions']) && is_array($sc['questions'])) {
+                                foreach ($sc['questions'] as $q) $questions[] = $q;
+                            }
+                        }
+                    } elseif (is_array($decoded) && array_is_list($decoded) && !empty($decoded[0]['questions'])) {
+                        foreach ($decoded as $sc) {
+                            if (!empty($sc['stimulus'])) $stimuli[] = $sc['stimulus'];
+                            elseif (!empty($sc['scenario'])) $stimuli[] = $sc['scenario'];
+                            if (!empty($sc['questions']) && is_array($sc['questions'])) {
+                                foreach ($sc['questions'] as $q) $questions[] = $q;
+                            }
+                        }
+                    } elseif (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
+                        $questions = $decoded['questions'];
+                        if (!empty($decoded['stimulus'])) $stimuli[] = $decoded['stimulus'];
+                        elseif (!empty($decoded['scenario'])) $stimuli[] = $decoded['scenario'];
+                    } elseif (is_array($decoded) && array_is_list($decoded)) {
+                        $questions = $decoded;
+                    }
+                    return [$questions, $stimuli];
+                };
+
+                [$questions, $allStimuli] = $normalizePackage($decoded);
+                if (empty($questions)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'questions.json must contain an array of questions or an object with a "questions" array.',
@@ -1393,12 +1418,37 @@ class QuestionsController extends Controller
                     ], 422);
                 }
 
-                if (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
-                    $questions = $decoded['questions'];
-                    $stimulus = $decoded['stimulus'] ?? $decoded['scenario'] ?? null;
-                } elseif (is_array($decoded) && array_is_list($decoded)) {
-                    $questions = $decoded;
-                } else {
+                $normalizePackage = function ($decoded) {
+                    $questions = [];
+                    $stimuli = [];
+                    if (is_array($decoded) && isset($decoded['scenarios']) && is_array($decoded['scenarios'])) {
+                        foreach ($decoded['scenarios'] as $sc) {
+                            if (!empty($sc['stimulus'])) $stimuli[] = $sc['stimulus'];
+                            elseif (!empty($sc['scenario'])) $stimuli[] = $sc['scenario'];
+                            if (!empty($sc['questions']) && is_array($sc['questions'])) {
+                                foreach ($sc['questions'] as $q) $questions[] = $q;
+                            }
+                        }
+                    } elseif (is_array($decoded) && array_is_list($decoded) && !empty($decoded[0]['questions'])) {
+                        foreach ($decoded as $sc) {
+                            if (!empty($sc['stimulus'])) $stimuli[] = $sc['stimulus'];
+                            elseif (!empty($sc['scenario'])) $stimuli[] = $sc['scenario'];
+                            if (!empty($sc['questions']) && is_array($sc['questions'])) {
+                                foreach ($sc['questions'] as $q) $questions[] = $q;
+                            }
+                        }
+                    } elseif (is_array($decoded) && isset($decoded['questions']) && is_array($decoded['questions'])) {
+                        $questions = $decoded['questions'];
+                        if (!empty($decoded['stimulus'])) $stimuli[] = $decoded['stimulus'];
+                        elseif (!empty($decoded['scenario'])) $stimuli[] = $decoded['scenario'];
+                    } elseif (is_array($decoded) && array_is_list($decoded)) {
+                        $questions = $decoded;
+                    }
+                    return [$questions, $stimuli];
+                };
+
+                [$questions, $allStimuli] = $normalizePackage($decoded);
+                if (empty($questions)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'JSON must be an array of questions or an object with a "questions" array.',
@@ -1429,12 +1479,19 @@ class QuestionsController extends Controller
             $referencedImages = [];
             $collectImageRefs = function ($text) use (&$referencedImages) {
                 if (!is_string($text) || empty($text)) return;
-                if (preg_match_all('/(?:src=["\']|[\'"\s(])(images\/[a-zA-Z0-9_\-\.\/]+)(?:["\'\s)]|$)/i', $text, $matches)) {
+                $trimmed = trim($text);
+                if (str_starts_with($trimmed, 'http://') || str_starts_with($trimmed, 'https://') || str_starts_with($trimmed, 'data:')) {
+                    return;
+                }
+                if (preg_match_all('/(?:src=["\']|[\'"\s(])((?:images\/|\.\/images\/|\.\/)?[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg))(?:["\'\s)]|$)/i', $text, $matches)) {
                     foreach ($matches[1] as $ref) {
-                        $referencedImages[] = trim($ref);
+                        $refClean = trim($ref);
+                        if (!str_starts_with($refClean, 'http://') && !str_starts_with($refClean, 'https://') && !str_starts_with($refClean, 'data:')) {
+                            $referencedImages[] = ltrim(str_replace('\\', '/', $refClean), './');
+                        }
                     }
-                } elseif (preg_match('/^images\/[a-zA-Z0-9_\-\.\/]+$/i', trim($text))) {
-                    $referencedImages[] = trim($text);
+                } elseif (preg_match('/^(?:images\/|\.\/images\/|\.\/)?[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg)$/i', $trimmed)) {
+                    $referencedImages[] = ltrim(str_replace('\\', '/', $trimmed), './');
                 }
             };
 
@@ -1458,28 +1515,38 @@ class QuestionsController extends Controller
                 }
             }
 
-            if ($stimulus) {
-                $collectImageRefs($stimulus['passage'] ?? null);
-                $collectImageRefs($stimulus['scenario_text'] ?? null);
-                $collectImageRefs($stimulus['diagram_url'] ?? null);
-                $collectImageRefs($stimulus['scenario_image'] ?? null);
-                $collectImageRefs($stimulus['image_url'] ?? null);
+            if (!empty($allStimuli)) {
+                foreach ($allStimuli as $stimulus) {
+                    $collectImageRefs($stimulus['passage'] ?? null);
+                    $collectImageRefs($stimulus['scenario_text'] ?? null);
+                    $collectImageRefs($stimulus['diagram_url'] ?? null);
+                    $collectImageRefs($stimulus['scenario_image'] ?? null);
+                    $collectImageRefs($stimulus['image_url'] ?? null);
+                }
             }
 
             $referencedImages = array_values(array_unique($referencedImages));
             $cleanArchiveImages = array_values(array_unique(array_map(fn ($img) => ltrim(str_replace('\\', '/', $img), './'), $archiveImages)));
+            $archiveBasenames = array_map(fn ($img) => basename($img), $cleanArchiveImages);
 
             $missingImages = [];
             foreach ($referencedImages as $ref) {
                 $cleanRef = ltrim(str_replace('\\', '/', $ref), './');
-                if (!in_array($cleanRef, $cleanArchiveImages, true)) {
+                $refBase = basename($cleanRef);
+                if (!in_array($cleanRef, $cleanArchiveImages, true) && !in_array($refBase, $archiveBasenames, true)) {
                     $missingImages[] = $ref;
                 }
             }
 
             $unusedImages = [];
+            $referencedBasenames = array_map(fn ($ref) => basename($ref), $referencedImages);
             foreach ($cleanArchiveImages as $archImg) {
-                if (!in_array($archImg, $referencedImages, true) && !in_array('images/' . basename($archImg), $referencedImages, true)) {
+                $archBase = basename($archImg);
+                if (
+                    !in_array($archImg, $referencedImages, true)
+                    && !in_array('images/' . $archBase, $referencedImages, true)
+                    && !in_array($archBase, $referencedBasenames, true)
+                ) {
                     $unusedImages[] = $archImg;
                 }
             }
