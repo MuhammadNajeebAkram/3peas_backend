@@ -454,6 +454,31 @@ class QuestionsController extends Controller
                 ], 404);
             }
 
+            if (!empty($question->scenario_text)) {
+                $question->scenario_text = $this->sanitizeCorruptImageUrl($question->scenario_text);
+            }
+            if (!empty($question->scenario_text_um)) {
+                $question->scenario_text_um = $this->sanitizeCorruptImageUrl($question->scenario_text_um);
+            }
+            if (!empty($question->scenario_image)) {
+                $question->scenario_image = $this->sanitizeCorruptImageUrl($question->scenario_image);
+            }
+            if (!empty($question->question)) {
+                $question->question = $this->sanitizeCorruptImageUrl($question->question);
+            }
+            if (!empty($question->question_um)) {
+                $question->question_um = $this->sanitizeCorruptImageUrl($question->question_um);
+            }
+            if (!empty($question->explanation)) {
+                $question->explanation = $this->sanitizeCorruptImageUrl($question->explanation);
+            }
+            if (!empty($question->explanation_um)) {
+                $question->explanation_um = $this->sanitizeCorruptImageUrl($question->explanation_um);
+            }
+            if (!empty($question->diagram)) {
+                $question->diagram = $this->sanitizeCorruptImageUrl($question->diagram);
+            }
+
             if (!$this->canAccessQuestionScope($request, 'questions.view', $this->questionContextById($question->id))) {
                 return response()->json([
                     'success' => false,
@@ -952,6 +977,22 @@ class QuestionsController extends Controller
                 )
                 ->first();
 
+            if ($scenarioGroup) {
+                if (!empty($scenarioGroup->scenario_text)) {
+                    $scenarioGroup->scenario_text = $this->sanitizeCorruptImageUrl($scenarioGroup->scenario_text);
+                }
+                if (!empty($scenarioGroup->scenario_text_um)) {
+                    $scenarioGroup->scenario_text_um = $this->sanitizeCorruptImageUrl($scenarioGroup->scenario_text_um);
+                }
+                if (!empty($scenarioGroup->scenario_image)) {
+                    $scenarioGroup->scenario_image = $this->sanitizeCorruptImageUrl($scenarioGroup->scenario_image);
+                }
+            }
+
+
+
+
+
             $questions = DB::table('exam_question_tbl as questions')
                 ->leftJoin('question_type_tbl as question_types', 'questions.question_type', '=', 'question_types.id')
                 ->where('questions.scenario_group_id', $request->id)
@@ -1071,6 +1112,10 @@ class QuestionsController extends Controller
             $scenarioGroup = DB::table('question_scenario_groups_tbl')
                 ->where('id', $scenarioGroupId)
                 ->first();
+
+
+
+
 
             if (!$scenarioGroup) {
                 return response()->json([
@@ -1477,39 +1522,64 @@ class QuestionsController extends Controller
 
             // Extract relative image references
             $referencedImages = [];
-            $collectImageRefs = function ($text) use (&$referencedImages) {
+            $collectImageRefs = function ($text, $isExplicit = false) use (&$referencedImages) {
                 if (!is_string($text) || empty($text)) return;
                 $trimmed = trim($text);
                 if (str_starts_with($trimmed, 'http://') || str_starts_with($trimmed, 'https://') || str_starts_with($trimmed, 'data:')) {
                     return;
                 }
-                if (preg_match_all('/(?:src=["\']|[\'"\s(])((?:images\/|\.\/images\/|\.\/)?[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg))(?:["\'\s)]|$)/i', $text, $matches)) {
+
+                // 1. Explicit diagram/image fields
+                if ($isExplicit) {
+                    if (preg_match('/^(?:images\/|\.\/images\/|\.\/)?[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg)$/i', $trimmed)) {
+                        $referencedImages[] = ltrim(str_replace('\\', '/', $trimmed), './');
+                    }
+                    return;
+                }
+
+                // 2. In rich text: ONLY match actual <img src="..."> tags
+                if (preg_match_all('/<img\s+[^>]*?src=["\']([^"\']+)["\'][^>]*?>/i', $text, $matches)) {
                     foreach ($matches[1] as $ref) {
                         $refClean = trim($ref);
                         if (!str_starts_with($refClean, 'http://') && !str_starts_with($refClean, 'https://') && !str_starts_with($refClean, 'data:')) {
                             $referencedImages[] = ltrim(str_replace('\\', '/', $refClean), './');
                         }
                     }
-                } elseif (preg_match('/^(?:images\/|\.\/images\/|\.\/)?[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg)$/i', $trimmed)) {
-                    $referencedImages[] = ltrim(str_replace('\\', '/', $trimmed), './');
+                }
+
+                // 3. Match markdown images ![alt](path)
+                if (preg_match_all('/!\[.*?\]\(([^)]+)\)/i', $text, $matches)) {
+                    foreach ($matches[1] as $ref) {
+                        $refClean = trim($ref);
+                        if (!str_starts_with($refClean, 'http://') && !str_starts_with($refClean, 'https://') && !str_starts_with($refClean, 'data:')) {
+                            $referencedImages[] = ltrim(str_replace('\\', '/', $refClean), './');
+                        }
+                    }
+                }
+
+                // 4. Standalone package image path explicitly starting with images/
+                if (preg_match_all('/(?:^|[\s"\'<(])((?:\.\/)?images\/[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg))(?:$|[\s"\'>)])/i', $text, $matches)) {
+                    foreach ($matches[1] as $ref) {
+                        $referencedImages[] = ltrim(str_replace('\\', '/', trim($ref)), './');
+                    }
                 }
             };
 
             foreach ($questions as $q) {
-                $collectImageRefs($q['question'] ?? null);
-                $collectImageRefs($q['question_um'] ?? null);
-                $collectImageRefs($q['explanation'] ?? null);
-                $collectImageRefs($q['explanation_um'] ?? null);
-                $collectImageRefs($q['diagram'] ?? null);
-                $collectImageRefs($q['diagram_url'] ?? null);
-                $collectImageRefs($q['image'] ?? null);
-                $collectImageRefs($q['question_diagram'] ?? null);
+                $collectImageRefs($q['question'] ?? null, false);
+                $collectImageRefs($q['question_um'] ?? null, false);
+                $collectImageRefs($q['explanation'] ?? null, false);
+                $collectImageRefs($q['explanation_um'] ?? null, false);
+                $collectImageRefs($q['diagram'] ?? null, true);
+                $collectImageRefs($q['diagram_url'] ?? null, true);
+                $collectImageRefs($q['image'] ?? null, true);
+                $collectImageRefs($q['question_diagram'] ?? null, true);
                 if (!empty($q['options']) && is_array($q['options'])) {
                     foreach ($q['options'] as $opt) {
                         if (is_array($opt)) {
-                            $collectImageRefs($opt['text'] ?? null);
-                            $collectImageRefs($opt['option'] ?? null);
-                            $collectImageRefs($opt['image'] ?? null);
+                            $collectImageRefs($opt['text'] ?? null, false);
+                            $collectImageRefs($opt['option'] ?? null, false);
+                            $collectImageRefs($opt['image'] ?? null, true);
                         }
                     }
                 }
@@ -1517,11 +1587,11 @@ class QuestionsController extends Controller
 
             if (!empty($allStimuli)) {
                 foreach ($allStimuli as $stimulus) {
-                    $collectImageRefs($stimulus['passage'] ?? null);
-                    $collectImageRefs($stimulus['scenario_text'] ?? null);
-                    $collectImageRefs($stimulus['diagram_url'] ?? null);
-                    $collectImageRefs($stimulus['scenario_image'] ?? null);
-                    $collectImageRefs($stimulus['image_url'] ?? null);
+                    $collectImageRefs($stimulus['passage'] ?? null, false);
+                    $collectImageRefs($stimulus['scenario_text'] ?? null, false);
+                    $collectImageRefs($stimulus['diagram_url'] ?? null, true);
+                    $collectImageRefs($stimulus['scenario_image'] ?? null, true);
+                    $collectImageRefs($stimulus['image_url'] ?? null, true);
                 }
             }
 
@@ -1739,6 +1809,10 @@ class QuestionsController extends Controller
                             })
                             ->first();
 
+
+
+
+
                         if ($existingTopic) {
                             $topicId = $existingTopic->id;
                             $createdTopicsMap[$normName] = $topicId;
@@ -1939,6 +2013,11 @@ class QuestionsController extends Controller
         }
 
         $uniqueCreatedTopics = array_values(array_unique($newlyCreatedTopicNames));
+        $allCreatedScenarioGroupIds = array_values(array_unique(array_filter(array_merge(
+            $singleScenarioGroupId ? [$singleScenarioGroupId] : [],
+            array_values($createdScenarioGroupsMap)
+        ))));
+        $allSavedQuestionIds = array_values(array_filter(array_column($results, 'question_id')));
 
         return response()->json([
             'success' => $importedCount > 0,
@@ -1947,9 +2026,128 @@ class QuestionsController extends Controller
             'imported' => $importedCount,
             'failed' => $failedCount,
             'created_topics' => $uniqueCreatedTopics,
+            'created_topic_ids' => array_values(array_unique(array_filter(array_values($createdTopicsMap)))),
             'scenario_group_id' => $singleScenarioGroupId ?? (!empty($createdScenarioGroupsMap) ? reset($createdScenarioGroupsMap) : null),
+            'scenario_group_ids' => $allCreatedScenarioGroupIds,
+            'question_ids' => $allSavedQuestionIds,
             'results' => $results,
         ]);
+    }
+
+    public function rollbackImport(Request $request)
+    {
+        $validated = $request->validate([
+            'question_ids' => ['required', 'array', 'min:1'],
+            'question_ids.*' => ['integer'],
+            'scenario_group_ids' => ['nullable', 'array'],
+            'scenario_group_ids.*' => ['integer'],
+            'topic_ids' => ['nullable', 'array'],
+            'topic_ids.*' => ['integer'],
+            'media_keys' => ['nullable', 'array'],
+            'media_keys.*' => ['string'],
+        ]);
+
+        $questionIds = array_values(array_unique($validated['question_ids']));
+        $scenarioGroupIds = !empty($validated['scenario_group_ids']) ? array_values(array_unique($validated['scenario_group_ids'])) : [];
+        $topicIds = !empty($validated['topic_ids']) ? array_values(array_unique($validated['topic_ids'])) : [];
+        $mediaKeys = !empty($validated['media_keys']) ? array_values(array_unique($validated['media_keys'])) : [];
+
+        // Safety Guard: Check if any question is already linked to live tests / attempts
+        if (Schema::hasTable('test_questions')) {
+            $inTests = DB::table('test_questions')->whereIn('question_id', $questionIds)->exists();
+            if ($inTests) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot rollback: One or more questions from this batch are already assigned to active tests.',
+                ], 422);
+            }
+        }
+        if (Schema::hasTable('test_attempt_questions')) {
+            $inAttempts = DB::table('test_attempt_questions')->whereIn('question_id', $questionIds)->exists();
+            if ($inAttempts) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot rollback: Students have already attempted one or more questions from this batch.',
+                ], 422);
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            // Delete question relations
+            DB::table('exam_question_board_tbl')->whereIn('question_id', $questionIds)->delete();
+            DB::table('exam_question_options_tbl')->whereIn('question_id', $questionIds)->delete();
+            DB::table('exam_answer_tbl')->whereIn('question_id', $questionIds)->delete();
+
+            // Delete questions
+            $deletedQuestionsCount = DB::table('exam_question_tbl')->whereIn('id', $questionIds)->delete();
+
+            // Delete scenario groups if no other questions link to them
+            $deletedScenariosCount = 0;
+            if (!empty($scenarioGroupIds)) {
+                $deletedScenariosCount = DB::table('question_scenario_groups_tbl')
+                    ->whereIn('id', $scenarioGroupIds)
+                    ->whereNotExists(function ($query) {
+                        $query->select(DB::raw(1))
+                            ->from('exam_question_tbl')
+                            ->whereColumn('exam_question_tbl.scenario_group_id', 'question_scenario_groups_tbl.id');
+                    })
+                    ->delete();
+            }
+
+            // Clean up auto-created topics if no questions remain under them
+            $deletedTopicsCount = 0;
+            if (!empty($topicIds)) {
+                $deletedTopicsCount = DB::table('book_unit_topic_tbl')
+                    ->whereIn('id', $topicIds)
+                    ->whereNotExists(function ($query) {
+                        $query->select(DB::raw(1))
+                            ->from('exam_question_tbl')
+                            ->whereColumn('exam_question_tbl.topic_id', 'book_unit_topic_tbl.id');
+                    })
+                    ->delete();
+            }
+
+            DB::commit();
+
+            // Delete S3 media files
+            $deletedMediaCount = 0;
+            if (!empty($mediaKeys)) {
+                $awsUploadService = app(AwsUploadService::class);
+                foreach ($mediaKeys as $keyOrUrl) {
+                    $key = $this->managedQuestionStatementImageKey($keyOrUrl);
+                    if (!$key) {
+                        $parsedPath = parse_url($keyOrUrl, PHP_URL_PATH);
+                        $key = ltrim($parsedPath ?: $keyOrUrl, '/');
+                    }
+                    if (!empty($key)) {
+                        try {
+                            $awsUploadService->deleteFileFromS3($key);
+                            $deletedMediaCount++;
+                        } catch (\Throwable $e) {
+                            Log::warning("Rollback S3 delete warning for {$key}: " . $e->getMessage());
+                        }
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Rollback successful: Removed {$deletedQuestionsCount} question(s)" .
+                    ($deletedScenariosCount > 0 ? " and {$deletedScenariosCount} scenario group(s)." : ".") .
+                    ($deletedMediaCount > 0 ? " Cleaned up {$deletedMediaCount} image(s) from S3." : ""),
+                'deleted_questions' => $deletedQuestionsCount,
+                'deleted_scenarios' => $deletedScenariosCount,
+                'deleted_topics' => $deletedTopicsCount,
+                'deleted_media' => $deletedMediaCount,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error rolling back import: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function updateQuestion(Request $request){
@@ -1987,6 +2185,10 @@ class QuestionsController extends Controller
                     'scenario_question_order'
                 )
                 ->first();
+
+
+
+
 
             if (! $existingQuestion) {
                 DB::rollBack();
@@ -2410,6 +2612,10 @@ if ($existingRecord) {
                     'subjects.subject_name'
                 )
                 ->first();
+
+
+
+
 
             if ($topicContext && $request->user()) {
                 $unitLabel = $topicContext->unit_no
@@ -2861,6 +3067,10 @@ if ($existingRecord) {
                 )
                 ->first();
 
+
+
+
+
             if ($topicContext) {
                 $context['unit_id'] = $context['unit_id'] ?: (int) $topicContext->unit_id;
                 $context['book_id'] = $context['book_id'] ?: (int) $topicContext->book_id;
@@ -2876,6 +3086,10 @@ if ($existingRecord) {
                 ->select('book_id')
                 ->first();
 
+
+
+
+
             $context['book_id'] = $unitContext?->book_id ? (int) $unitContext->book_id : null;
         }
 
@@ -2884,6 +3098,10 @@ if ($existingRecord) {
                 ->where('id', $context['book_id'])
                 ->select('subject_id', 'class_id', 'curriculum_board_id')
                 ->first();
+
+
+
+
 
             if ($bookContext) {
                 $context['subject_id'] = $bookContext->subject_id ? (int) $bookContext->subject_id : null;
