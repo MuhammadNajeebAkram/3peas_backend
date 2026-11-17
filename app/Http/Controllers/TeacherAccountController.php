@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Services\Authentication\WebUserAuthService;
 use App\Http\Services\TeacherSettlementService;
+use App\Http\Services\TeacherCollectionPermissionService;
 use App\Models\TeacherProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,7 @@ class TeacherAccountController extends Controller
             'city_id' => 'nullable|integer|exists:city_tbl,id',
             'institute_id' => 'nullable|integer|exists:institute_tbl,id',
             'status' => 'prohibited', 'collection_code' => 'prohibited', 'teacher_code' => 'prohibited',
+            'can_collect_student_subscriptions' => 'prohibited',
         ]);
         DB::transaction(function () use ($profile, $data) {
             $profile->webUser->update(['name' => $data['name'], 'phone' => $data['phone']]);
@@ -52,11 +54,19 @@ class TeacherAccountController extends Controller
         return $this->show();
     }
 
-    public function dashboard(TeacherSettlementService $settlements)
+    public function dashboard(TeacherSettlementService $settlements, TeacherCollectionPermissionService $collectionPermissions)
     {
         $profile = $this->profile();
+        $eligibility = $collectionPermissions->eligibility($profile);
+        $canCollect = $collectionPermissions->canCollect($profile);
         return response()->json(['teacher_profile' => $profile,
-            'can_collect' => $profile->status === 'active' && filled($profile->collection_code),
+            'can_collect' => $canCollect,
+            'collection_permission' => [
+                'enabled' => (bool) $profile->can_collect_student_subscriptions,
+                'eligible' => $eligibility['eligible'],
+                'currently_authorized' => $canCollect,
+                'reason' => $eligibility['reason'],
+            ],
             'summary' => $settlements->summary($profile->id)]);
     }
 }

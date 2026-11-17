@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Services\AwsUploadService;
+use App\Http\Services\PastPaperCurriculumOwnershipService;
+use App\Models\PastPaperCurriculumAuditLog;
 use App\Models\TstPastPaper;
 use App\Models\TstPastPaperPage;
 use Illuminate\Http\Request;
@@ -16,9 +18,12 @@ class TstPastPaperController extends Controller
 {
     protected AwsUploadService $awsUploadService;
 
+    protected PastPaperCurriculumOwnershipService $ownershipService;
+
     public function __construct()
     {
         $this->awsUploadService = new AwsUploadService();
+        $this->ownershipService = new PastPaperCurriculumOwnershipService();
     }
 
     public function getAllPastPapersForAdmin(Request $request)
@@ -26,12 +31,14 @@ class TstPastPaperController extends Controller
         try {
             $query = TstPastPaper::query()
                 ->leftJoin('board_tbl as boards', 'boards.id', '=', 'tst_past_papers.board_id')
+                ->leftJoin('curriculum_board_tbl as curriculum_boards', 'curriculum_boards.id', '=', 'tst_past_papers.curriculum_board_id')
                 ->leftJoin('subject_tbl as subjects', 'subjects.id', '=', 'tst_past_papers.subject_id')
                 ->leftJoin('class_tbl as classes', 'classes.id', '=', 'tst_past_papers.class_id')
                 ->leftJoin('exam_session_tbl as sessions', 'sessions.id', '=', 'tst_past_papers.session_id')
                 ->select([
                     'tst_past_papers.*',
                     'boards.board_name',
+                    'curriculum_boards.name as curriculum_board_name',
                     'subjects.subject_name',
                     'classes.class_name',
                     'sessions.session_name',
@@ -39,10 +46,17 @@ class TstPastPaperController extends Controller
                 ->withCount('pages')
                 ->orderByDesc('tst_past_papers.created_at');
 
-            foreach (['board_id', 'subject_id', 'class_id', 'session_id', 'year', 'group'] as $filter) {
+            foreach (['board_id', 'curriculum_board_id', 'subject_id', 'class_id', 'session_id', 'year', 'group'] as $filter) {
                 if ($request->filled($filter)) {
                     $query->where("tst_past_papers.{$filter}", $request->input($filter));
                 }
+            }
+
+            $ownershipStatus = $request->input('ownership_status');
+            if ($ownershipStatus === 'assigned') {
+                $query->whereNotNull('tst_past_papers.curriculum_board_id');
+            } elseif ($ownershipStatus === 'unresolved' || $request->boolean('unresolved_curriculum')) {
+                $query->whereNull('tst_past_papers.curriculum_board_id');
             }
 
             if ($request->filled('is_active')) {
@@ -64,6 +78,7 @@ class TstPastPaperController extends Controller
             return response()->json([
                 'success' => 1,
                 'past_papers' => $pastPapers,
+                'summary' => $this->ownershipService->getSummaryCounts(PastPaperCurriculumAuditLog::SOURCE_STRUCTURED),
             ]);
         } catch (\Throwable $e) {
             Log::error('getAllPastPapersForAdmin failed', [
@@ -82,12 +97,13 @@ class TstPastPaperController extends Controller
     public function getPastPaperForAdminById($id)
     {
         try {
-            $pastPaper = TstPastPaper::with(['pages', 'board:id,board_name', 'subject:id,subject_name', 'userClass:id,class_name'])
+            $pastPaper = TstPastPaper::with(['pages', 'board:id,board_name', 'curriculumBoard:id,name', 'subject:id,subject_name', 'userClass:id,class_name'])
                 ->findOrFail($id);
 
             return response()->json([
                 'success' => 1,
                 'past_paper' => $pastPaper,
+                'audit_logs' => $this->ownershipService->getAuditLogs(PastPaperCurriculumAuditLog::SOURCE_STRUCTURED, (int) $pastPaper->id),
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -109,7 +125,21 @@ class TstPastPaperController extends Controller
             $validated['created_by'] = $adminId;
             $validated['updated_by'] = $adminId;
 
-            $pastPaper = TstPastPaper::create($validated);
+            $pastPaper = DB::transaction(function () use ($validated, $adminId, $request) {
+                $created = TstPastPaper::create($validated);
+
+                if ($created->curriculum_board_id !== null && $adminId) {
+                    $this->ownershipService->recordInitialCreationAudit(
+                        source: PastPaperCurriculumAuditLog::SOURCE_STRUCTURED,
+                        paperId: (int) $created->id,
+                        curriculumBoardId: (int) $created->curriculum_board_id,
+                        adminUserId: (int) $adminId,
+                        ipAddress: $request->ip()
+                    );
+                }
+
+                return $created;
+            });
 
             return response()->json([
                 'success' => 1,
@@ -134,6 +164,22 @@ class TstPastPaperController extends Controller
     {
         $pastPaper = TstPastPaper::findOrFail($id);
         $validated = $this->validatePastPaper($request, $id);
+
+        $existingCurriculumBoardId = $pastPaper->curriculum_board_id !== null ? (int) $pastPaper->curriculum_board_id : null;
+        if ($request->exists('curriculum_board_id')) {
+            $rawIncoming = $request->input('curriculum_board_id');
+            $incomingCurriculumBoardId = ($rawIncoming !== null && $rawIncoming !== '') ? (int) $rawIncoming : null;
+
+            if ($incomingCurriculumBoardId !== $existingCurriculumBoardId) {
+                return response()->json([
+                    'success' => 0,
+                    'code' => 'explicit_ownership_action_required',
+                    'message' => 'Use the explicit curriculum-board assignment or reassignment action to change ownership.',
+                ], 422);
+            }
+        }
+
+        unset($validated['curriculum_board_id']);
 
         try {
             $validated['paper_slug'] = $this->normalizeSlug($validated['paper_slug'] ?? $validated['paper_title']);
@@ -163,6 +209,89 @@ class TstPastPaperController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function assignCurriculumBoard(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'curriculum_board_id' => 'required|integer',
+            'operation' => ['required', Rule::in(['assign', 'reassign'])],
+            'confirm_reassignment' => 'sometimes|boolean',
+            'expected_current_curriculum_board_id' => 'nullable|integer',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $adminId = (int) (Auth::guard('api')->id() ?? Auth::id() ?? 0);
+
+        $result = $this->ownershipService->assignSingle(
+            source: PastPaperCurriculumAuditLog::SOURCE_STRUCTURED,
+            paperId: $id,
+            curriculumBoardId: (int) $validated['curriculum_board_id'],
+            operation: $validated['operation'],
+            confirmReassignment: (bool) ($validated['confirm_reassignment'] ?? false),
+            adminUserId: $adminId,
+            expectedCurrentCurriculumBoardId: array_key_exists('expected_current_curriculum_board_id', $validated) && $validated['expected_current_curriculum_board_id'] !== null
+                ? (int) $validated['expected_current_curriculum_board_id']
+                : null,
+            hasExpectedCurrent: $request->exists('expected_current_curriculum_board_id'),
+            note: $validated['note'] ?? null,
+            ipAddress: $request->ip()
+        );
+
+        return response()->json([
+            'success' => 1,
+            'message' => $result['operation_type'] === PastPaperCurriculumAuditLog::OPERATION_REASSIGN
+                ? 'Past paper curriculum board reassigned.'
+                : 'Past paper curriculum board assigned.',
+            'assignment' => $result,
+        ]);
+    }
+
+    public function bulkAssignCurriculumBoard(Request $request)
+    {
+        $validated = $request->validate([
+            'paper_ids' => 'required|array|min:1|max:50',
+            'paper_ids.*' => 'required|integer|min:1',
+            'curriculum_board_id' => 'required|integer',
+            'operation' => ['required', Rule::in(['assign', 'reassign'])],
+            'confirm_reassignment' => 'sometimes|boolean',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $adminId = (int) (Auth::guard('api')->id() ?? Auth::id() ?? 0);
+
+        $result = $this->ownershipService->bulkAssign(
+            source: PastPaperCurriculumAuditLog::SOURCE_STRUCTURED,
+            paperIds: $validated['paper_ids'],
+            curriculumBoardId: (int) $validated['curriculum_board_id'],
+            operation: $validated['operation'],
+            confirmReassignment: (bool) ($validated['confirm_reassignment'] ?? false),
+            adminUserId: $adminId,
+            note: $validated['note'] ?? null,
+            ipAddress: $request->ip()
+        );
+
+        return response()->json([
+            'success' => 1,
+            'message' => "Processed {$result['total_requested']} structured past paper record(s): {$result['succeeded_count']} succeeded, {$result['failed_count']} failed.",
+            'result' => $result,
+        ]);
+    }
+
+    public function curriculumAudit(int $id)
+    {
+        if (!TstPastPaper::where('id', $id)->exists()) {
+            return response()->json([
+                'success' => 0,
+                'code' => 'past_paper_not_found',
+                'message' => 'Past paper not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => 1,
+            'audit_logs' => $this->ownershipService->getAuditLogs(PastPaperCurriculumAuditLog::SOURCE_STRUCTURED, $id),
+        ]);
     }
 
     public function activatePastPaperForAdmin(Request $request, $id)
@@ -485,6 +614,9 @@ class TstPastPaperController extends Controller
                 Rule::unique('tst_past_papers', 'paper_slug')->ignore($ignoreId),
             ],
             'board_id' => 'required|integer|exists:board_tbl,id',
+            'curriculum_board_id' => $ignoreId
+                ? 'nullable|integer|exists:curriculum_board_tbl,id'
+                : ['nullable', 'integer', Rule::exists('curriculum_board_tbl', 'id')->where('activate', 1)],
             'subject_id' => 'required|integer|exists:subject_tbl,id',
             'class_id' => 'required|integer|exists:class_tbl,id',
             'session_id' => 'required|integer|exists:exam_session_tbl,id',

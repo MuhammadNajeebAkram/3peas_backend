@@ -11,12 +11,18 @@ class CheckPermission
 {
     public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
-        $user = Auth::user();
+        $user = $request->user('api') ?: auth('api')->user() ?: Auth::user();
 
         if (!$user) {
             return response()->json([
                 'message' => 'Unauthenticated.',
             ], 401);
+        }
+
+        if (!($user instanceof \App\Models\User)) {
+            return response()->json([
+                'message' => 'Forbidden.',
+            ], 403);
         }
 
         $permissions = collect($permissions)

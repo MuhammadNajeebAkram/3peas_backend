@@ -15,7 +15,7 @@ class AwsUploadService
      */
     protected function getEnvPrefix(): string
     {
-        $configuredPrefix = env('AWS_UPLOAD_PREFIX');
+        $configuredPrefix = config('filesystems.disks.s3.prefix');
 
         if (!empty($configuredPrefix)) {
             return trim($configuredPrefix, '/');
@@ -186,7 +186,7 @@ class AwsUploadService
      */
     public function getS3Url($s3Key)
     {
-        $cdnUrl = env('CDN_URL');
+        $cdnUrl = config('filesystems.cdn_url');
         
         if ($cdnUrl) {
             return rtrim($cdnUrl, '/') . '/' . ltrim($s3Key, '/');

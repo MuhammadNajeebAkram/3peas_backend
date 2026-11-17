@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Services\BookService;
 use App\Models\BookUnitTopic;
+use App\Models\BookUnit;
+use App\Models\SloTopic;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -392,7 +394,10 @@ class TopicsController extends Controller
     public function getTopicsForAdmin()
     {
         try {
-            $topics = BookUnitTopic::with('bookUnit:id,unit_name')
+            $topics = BookUnitTopic::with([
+                'bookUnit:id,unit_name',
+                'sloTopics:id,slo_code,slo_title',
+            ])
                 ->orderBy('unit_id')
                 ->orderBy('topic_no')
                 ->get()
@@ -407,6 +412,12 @@ class TopicsController extends Controller
                         'unit_name' => $topic->bookUnit?->unit_name,
                         'activate' => (bool) $topic->activate,
                         'is_alp' => (bool) $topic->is_alp,
+                        'slo_topics' => $topic->sloTopics->map(fn ($s) => [
+                            'id' => $s->id,
+                            'slo_code' => $s->slo_code,
+                            'slo_title' => $s->slo_title,
+                        ]),
+                        'slo_topic_ids' => $topic->sloTopics->pluck('id')->all(),
                     ];
                 });
 
@@ -425,7 +436,10 @@ class TopicsController extends Controller
     public function getActiveTopicsForAdmin()
     {
         try {
-            $topics = BookUnitTopic::with('bookUnit:id,unit_name')
+            $topics = BookUnitTopic::with([
+                'bookUnit:id,unit_name',
+                'sloTopics:id,slo_code,slo_title',
+            ])
                 ->where('activate', 1)
                 ->orderBy('unit_id')
                 ->orderBy('topic_no')
@@ -440,6 +454,12 @@ class TopicsController extends Controller
                         'unit_id' => $topic->unit_id,
                         'unit_name' => $topic->bookUnit?->unit_name,
                         'is_alp' => (bool) $topic->is_alp,
+                        'slo_topics' => $topic->sloTopics->map(fn ($s) => [
+                            'id' => $s->id,
+                            'slo_code' => $s->slo_code,
+                            'slo_title' => $s->slo_title,
+                        ]),
+                        'slo_topic_ids' => $topic->sloTopics->pluck('id')->all(),
                     ];
                 });
 
@@ -464,6 +484,8 @@ class TopicsController extends Controller
             'slo_no' => 'nullable|string|max:255',
             'unit_id' => 'required|integer|exists:book_unit_tbl,id',
             'is_alp' => 'nullable|boolean',
+            'slo_topic_ids' => 'nullable|array',
+            'slo_topic_ids.*' => 'integer|exists:slo_topic_tbl,id',
         ]);
 
         try {
@@ -478,7 +500,7 @@ class TopicsController extends Controller
                 ]);
             }
 
-            BookUnitTopic::create([
+            $newTopic = BookUnitTopic::create([
                 'topic_name' => $request->topic_name,
                 'topic_name_um' => $request->topic_name_um,
                 'topic_no' => $request->topic_no,
@@ -487,6 +509,10 @@ class TopicsController extends Controller
                 'activate' => 1,
                 'is_alp' => $request->boolean('is_alp', true),
             ]);
+
+            if ($request->has('slo_topic_ids')) {
+                $newTopic->sloTopics()->sync($request->slo_topic_ids ?? []);
+            }
 
             return response()->json([
                 'success' => 1,
@@ -509,6 +535,8 @@ class TopicsController extends Controller
             'slo_no' => 'nullable|string|max:255',
             'unit_id' => 'required|integer|exists:book_unit_tbl,id',
             'is_alp' => 'nullable|boolean',
+            'slo_topic_ids' => 'nullable|array',
+            'slo_topic_ids.*' => 'integer|exists:slo_topic_tbl,id',
         ]);
 
         try {
@@ -540,6 +568,10 @@ class TopicsController extends Controller
             }
 
             $topic->save();
+
+            if ($request->has('slo_topic_ids')) {
+                $topic->sloTopics()->sync($request->slo_topic_ids ?? []);
+            }
 
             return response()->json([
                 'success' => 1,
@@ -577,5 +609,153 @@ class TopicsController extends Controller
         }
     }
 
+    /**
+     * Bulk import Topics from structured JSON array.
+     */
+    public function bulkImportTopicsForAdmin(Request $request)
+    {
+        $request->validate([
+            'topics' => 'required|array|min:1',
+            'unit_id' => 'nullable|integer|exists:book_unit_tbl,id',
+            'update_existing' => 'nullable|boolean',
+        ]);
 
+        $defaultUnitId = $request->unit_id;
+        $updateExisting = $request->boolean('update_existing', true);
+
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($request->topics as $index => $item) {
+                $idxLabel = "Topic #" . ($index + 1);
+
+                $unitId = $item['unit_id'] ?? $defaultUnitId;
+                if (!$unitId && !empty($item['unit_name'])) {
+                    $unitId = BookUnit::where('unit_name', trim($item['unit_name']))->value('id');
+                }
+
+                if (!$unitId) {
+                    $errors[] = "$idxLabel: Missing or unresolvable Unit.";
+                    $skipped++;
+                    continue;
+                }
+
+                $topicName = trim($item['topic_name'] ?? $item['name'] ?? $item['title'] ?? '');
+                if (!$topicName) {
+                    $errors[] = "$idxLabel: Missing required 'topic_name'.";
+                    $skipped++;
+                    continue;
+                }
+
+                $topicNameUm = !empty($item['topic_name_um'])
+                    ? trim($item['topic_name_um'])
+                    : (!empty($item['urdu_name']) ? trim($item['urdu_name']) : null);
+
+                $topicNo = !empty($item['topic_no']) && is_numeric($item['topic_no'])
+                    ? (int) $item['topic_no']
+                    : null;
+
+                $sloNo = !empty($item['slo_no']) ? trim($item['slo_no']) : null;
+
+                $isAlp = isset($item['is_alp'])
+                    ? filter_var($item['is_alp'], FILTER_VALIDATE_BOOLEAN)
+                    : true;
+
+                $activate = isset($item['activate'])
+                    ? filter_var($item['activate'], FILTER_VALIDATE_BOOLEAN)
+                    : 1;
+
+                // Resolve SLO Topic IDs if provided directly or by SLO codes
+                $sloTopicIds = [];
+                if (!empty($item['slo_topic_ids']) && is_array($item['slo_topic_ids'])) {
+                    $sloTopicIds = array_filter(array_map('intval', $item['slo_topic_ids']));
+                } elseif (!empty($item['slo_codes'])) {
+                    $codes = is_array($item['slo_codes'])
+                        ? $item['slo_codes']
+                        : array_map('trim', explode(',', (string) $item['slo_codes']));
+                    $sloTopicIds = SloTopic::whereIn('slo_code', $codes)->pluck('id')->toArray();
+                }
+
+                // Match existing by unit and topic name
+                $existing = BookUnitTopic::where('unit_id', $unitId)
+                    ->where('topic_name', $topicName)
+                    ->first();
+
+                if (!$existing && $topicNo !== null) {
+                    $existing = BookUnitTopic::where('unit_id', $unitId)
+                        ->where('topic_no', $topicNo)
+                        ->first();
+                }
+
+                if ($existing) {
+                    if (!$updateExisting) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $existing->topic_name = $topicName;
+                    if ($topicNameUm !== null) {
+                        $existing->topic_name_um = $topicNameUm;
+                    }
+                    if ($topicNo !== null) {
+                        $existing->topic_no = $topicNo;
+                    }
+                    if ($sloNo !== null) {
+                        $existing->slo_no = $sloNo;
+                    }
+                    $existing->is_alp = $isAlp;
+                    $existing->activate = $activate;
+                    $existing->save();
+
+                    if (!empty($sloTopicIds)) {
+                        $existing->sloTopics()->syncWithoutDetaching($sloTopicIds);
+                    }
+
+                    $updated++;
+                } else {
+                    if ($topicNo === null) {
+                        $maxNo = BookUnitTopic::where('unit_id', $unitId)->max('topic_no');
+                        $topicNo = ($maxNo ? $maxNo : 0) + 1;
+                    }
+
+                    $topic = BookUnitTopic::create([
+                        'unit_id' => $unitId,
+                        'topic_name' => $topicName,
+                        'topic_name_um' => $topicNameUm,
+                        'topic_no' => $topicNo,
+                        'slo_no' => $sloNo,
+                        'is_alp' => $isAlp,
+                        'activate' => $activate,
+                    ]);
+
+                    if (!empty($sloTopicIds)) {
+                        $topic->sloTopics()->sync($sloTopicIds);
+                    }
+
+                    $imported++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+                'message' => "Import complete. $imported created, $updated updated, $skipped skipped.",
+                'total_imported' => $imported,
+                'total_updated' => $updated,
+                'total_skipped' => $skipped,
+                'errors' => $errors,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => 0,
+                'error' => 'Failed to import topics: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

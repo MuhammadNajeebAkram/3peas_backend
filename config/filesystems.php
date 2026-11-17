@@ -51,14 +51,16 @@ return [
             'region' => env('AWS_DEFAULT_REGION'),
             'bucket' => env('AWS_BUCKET'),
             'url' => env('AWS_URL'),
+            'cdn_url' => env('CDN_URL'),
+            'prefix' => env('AWS_UPLOAD_PREFIX', ''),
            // 'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => true,
         ],
 
-        
-
     ],
+
+    'cdn_url' => env('CDN_URL'),
 
     /*
     |--------------------------------------------------------------------------

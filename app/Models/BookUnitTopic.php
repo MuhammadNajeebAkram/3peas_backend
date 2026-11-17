@@ -24,7 +24,15 @@ class BookUnitTopic extends Model
         return $this->belongsTo(BookUnit::class, 'unit_id');
     }
 
+    public function unit(){
+        return $this->belongsTo(BookUnit::class, 'unit_id');
+    }
+
     public function questions(){
         return $this->hasMany(ExamQuestion::class, 'topic_id');
+    }
+
+    public function sloTopics(){
+        return $this->belongsToMany(SloTopic::class, 'topic_slo_topic_tbl', 'topic_id', 'slo_topic_id')->withTimestamps();
     }
 }

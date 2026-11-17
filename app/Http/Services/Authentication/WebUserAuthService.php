@@ -239,6 +239,11 @@ class WebUserAuthService
     public function logout()
     {
         try {
+            $user = Auth::guard($this->guard)->user();
+            if ($user instanceof WebUser) {
+                $user->update(['last_token' => null]);
+            }
+
             $token = JWTAuth::getToken();
 
             if ($token) {
@@ -278,8 +283,22 @@ class WebUserAuthService
         return $payload;
     }
 
+    private function recordActiveSession(WebUser $user, string $token): void
+    {
+        $tokenHash = hash('sha256', $token);
+
+        DB::transaction(function () use ($user, $tokenHash) {
+            WebUser::where('id', $user->id)->lockForUpdate()->first();
+            $user->update([
+                'last_token' => $tokenHash,
+                'last_login_at' => now(),
+            ]);
+        });
+    }
+
     private function authResponse(WebUser $user, string $token, string $message = 'Authenticated successfully.')
     {
+        $this->recordActiveSession($user, $token);
         $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
 
         return response()->json([
@@ -303,25 +322,28 @@ class WebUserAuthService
 
     private function cookieDomain(): ?string
     {
-        return env('LMS_JWT_COOKIE_DOMAIN', app()->environment('production') ? 'api.thestudentstimes.com' : null);
+        return config('auth.cookies.lms_domain', app()->environment('production') ? 'api.thestudentstimes.com' : null);
     }
 
     private function cookieSecure(): bool
     {
-        return filter_var(
-            env('LMS_JWT_COOKIE_SECURE', app()->environment('production')),
-            FILTER_VALIDATE_BOOL
-        );
+        $configured = config('auth.cookies.lms_secure');
+
+        if ($configured !== null) {
+            return filter_var($configured, FILTER_VALIDATE_BOOL);
+        }
+
+        return app()->environment('production');
     }
 
     private function cookieName(): string
     {
-        return env('LMS_JWT_COOKIE_NAME', 'lms_auth_token');
+        return (string) config('auth.cookies.lms', 'lms_auth_token');
     }
 
     private function cookieSameSite(): string
     {
-        return env('LMS_JWT_COOKIE_SAMESITE', 'Lax');
+        return (string) config('auth.cookies.lms_samesite', 'Lax');
     }
 
     private function userPayload(WebUser $user): array

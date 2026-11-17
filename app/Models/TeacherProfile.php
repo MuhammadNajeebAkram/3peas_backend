@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class TeacherProfile extends Model
@@ -18,6 +19,7 @@ class TeacherProfile extends Model
     protected $casts = [
         'approved_at' => 'datetime',
         'status_changed_at' => 'datetime',
+        'can_collect_student_subscriptions' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -56,5 +58,10 @@ class TeacherProfile extends Model
     public function statusChangedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'status_changed_by');
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(TeacherSubscription::class);
     }
 }

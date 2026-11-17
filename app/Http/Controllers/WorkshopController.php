@@ -4,15 +4,42 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\WebUser;
 use App\Models\Workshop;
 use App\Models\WorkshopRegistration;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class WorkshopController extends Controller
 {
+    /**
+     * Resolve the authenticated user across web_api (WebUser), api (admin User), and default guards.
+     */
+    private function resolveAuthenticatedUser(Request $request): WebUser|User|null
+    {
+        return $request->user('web_api')
+            ?? auth('web_api')->user()
+            ?? $request->user('api')
+            ?? auth('api')->user()
+            ?? $request->user();
+    }
+
+    /**
+     * Resolve the authenticated WebUser (student/teacher), ensuring proper model type for registration.
+     */
+    private function resolveWebUser(Request $request): ?WebUser
+    {
+        $user = $request->user('web_api')
+            ?? auth('web_api')->user()
+            ?? $request->user();
+
+        return $user instanceof WebUser ? $user : null;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $type = $request->query('type', 'upcoming'); // upcoming | past | all
@@ -57,16 +84,17 @@ class WorkshopController extends Controller
             });
         }
 
-        $user = $request->user('web_user');
+        $user = $this->resolveAuthenticatedUser($request);
+        $webUser = $user instanceof WebUser ? $user : null;
 
         $workshops = $query->paginate($perPage);
 
-        $workshops->getCollection()->transform(function ($workshop) use ($user) {
+        $workshops->getCollection()->transform(function ($workshop) use ($webUser) {
             $isRegistered = false;
 
-            if ($user) {
+            if ($webUser) {
                 $isRegistered = WorkshopRegistration::where('workshop_id', $workshop->id)
-                    ->where('user_id', $user->id)
+                    ->where('user_id', $webUser->id)
                     ->exists();
             }
 
@@ -103,12 +131,13 @@ class WorkshopController extends Controller
             ->where('is_published', true)
             ->firstOrFail();
 
-        $user = $request->user('web_user');
+        $user = $this->resolveAuthenticatedUser($request);
+        $webUser = $user instanceof WebUser ? $user : null;
 
         $isRegistered = false;
-        if ($user) {
+        if ($webUser) {
             $isRegistered = WorkshopRegistration::where('workshop_id', $workshop->id)
-                ->where('user_id', $user->id)
+                ->where('user_id', $webUser->id)
                 ->exists();
         }
 
@@ -174,7 +203,13 @@ class WorkshopController extends Controller
 
     public function register(Request $request, int $id): JsonResponse
     {
-        $user = $request->user('web_user');
+        $webUser = $this->resolveWebUser($request);
+
+        if (!$webUser) {
+            return response()->json([
+                'message' => 'Unauthenticated or unauthorized to register for workshops.',
+            ], 401);
+        }
 
         $workshop = Workshop::where('id', $id)
             ->where('is_published', true)
@@ -202,7 +237,7 @@ class WorkshopController extends Controller
         }
 
         $alreadyRegistered = WorkshopRegistration::where('workshop_id', $workshop->id)
-            ->where('user_id', $user->id)
+            ->where('user_id', $webUser->id)
             ->exists();
 
         if ($alreadyRegistered) {
@@ -211,10 +246,10 @@ class WorkshopController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($workshop, $user) {
+        DB::transaction(function () use ($workshop, $webUser) {
             WorkshopRegistration::create([
                 'workshop_id' => $workshop->id,
-                'user_id' => $user->id,
+                'user_id' => $webUser->id,
                 'status' => 'registered',
                 'registered_at' => now(),
             ]);
@@ -234,12 +269,18 @@ class WorkshopController extends Controller
 
     public function unregister(Request $request, int $id): JsonResponse
     {
-        $user = $request->user('web_user');
+        $webUser = $this->resolveWebUser($request);
+
+        if (!$webUser) {
+            return response()->json([
+                'message' => 'Unauthenticated or unauthorized.',
+            ], 401);
+        }
 
         $workshop = Workshop::findOrFail($id);
 
         $registration = WorkshopRegistration::where('workshop_id', $workshop->id)
-            ->where('user_id', $user->id)
+            ->where('user_id', $webUser->id)
             ->first();
 
         if (!$registration) {

@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 use App\Models\SubscriptionPaymentRequest;
 use App\Http\Services\AwsUploadService;
+use App\Http\Services\StudentSubscriptionPaymentService;
+use Illuminate\Support\Facades\Storage;
 
 class UserPaymentController extends Controller
 {
@@ -21,96 +22,56 @@ class UserPaymentController extends Controller
         if ($request->input('payment_method') === 'teacher') {
             return app(TeacherPaymentController::class)->store($request);
         }
+        abort_unless(auth('web_api')->user()?->role === 'student' && auth('web_api')->user()?->status === 'active', 403);
+        foreach (['transaction_id', 'payer_name', 'payer_phone'] as $field) {
+            if (is_string($request->input($field))) {
+                $request->merge([$field => trim($request->input($field))]);
+            }
+        }
         $request->validate(['payment_method' => 'sometimes|in:account,bank,jazzcash']);
         $userId = auth('web_api')->id();
+        $data = $request->validate([
+            'offered_program_id' => 'required|integer|exists:offered_programs,id',
+            'payment_account_id' => 'required|integer|exists:payment_accounts,id',
+            'transaction_id' => 'required|string|max:255|unique:subscription_payment_requests,transaction_id',
+            'payer_name' => 'required|string|max:255',
+            'payer_phone' => 'required|string|max:20',
+            'proof_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'amount' => 'prohibited', 'price' => 'prohibited', 'price_paid' => 'prohibited',
+            'discount_amount' => 'prohibited', 'discount_percentage' => 'prohibited', 'final_amount' => 'prohibited',
+            'access_type' => 'prohibited', 'expires_at' => 'prohibited',
+            'user_id' => 'prohibited', 'student_id' => 'prohibited', 'teacher_profile_id' => 'prohibited',
+            'approved_by' => 'prohibited', 'subscription_id' => 'prohibited',
+        ]);
 
+        $file = $request->file('proof_file');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $path = $this->awsUploadService->uploadFileToS3($file, $extension,
+            'payment_proofs/'.date('Y').'/'.date('m'), 'payment-slip-'.$userId.'-'.\Illuminate\Support\Str::uuid().'.'.$extension);
+        abort_unless($path, 503, 'Payment proof upload failed. Please try again.');
         try {
-            $validator = Validator::make($request->all(), [
-                'offered_program_id' => 'required|exists:offered_programs,id',
-                'payment_account_id' => 'nullable|exists:payment_accounts,id',
-                'amount' => 'required|numeric|min:0',
-                'transaction_id' => 'nullable|string|unique:subscription_payment_requests,transaction_id',
-                'payer_name' => 'nullable|string|max:255',
-                'payer_phone' => 'nullable|string|max:20',
-                'proof_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
-            ]);
-
-            if ($validator->fails()) {
-                Log::warning('Payment request validation failed', [
-                    'user_id' => $userId,
-                    'errors' => $validator->errors()->toArray(),
-                    'offered_program_id' => $request->input('offered_program_id'),
-                    'payment_account_id' => $request->input('payment_account_id'),
-                    'transaction_id' => $request->input('transaction_id'),
-                ]);
-
-                return response()->json([
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-
-            $validatedData = $validator->validated();
-            $proofFilePath = null;
-
-            if ($request->hasFile('proof_file')) {
-                $proofFile = $request->file('proof_file');
-                $s3Directory = 'payment_proofs/' . date('Y') . '/' . date('m');
-                $fileName = 'payment-slip-' . $userId . '-' . time() . '.' . $proofFile->getClientOriginalExtension();
-                $uploadedS3Key = $this->awsUploadService->uploadFileToS3(
-                    $proofFile,
-                    $proofFile->getClientOriginalExtension(),
-                    $s3Directory,
-                    $fileName
-                );
-
-                if (!$uploadedS3Key) {
-                    Log::error('Payment slip upload failed', [
-                        'user_id' => $userId,
-                        'offered_program_id' => $validatedData['offered_program_id'],
-                        'file_name' => $fileName,
-                        'directory' => $s3Directory,
-                    ]);
-
-                    return response()->json([
-                        'message' => 'Payment slip upload failed. Please try again.',
-                    ], 500);
-                }
-
-                $proofFilePath = $uploadedS3Key;
-            }
-
-            $paymentRequest = SubscriptionPaymentRequest::create([
-                'user_id' => $userId,
-                'offered_program_id' => $validatedData['offered_program_id'],
-                'payment_account_id' => $validatedData['payment_account_id'] ?? null,                
-                'final_amount' => $validatedData['amount'],
-                'price' => $validatedData['amount'],
-                'transaction_id' => $validatedData['transaction_id'] ?? null,
-                'payer_name' => $validatedData['payer_name'] ?? null,
-                'payer_phone' => $validatedData['payer_phone'] ?? null,
-                'proof_file_path' => $proofFilePath,
-                'status' => 'pending',
-            ]);
-
-            return response()->json([
-                'message' => 'Payment request submitted successfully',
-                'payment_request' => $paymentRequest,
-            ], 201);
+            $payment = app(StudentSubscriptionPaymentService::class)->submitAccount($userId, $data, $path);
         } catch (\Throwable $e) {
-            Log::error('Failed to submit payment request', [
-                'user_id' => $userId,
-                'offered_program_id' => $request->input('offered_program_id'),
-                'payment_account_id' => $request->input('payment_account_id'),
-                'transaction_id' => $request->input('transaction_id'),
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-
-            return response()->json([
-                'message' => 'Unable to submit payment request at the moment.',
-            ], 500);
+            Storage::disk('s3')->delete($path);
+            throw $e;
         }
+        return response()->json(['message' => 'Payment request submitted and is awaiting review.', 'payment_request' => $payment], 201);
+    }
+
+    public function offerings() { return response()->json(['data' => app(StudentSubscriptionPaymentService::class)->offerings()]); }
+
+    public function methods() { return response()->json(['methods' => app(StudentSubscriptionPaymentService::class)->paymentAccounts(), 'teacher_collection_available' => app(\App\Http\Services\TeacherCollectionPermissionService::class)->anyEligibleTeacher()]); }
+
+    public function mine() { return response()->json(SubscriptionPaymentRequest::where('user_id', auth('web_api')->id())->with(['offeredProgram:id,title', 'userSubscription:id,status,expires_at', 'paymentAccount:id,title'])->latest('id')->paginate(20)); }
+
+    public function proof(int $id)
+    {
+        $payment = SubscriptionPaymentRequest::findOrFail($id);
+        abort_unless((int) $payment->user_id === (int) auth('web_api')->id(), 404);
+        abort_unless($payment->proof_file_path, 404);
+        abort_unless(Storage::disk('s3')->exists($payment->proof_file_path), 404);
+        $extension = strtolower(pathinfo($payment->proof_file_path, PATHINFO_EXTENSION));
+        $type = match ($extension) { 'jpg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'pdf' => 'application/pdf', default => 'application/octet-stream' };
+        return response(Storage::disk('s3')->get($payment->proof_file_path))->header('Content-Type', $type)->header('Cache-Control', 'private, no-store');
     }
 }

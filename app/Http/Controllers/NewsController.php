@@ -1213,7 +1213,7 @@ class NewsController extends Controller
             return null;
         }
 
-        $cdnUrl = env('CDN_URL');
+        $cdnUrl = config('filesystems.cdn_url');
 
         if ($cdnUrl && str_starts_with($normalized, rtrim($cdnUrl, '/') . '/')) {
             $path = ltrim(substr($normalized, strlen(rtrim($cdnUrl, '/') . '/')), '/');
@@ -1507,8 +1507,8 @@ class NewsController extends Controller
     private function managedMediaUrlPrefixes(): array
     {
         return collect([
-            env('CDN_URL'),
-            env('AWS_URL'),
+            config('filesystems.cdn_url'),
+            config('filesystems.disks.s3.url'),
         ])
             ->filter()
             ->map(fn ($prefix) => rtrim((string) $prefix, '/') . '/')
@@ -1519,7 +1519,7 @@ class NewsController extends Controller
 
     private function managedUploadPrefix(): string
     {
-        $configuredPrefix = env('AWS_UPLOAD_PREFIX');
+        $configuredPrefix = config('filesystems.disks.s3.prefix');
 
         if (!empty($configuredPrefix)) {
             return trim($configuredPrefix, '/');

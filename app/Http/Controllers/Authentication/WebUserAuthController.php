@@ -471,8 +471,7 @@ class WebUserAuthController extends Controller
     public function getAllUsersDataByAdmin()
     {
         try {
-            $users = WebUser::with(['profile', 'teacherProfile', 'subscriptions', 'subscriptionPaymentRequests',
-            'subscriptionPaymentRequests.offeredProgram'])->get();
+            $users = WebUser::with(['profile', 'teacherProfile', 'subscriptions'])->get();
 
             return response()->json([
                 'success' => 1,
@@ -490,101 +489,15 @@ class WebUserAuthController extends Controller
 
     public function approveStudentSubscriptionByAdmin(Request $request)
     {
-        $validatedData = $request->validate([
+        $data = $request->validate([
             'subscription_payment_request_id' => ['required', 'integer', 'exists:subscription_payment_requests,id'],
-            'access_type' => ['nullable', Rule::in(['paid', 'discounted', 'free_specimen', 'complimentary'])],
-            'expires_at' => ['nullable', 'date'],
-            'started_at' => ['nullable', 'date'],
-            'admin_remarks' => ['nullable', 'string'],
+            'admin_remarks' => ['nullable', 'string', 'max:255'],
+            'access_type' => ['prohibited'], 'expires_at' => ['prohibited'], 'started_at' => ['prohibited'],
         ]);
-
-        abort_if(SubscriptionPaymentRequest::whereKey($validatedData['subscription_payment_request_id'])
-            ->where('payment_method', 'teacher')->exists(), 409, 'Teacher payments must be confirmed by the assigned teacher.');
-
-        DB::beginTransaction();
-
-        try {
-            $adminId = Auth::guard('api')->id();
-            $paymentRequest = SubscriptionPaymentRequest::with(['user', 'offeredProgram'])
-                ->find($validatedData['subscription_payment_request_id']);
-
-            if (!$paymentRequest) {
-                return response()->json([
-                    'success' => 0,
-                    'error' => 'Subscription payment request not found.',
-                ], 404);
-            }
-
-            if ($paymentRequest->status === 'approved') {
-                return response()->json([
-                    'success' => 0,
-                    'error' => 'This payment request is already approved.',
-                ], 422);
-            }
-
-            if ($paymentRequest->status === 'rejected') {
-                return response()->json([
-                    'success' => 0,
-                    'error' => 'Rejected payment requests cannot be approved directly.',
-                ], 422);
-            }
-
-            $subscription = null;
-
-            if (!empty($paymentRequest->subscription_id)) {
-                $subscription = UserSubscription::where('id', $paymentRequest->subscription_id)
-                    ->where('user_id', $paymentRequest->user_id)
-                    ->where('offered_program_id', $paymentRequest->offered_program_id)
-                    ->first();
-            }
-
-            if (!$subscription) {
-                $subscription = UserSubscription::firstOrNew([
-                    'user_id' => $paymentRequest->user_id,
-                    'offered_program_id' => $paymentRequest->offered_program_id,
-                ]);
-            }
-
-            $subscription->fill([
-                'status' => 'active',
-                'access_type' => $validatedData['access_type'] ?? $subscription->access_type ?? 'paid',
-                'price_paid' => $paymentRequest->final_amount ?? $paymentRequest->price ?? $subscription->price_paid ?? 0,
-                'started_at' => $validatedData['started_at'] ?? $subscription->started_at ?? now()->toDateString(),
-                'expires_at' => $validatedData['expires_at'] ?? $subscription->expires_at,
-                'approved_at' => now(),
-                'approved_by' => $adminId,
-            ]);
-            $subscription->save();
-
-            $paymentRequest->update([
-                'subscription_id' => $subscription->id,
-                'status' => 'approved',
-                'approved_at' => now(),
-                'approved_by' => $adminId,
-                'rejected_by' => null,
-                'rejection_reason' => null,
-                'admin_remarks' => $validatedData['admin_remarks'] ?? $paymentRequest->admin_remarks,
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => 1,
-                'message' => 'Student subscription approved successfully.',
-                'data' => [
-                    'payment_request' => $paymentRequest->fresh(['offeredProgram', 'user', 'userSubscription']),
-                    'subscription' => $subscription->fresh(['offeredProgram', 'webUser']),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Admin approveStudentSubscriptionByAdmin failed: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => -1,
-                'error' => 'Server Error: Could not approve student subscription.',
-            ], 500);
-        }
+        $payment = app(\App\Http\Services\StudentSubscriptionPaymentService::class)->approve(
+            (int) $data['subscription_payment_request_id'], 'admin', (int) Auth::guard('api')->id(), null, $data['admin_remarks'] ?? null
+        );
+        return response()->json(['success' => 1, 'message' => 'Student subscription approved successfully.', 'data' => ['payment_request' => $payment, 'subscription' => $payment->userSubscription]]);
     }
 
     public function verifiedUserByAdmin(Request $request){

@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\EnsureStudySessionVerified;
 use App\Http\Middleware\VerifyUserSession;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\EnsureTeacherFeature;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -34,14 +35,16 @@ return Application::configure(basePath: dirname(__DIR__))
         //
         $middleware->append(HandleCors::class);
         //$middleware->append(RefreshAuthTokenMiddleware::class);
-        $middleware->alias(['token.refresh' => RefreshAuthTokenMiddleware::class,
-    ]);     
-        $middleware->alias(['verified' => EnsureEmailsVerified::class]);
-        $middleware->alias(['paymentVerified' => EnsurePaymentVerified::class]);
-        $middleware->alias(['studySessionVerified' => EnsureStudySessionVerified::class]);
-        $middleware->alias(['jwt.cookie' => AttachJwtFromCookie::class]);
-        $middleware->alias(['jwt.auth' => AuthenticateJwtCookieGuard::class]);
-        $middleware->alias(['permission' => CheckPermission::class]);
+        $middleware->alias([
+            'token.refresh' => RefreshAuthTokenMiddleware::class,
+            'verified' => EnsureEmailsVerified::class,
+            'paymentVerified' => EnsurePaymentVerified::class,
+            'studySessionVerified' => EnsureStudySessionVerified::class,
+            'jwt.cookie' => AttachJwtFromCookie::class,
+            'jwt.auth' => AuthenticateJwtCookieGuard::class,
+            'permission' => CheckPermission::class,
+            'teacher.feature' => EnsureTeacherFeature::class,
+        ]);
 
        
        

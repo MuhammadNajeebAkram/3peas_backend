@@ -81,6 +81,25 @@ class AuthenticateJwtCookieGuard
                 ], 401);
             }
 
+            if ($user instanceof \App\Models\WebUser) {
+                $tokenHash = hash('sha256', $token);
+                $activeTokenHash = $user->last_token;
+
+                if (empty($activeTokenHash) || !hash_equals($activeTokenHash, $tokenHash)) {
+                    Log::warning('AuthenticateJwtCookieGuard session revoked: account active on another device', [
+                        'context' => $context,
+                        'guard' => $guard,
+                        'user_id' => $user->id,
+                        'user_role' => $user->role,
+                    ]);
+
+                    return response()->json([
+                        'message' => 'Your account was signed in on another device. Please log in again.',
+                        'code' => 'SESSION_REVOKED',
+                    ], 401);
+                }
+            }
+
             Auth::shouldUse($guard);
             Auth::guard($guard)->setUser($user);
 
@@ -118,9 +137,9 @@ class AuthenticateJwtCookieGuard
     private function resolveCookieName(?string $context): string
     {
         return match ($context) {
-            'admin' => env('ADMIN_JWT_COOKIE_NAME', 'admin_auth_token'),
-            'lms' => env('LMS_JWT_COOKIE_NAME', 'lms_auth_token'),
-            default => env('JWT_COOKIE_NAME', 'auth_token'),
+            'admin' => (string) config('auth.cookies.admin', 'admin_auth_token'),
+            'lms' => (string) config('auth.cookies.lms', 'lms_auth_token'),
+            default => (string) config('auth.cookies.default', 'auth_token'),
         };
     }
 }

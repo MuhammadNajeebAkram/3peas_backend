@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ExamQuestion;
 use App\Models\StudentActivity;
 use App\Http\Services\AwsUploadService;
+use App\Http\Services\QuestionAuthoringSecurityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +15,18 @@ use Illuminate\Support\Facades\Storage;
 
 class QuestionsController extends Controller
 {
+    /**
+     * Sanitizes corrupt image paths where a relative prefix like "images/" or "images/1/"
+     * was accidentally prepended to an absolute URL (e.g. "images/https://...").
+     */
+    public function sanitizeCorruptImageUrl($val)
+    {
+        if (!is_string($val) || empty($val)) {
+            return $val;
+        }
+        return preg_replace('/(?:images\/[a-zA-Z0-9_\-\.\/]*|images\/)(https?:\/\/[^"\'\s>]+)/i', '$1', $val);
+    }
+
     //
     public function getAllQuestions(Request $request){
         try{
@@ -428,12 +441,22 @@ class QuestionsController extends Controller
 
     public function getQuestionDataById(Request $request){
         try{
+            $hasProvider = Schema::hasTable('ai_providers') && Schema::hasColumn('exam_question_tbl', 'ai_provider_id');
+            $hasModel = Schema::hasTable('ai_models') && Schema::hasColumn('exam_question_tbl', 'ai_model_id');
 
-            $questionData = DB::table('exam_question_tbl as questions')
+            $query = DB::table('exam_question_tbl as questions')
             ->leftJoin('question_presentation_type_tbl as presentation_types', 'questions.question_presentation_type_id', '=', 'presentation_types.id')
-            ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'questions.scenario_group_id', '=', 'scenario_groups.id')
-            ->where('questions.id', '=', $request -> id)
-            ->select(
+            ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'questions.scenario_group_id', '=', 'scenario_groups.id');
+
+            if ($hasProvider) {
+                $query->leftJoin('ai_providers', 'questions.ai_provider_id', '=', 'ai_providers.id');
+            }
+
+            if ($hasModel) {
+                $query->leftJoin('ai_models', 'questions.ai_model_id', '=', 'ai_models.id');
+            }
+
+            $selects = [
                 'questions.*',
                 'presentation_types.type_name as question_presentation_type_name',
                 'presentation_types.code as question_presentation_type_code',
@@ -441,9 +464,28 @@ class QuestionsController extends Controller
                 'scenario_groups.title as scenario_title',
                 'scenario_groups.scenario_text',
                 'scenario_groups.scenario_text_um',
-                'scenario_groups.scenario_image'
-            )
-            ->get();
+                'scenario_groups.scenario_image',
+            ];
+
+            if ($hasProvider) {
+                $selects[] = 'ai_providers.name as ai_provider_name';
+                $selects[] = 'ai_providers.key as ai_provider_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_provider_name');
+                $selects[] = DB::raw('NULL as ai_provider_key');
+            }
+
+            if ($hasModel) {
+                $selects[] = 'ai_models.name as ai_model_name';
+                $selects[] = 'ai_models.model_key as ai_model_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_model_name');
+                $selects[] = DB::raw('NULL as ai_model_key');
+            }
+
+            $questionData = $query->where('questions.id', '=', $request -> id)
+                ->select($selects)
+                ->get();
 
             $question = $questionData -> first();
 
@@ -528,7 +570,16 @@ class QuestionsController extends Controller
                 $options = DB::table('exam_question_options_tbl')
                 ->where('question_id', '=', $question -> id)
                 ->select('id', 'option as text', 'option_um as text_um', 'is_answer as is_correct')
-                ->get();
+                ->get()
+                ->map(function ($opt) {
+                    if (!empty($opt->text)) {
+                        $opt->text = $this->sanitizeCorruptImageUrl($opt->text);
+                    }
+                    if (!empty($opt->text_um)) {
+                        $opt->text_um = $this->sanitizeCorruptImageUrl($opt->text_um);
+                    }
+                    return $opt;
+                });
 
             }
 
@@ -601,7 +652,7 @@ class QuestionsController extends Controller
         foreach (['topic_id', 'question_type', 'cognitive_domain', 'topic_content', 'difficulty',
             'activate', 'is_mcq', 'has_diagram', 'question_presentation_type_id', 'is_alp_question',
             'class_id', 'subject_id', 'curriculum_board_id', 'board_id', 'session_id', 'year',
-            'group_id', 'unit_id', 'book_id', 'status'] as $field) {
+            'group_id', 'unit_id', 'book_id', 'status', 'ai_provider_id', 'ai_model_id'] as $field) {
             $valueRule = $field === 'status' ? 'string' : 'integer';
             $rules[$field] = ['nullable', is_array($request->input($field)) ? 'array' : $valueRule];
             if (is_array($request->input($field))) {
@@ -616,7 +667,13 @@ class QuestionsController extends Controller
     private function questionFilterResponse(Request $request, bool $export = false)
     {
         try {
-            $query = DB::table('exam_question_tbl as q')
+            $hasProviderTable = Schema::hasTable('ai_providers');
+            $hasModelTable = Schema::hasTable('ai_models');
+            $hasProviderCol = Schema::hasColumn('exam_question_tbl', 'ai_provider_id');
+            $hasModelCol = Schema::hasColumn('exam_question_tbl', 'ai_model_id');
+            $hasReports = Schema::hasTable('question_reports');
+
+            $allQuestions = DB::table('exam_question_tbl as q')
                 ->leftJoin('book_unit_topic_tbl as topics', 'q.topic_id', '=', 'topics.id')
                 ->leftJoin('book_unit_tbl as units', function ($join) {
                     $join->on('units.id', '=', DB::raw('COALESCE(q.unit_id, topics.unit_id)'));
@@ -626,49 +683,84 @@ class QuestionsController extends Controller
                 })
                 ->leftJoin('question_type_tbl as question_types', 'q.question_type', '=', 'question_types.id')
                 ->leftJoin('question_presentation_type_tbl as presentation_types', 'q.question_presentation_type_id', '=', 'presentation_types.id')
-                ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'q.scenario_group_id', '=', 'scenario_groups.id')
-                ->select(
-                    'q.id',
-                    'q.question',
-                    'q.question_um',
-                    'q.topic_id',
-                    'topics.topic_name',
-                    'topics.topic_name_um',
-                    DB::raw('COALESCE(q.unit_id, topics.unit_id) as unit_id'),
-                    'units.unit_name',
-                    DB::raw('COALESCE(q.book_id, units.book_id) as book_id'),
-                    'books.book_name',
-                    'books.class_id',
-                    'books.subject_id',
-                    'books.curriculum_board_id',
-                    'q.question_type',
-                    'question_types.type_name',
-                    'q.cognitive_domain',
-                    'q.topic_content',
-                    'q.difficulty',
-                    'q.marks',
-                    'q.status',
-                    'q.source',
-                    'q.ai_question_generation_id',
-                    'q.reviewed_by',
-                    'q.reviewed_at',
-                    'q.explanation',
-                    'q.explanation_um',
-                    'q.explanation_video_url',
-                    'q.activate',
-                    'q.is_mcq',
-                    'q.has_diagram',
-                    'q.question_presentation_type_id',
-                    'presentation_types.type_name as question_presentation_type_name',
-                    'presentation_types.code as question_presentation_type_code',
-                    'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
-                    'q.scenario_group_id',
-                    'q.scenario_question_order',
-                    'scenario_groups.title as scenario_title',
-                    'q.is_alp_question',
-                    'q.created_at',
-                    'q.updated_at'
-                );
+                ->leftJoin('question_scenario_groups_tbl as scenario_groups', 'q.scenario_group_id', '=', 'scenario_groups.id');
+
+            if ($hasProviderTable && $hasProviderCol) {
+                $allQuestions->leftJoin('ai_providers', 'q.ai_provider_id', '=', 'ai_providers.id');
+            }
+
+            if ($hasModelTable && $hasModelCol) {
+                $allQuestions->leftJoin('ai_models', 'q.ai_model_id', '=', 'ai_models.id');
+            }
+
+            $selects = [
+                'q.id',
+                'q.question',
+                'q.question_um',
+                'q.topic_id',
+                'topics.topic_name',
+                'topics.topic_name_um',
+                DB::raw('COALESCE(q.unit_id, topics.unit_id) as unit_id'),
+                'units.unit_name',
+                DB::raw('COALESCE(q.book_id, units.book_id) as book_id'),
+                'books.book_name',
+                'books.class_id',
+                'books.subject_id',
+                'books.curriculum_board_id',
+                'q.question_type',
+                'question_types.type_name',
+                'q.cognitive_domain',
+                'q.topic_content',
+                'q.difficulty',
+                'q.marks',
+                'q.status',
+                Schema::hasColumn('exam_question_tbl', 'source') ? 'q.source' : DB::raw('NULL as source'),
+                Schema::hasColumn('exam_question_tbl', 'ai_question_generation_id') ? 'q.ai_question_generation_id' : DB::raw('NULL as ai_question_generation_id'),
+                $hasProviderCol ? 'q.ai_provider_id' : DB::raw('NULL as ai_provider_id'),
+                $hasModelCol ? 'q.ai_model_id' : DB::raw('NULL as ai_model_id'),
+            ];
+
+            if ($hasProviderTable && $hasProviderCol) {
+                $selects[] = 'ai_providers.name as ai_provider_name';
+                $selects[] = 'ai_providers.key as ai_provider_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_provider_name');
+                $selects[] = DB::raw('NULL as ai_provider_key');
+            }
+
+            if ($hasModelTable && $hasModelCol) {
+                $selects[] = 'ai_models.name as ai_model_name';
+                $selects[] = 'ai_models.model_key as ai_model_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_model_name');
+                $selects[] = DB::raw('NULL as ai_model_key');
+            }
+
+            $selects = array_merge($selects, [
+                'q.reviewed_by',
+                'q.reviewed_at',
+                'q.explanation',
+                'q.explanation_um',
+                'q.explanation_video_url',
+                'q.activate',
+                'q.is_mcq',
+                'q.has_diagram',
+                'q.question_presentation_type_id',
+                'presentation_types.type_name as question_presentation_type_name',
+                'presentation_types.code as question_presentation_type_code',
+                'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
+                'q.scenario_group_id',
+                'q.scenario_question_order',
+                'scenario_groups.title as scenario_title',
+                'q.is_alp_question',
+                'q.created_at',
+                'q.updated_at',
+                $hasReports
+                    ? DB::raw('(SELECT COUNT(*) FROM question_reports WHERE question_reports.question_id = q.id) as reports_count')
+                    : DB::raw('0 as reports_count'),
+            ]);
+
+            $query = $allQuestions->select($selects);
 
             $applyFilter = function ($column, $value) use ($query) {
                 if (is_array($value)) {
@@ -688,7 +780,15 @@ class QuestionsController extends Controller
 
             $applyFilter('q.topic_id', $request->input('topic_id'));
             $applyFilter('q.status', $request->input('status'));
-            $applyFilter('q.source', $request->input('source'));
+            if (Schema::hasColumn('exam_question_tbl', 'source')) {
+                $applyFilter('q.source', $request->input('source'));
+            }
+            if ($hasProviderCol) {
+                $applyFilter('q.ai_provider_id', $request->input('ai_provider_id'));
+            }
+            if ($hasModelCol) {
+                $applyFilter('q.ai_model_id', $request->input('ai_model_id'));
+            }
             $applyFilter('q.question_type', $request->input('question_type'));
             $applyFilter('q.cognitive_domain', $request->input('cognitive_domain'));
             $applyFilter('q.topic_content', $request->input('topic_content'));
@@ -828,6 +928,7 @@ class QuestionsController extends Controller
                     $question->year = $firstLink?->year;
                     $question->group_id = $firstLink?->group_id;
                     $question->group_name = $firstLink?->group_name;
+                    $question->reports_count = (int) ($question->reports_count ?? 0);
 
                     return $question;
                 });
@@ -966,15 +1067,45 @@ class QuestionsController extends Controller
                 'id' => ['required', 'integer', 'exists:question_scenario_groups_tbl,id'],
             ]);
 
-            $scenarioGroup = DB::table('question_scenario_groups_tbl as scenario_groups')
-                ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id')
-                ->where('scenario_groups.id', $request->id)
-                ->select(
-                    'scenario_groups.*',
-                    'presentation_types.type_name as question_presentation_type_name',
-                    'presentation_types.code as question_presentation_type_code',
-                    'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs'
-                )
+            $hasProvider = Schema::hasTable('ai_providers') && Schema::hasColumn('question_scenario_groups_tbl', 'ai_provider_id');
+            $hasModel = Schema::hasTable('ai_models') && Schema::hasColumn('question_scenario_groups_tbl', 'ai_model_id');
+
+            $query = DB::table('question_scenario_groups_tbl as scenario_groups')
+                ->leftJoin('question_presentation_type_tbl as presentation_types', 'scenario_groups.question_presentation_type_id', '=', 'presentation_types.id');
+
+            if ($hasProvider) {
+                $query->leftJoin('ai_providers', 'scenario_groups.ai_provider_id', '=', 'ai_providers.id');
+            }
+
+            if ($hasModel) {
+                $query->leftJoin('ai_models', 'scenario_groups.ai_model_id', '=', 'ai_models.id');
+            }
+
+            $selects = [
+                'scenario_groups.*',
+                'presentation_types.type_name as question_presentation_type_name',
+                'presentation_types.code as question_presentation_type_code',
+                'presentation_types.allows_multiple_mcqs as question_presentation_type_allows_multiple_mcqs',
+            ];
+
+            if ($hasProvider) {
+                $selects[] = 'ai_providers.name as ai_provider_name';
+                $selects[] = 'ai_providers.key as ai_provider_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_provider_name');
+                $selects[] = DB::raw('NULL as ai_provider_key');
+            }
+
+            if ($hasModel) {
+                $selects[] = 'ai_models.name as ai_model_name';
+                $selects[] = 'ai_models.model_key as ai_model_key';
+            } else {
+                $selects[] = DB::raw('NULL as ai_model_name');
+                $selects[] = DB::raw('NULL as ai_model_key');
+            }
+
+            $scenarioGroup = $query->where('scenario_groups.id', $request->id)
+                ->select($selects)
                 ->first();
 
             if ($scenarioGroup) {
@@ -1171,6 +1302,14 @@ class QuestionsController extends Controller
         ]);
 
         try {
+            $context = $this->scenarioGroupContextById($validated['id']);
+            if (!$this->canAccessQuestionScope($request, 'questions.activate', $context)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. You are not allowed to update question scenario group status.',
+                ], 403);
+            }
+
             $userId = $this->authenticatedUserId($request);
 
             DB::table('question_scenario_groups_tbl')
@@ -1215,8 +1354,7 @@ class QuestionsController extends Controller
                 : ($status === 'published' ? now() : null);
             $scenarioData = $this->resolveQuestionScenarioData($request);
 
-            $question = DB::table('exam_question_tbl')
-            ->insertGetId($this->withAuditColumns('exam_question_tbl', [
+            $questionInsert = [
                 'question' => $request -> question,
                 'question_um' => $request -> question_um,
                 'topic_id' => $request -> topic_id,
@@ -1249,8 +1387,17 @@ class QuestionsController extends Controller
                 'is_alp_question' => $request->has('is_alp_question') ? ($request->is_alp_question ? 1 : 0) : 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
+            ];
 
-            ], $userId));
+            if (Schema::hasColumn('exam_question_tbl', 'ai_provider_id')) {
+                $questionInsert['ai_provider_id'] = $request->filled('ai_provider_id') ? (int) $request->ai_provider_id : null;
+            }
+            if (Schema::hasColumn('exam_question_tbl', 'ai_model_id')) {
+                $questionInsert['ai_model_id'] = $request->filled('ai_model_id') ? (int) $request->ai_model_id : null;
+            }
+
+            $question = DB::table('exam_question_tbl')
+            ->insertGetId($this->withAuditColumns('exam_question_tbl', $questionInsert, $userId));
 
             if ($this->hasQuestionStatementImage($request)) {
                 $questionStatement = $this->resolveQuestionStatement($request, null, $question);
@@ -1650,8 +1797,8 @@ class QuestionsController extends Controller
 
     public function bulkImportQuestions(Request $request)
     {
-        $validated = $request->validate([
-            'questions' => ['required', 'array', 'min:1', 'max:100'],
+        $validationRules = [
+            'questions' => ['required', 'array', 'min:1', 'max:2000'],
             'book_id' => ['nullable', 'integer', 'exists:book_tbl,id'],
             'unit_id' => ['nullable', 'integer', 'exists:book_unit_tbl,id'],
             'topic_id' => ['nullable', 'integer', 'exists:book_unit_topic_tbl,id'],
@@ -1664,18 +1811,40 @@ class QuestionsController extends Controller
             'scenario' => ['nullable', 'array'],
             'scenarios' => ['nullable', 'array'],
             'import_batch_id' => ['nullable', 'string', 'max:128'],
-        ]);
+            'ai_provider_id' => ['nullable', 'integer'],
+            'ai_model_id' => ['nullable', 'integer'],
+        ];
+
+        if (Schema::hasTable('ai_providers')) {
+            $validationRules['ai_provider_id'][] = 'exists:ai_providers,id';
+        }
+        if (Schema::hasTable('ai_models')) {
+            $validationRules['ai_model_id'][] = 'exists:ai_models,id';
+        }
+
+        $validated = $request->validate($validationRules);
 
         $defaultBookId = $validated['book_id'] ?? null;
         $defaultUnitId = $validated['unit_id'] ?? null;
         $defaultTopicId = $validated['topic_id'] ?? null;
+        $aiModelId = !empty($validated['ai_model_id']) ? (int) $validated['ai_model_id'] : null;
+        $aiProviderId = !empty($validated['ai_provider_id']) ? (int) $validated['ai_provider_id'] : null;
+        if ($aiModelId && !$aiProviderId && Schema::hasTable('ai_models') && Schema::hasColumn('ai_models', 'ai_provider_id')) {
+            $aiProviderId = (int) DB::table('ai_models')->where('id', $aiModelId)->value('ai_provider_id');
+        }
         $defaultMarks = isset($validated['default_marks']) && is_numeric($validated['default_marks'])
             ? (float) $validated['default_marks']
             : null;
         $defaultStatus = $validated['default_status'] ?? 'draft';
         $defaultPresentationTypeId = !empty($validated['default_presentation_type_id'])
             ? (int) $validated['default_presentation_type_id']
-            : (!empty($validated['question_presentation_type_id']) ? (int) $validated['question_presentation_type_id'] : null);
+            : (!empty($validated['question_presentation_type_id'])
+                ? (int) $validated['question_presentation_type_id']
+                : (!empty($validated['stimulus']['question_presentation_type_id'])
+                    ? (int) $validated['stimulus']['question_presentation_type_id']
+                    : (!empty($validated['scenario']['question_presentation_type_id'])
+                        ? (int) $validated['scenario']['question_presentation_type_id']
+                        : null)));
         $autoCreateTopics = $request->boolean('auto_create_topics', true);
         $userId = $this->authenticatedUserId($request);
 
@@ -1702,7 +1871,9 @@ class QuestionsController extends Controller
             $defaultUnitId,
             $defaultTopicId,
             $userId,
-            $sanitizeCorruptImageUrl
+            $sanitizeCorruptImageUrl,
+            $aiProviderId,
+            $aiModelId
         ) {
             if (empty($stimData) || !is_array($stimData)) {
                 return null;
@@ -1727,7 +1898,7 @@ class QuestionsController extends Controller
                 ?? $defaultPresentationTypeId
                 ?? $defaultPassagePresTypeId;
 
-            $newGroupId = DB::table('question_scenario_groups_tbl')->insertGetId($this->withAuditColumns('question_scenario_groups_tbl', [
+            $groupFields = [
                 'title' => $scenarioTitle,
                 'scenario_text' => $scenarioText,
                 'scenario_text_um' => $sanitizeCorruptImageUrl($stimData['scenario_text_um'] ?? $stimData['passage_um'] ?? null),
@@ -1739,7 +1910,16 @@ class QuestionsController extends Controller
                 'activate' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ], $userId));
+            ];
+
+            if (Schema::hasColumn('question_scenario_groups_tbl', 'ai_provider_id')) {
+                $groupFields['ai_provider_id'] = !empty($stimData['ai_provider_id']) ? (int) $stimData['ai_provider_id'] : $aiProviderId;
+            }
+            if (Schema::hasColumn('question_scenario_groups_tbl', 'ai_model_id')) {
+                $groupFields['ai_model_id'] = !empty($stimData['ai_model_id']) ? (int) $stimData['ai_model_id'] : $aiModelId;
+            }
+
+            $newGroupId = DB::table('question_scenario_groups_tbl')->insertGetId($this->withAuditColumns('question_scenario_groups_tbl', $groupFields, $userId));
 
             $createdScenarioGroupsMap[$groupKey] = $newGroupId;
             return $newGroupId;
@@ -1887,7 +2067,18 @@ class QuestionsController extends Controller
                     ? (int) $qData['question_presentation_type_id']
                     : $defaultPresentationTypeId;
 
-                if ($qPresTypeId) {
+                if ($isMcq) {
+                    if (!$qPresTypeId) {
+                        throw new \InvalidArgumentException("Question #" . ($index + 1) . " requires a question presentation type for MCQs.");
+                    }
+                    $presType = DB::table('question_presentation_type_tbl')
+                        ->where('id', $qPresTypeId)
+                        ->first();
+                    if (!$presType || !(bool) $presType->activate) {
+                        throw new \InvalidArgumentException("Question #" . ($index + 1) . " has an invalid or inactive presentation type.");
+                    }
+                    $subData['question_presentation_type_id'] = $qPresTypeId;
+                } elseif ($qPresTypeId) {
                     $subData['question_presentation_type_id'] = $qPresTypeId;
                 }
 
@@ -1972,6 +2163,14 @@ class QuestionsController extends Controller
                     $subData['diagram'] = $sanitizeCorruptImageUrl($subData['diagram']);
                 }
 
+                $qAiModelId = !empty($qData['ai_model_id']) ? (int) $qData['ai_model_id'] : $aiModelId;
+                $qAiProviderId = !empty($qData['ai_provider_id']) ? (int) $qData['ai_provider_id'] : $aiProviderId;
+                if ($qAiModelId && !$qAiProviderId && Schema::hasTable('ai_models') && Schema::hasColumn('ai_models', 'ai_provider_id')) {
+                    $qAiProviderId = (int) DB::table('ai_models')->where('id', $qAiModelId)->value('ai_provider_id');
+                }
+                $subData['ai_provider_id'] = $qAiProviderId;
+                $subData['ai_model_id'] = $qAiModelId;
+
                 $subRequest = new Request();
                 $subRequest->merge($subData);
                 $subRequest->setUserResolver(fn () => $request->user());
@@ -1980,10 +2179,32 @@ class QuestionsController extends Controller
                 $resData = $res->getData(true);
 
                 if (!empty($resData['success']) && !empty($resData['question_id'])) {
+                    $questionUpdates = [];
                     if (Schema::hasColumn('exam_question_tbl', 'source')) {
+                        $questionUpdates['source'] = ($qAiModelId || $qAiProviderId) ? 'ai' : 'import';
+                    }
+                    if (Schema::hasColumn('exam_question_tbl', 'ai_provider_id')) {
+                        $questionUpdates['ai_provider_id'] = $qAiProviderId;
+                    }
+                    if (Schema::hasColumn('exam_question_tbl', 'ai_model_id')) {
+                        $questionUpdates['ai_model_id'] = $qAiModelId;
+                    }
+
+                    // Auto-align with SLO Topic if slo_code or slo_topic_id is provided
+                    $qSloTopicId = !empty($qData['slo_topic_id']) ? (int) $qData['slo_topic_id'] : null;
+                    if (!$qSloTopicId && (!empty($qData['slo_code']) || !empty($qData['slo']))) {
+                        $rawSlo = trim($qData['slo_code'] ?? $qData['slo']);
+                        if (Schema::hasTable('slo_topic_tbl')) {
+                            $qSloTopicId = DB::table('slo_topic_tbl')->where('slo_code', $rawSlo)->value('id');
+                        }
+                    }
+                    if ($qSloTopicId && Schema::hasColumn('exam_question_tbl', 'slo_topic_id')) {
+                        $questionUpdates['slo_topic_id'] = $qSloTopicId;
+                    }
+                    if (!empty($questionUpdates)) {
                         DB::table('exam_question_tbl')
                             ->where('id', $resData['question_id'])
-                            ->update(['source' => 'import']);
+                            ->update($questionUpdates);
                     }
                     if ($clientId) {
                         Cache::put('bulk_q_import_' . $userId . '_' . md5($clientId), $resData['question_id'], now()->addHours(6));
@@ -2037,7 +2258,7 @@ class QuestionsController extends Controller
     public function rollbackImport(Request $request)
     {
         $validated = $request->validate([
-            'question_ids' => ['required', 'array', 'min:1'],
+            'question_ids' => ['nullable', 'array'],
             'question_ids.*' => ['integer'],
             'scenario_group_ids' => ['nullable', 'array'],
             'scenario_group_ids.*' => ['integer'],
@@ -2047,40 +2268,45 @@ class QuestionsController extends Controller
             'media_keys.*' => ['string'],
         ]);
 
-        $questionIds = array_values(array_unique($validated['question_ids']));
+        $questionIds = !empty($validated['question_ids']) ? array_values(array_unique($validated['question_ids'])) : [];
         $scenarioGroupIds = !empty($validated['scenario_group_ids']) ? array_values(array_unique($validated['scenario_group_ids'])) : [];
         $topicIds = !empty($validated['topic_ids']) ? array_values(array_unique($validated['topic_ids'])) : [];
         $mediaKeys = !empty($validated['media_keys']) ? array_values(array_unique($validated['media_keys'])) : [];
 
         // Safety Guard: Check if any question is already linked to live tests / attempts
-        if (Schema::hasTable('test_questions')) {
-            $inTests = DB::table('test_questions')->whereIn('question_id', $questionIds)->exists();
-            if ($inTests) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot rollback: One or more questions from this batch are already assigned to active tests.',
-                ], 422);
+        if (!empty($questionIds)) {
+            if (Schema::hasTable('test_questions')) {
+                $inTests = DB::table('test_questions')->whereIn('question_id', $questionIds)->exists();
+                if ($inTests) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot rollback: One or more questions from this batch are already assigned to active tests.',
+                    ], 422);
+                }
             }
-        }
-        if (Schema::hasTable('test_attempt_questions')) {
-            $inAttempts = DB::table('test_attempt_questions')->whereIn('question_id', $questionIds)->exists();
-            if ($inAttempts) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot rollback: Students have already attempted one or more questions from this batch.',
-                ], 422);
+            if (Schema::hasTable('test_attempt_questions')) {
+                $inAttempts = DB::table('test_attempt_questions')->whereIn('question_id', $questionIds)->exists();
+                if ($inAttempts) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot rollback: Students have already attempted one or more questions from this batch.',
+                    ], 422);
+                }
             }
         }
 
         DB::beginTransaction();
         try {
-            // Delete question relations
-            DB::table('exam_question_board_tbl')->whereIn('question_id', $questionIds)->delete();
-            DB::table('exam_question_options_tbl')->whereIn('question_id', $questionIds)->delete();
-            DB::table('exam_answer_tbl')->whereIn('question_id', $questionIds)->delete();
+            $deletedQuestionsCount = 0;
+            if (!empty($questionIds)) {
+                // Delete question relations
+                DB::table('exam_question_board_tbl')->whereIn('question_id', $questionIds)->delete();
+                DB::table('exam_question_options_tbl')->whereIn('question_id', $questionIds)->delete();
+                DB::table('exam_answer_tbl')->whereIn('question_id', $questionIds)->delete();
 
-            // Delete questions
-            $deletedQuestionsCount = DB::table('exam_question_tbl')->whereIn('id', $questionIds)->delete();
+                // Delete questions
+                $deletedQuestionsCount = DB::table('exam_question_tbl')->whereIn('id', $questionIds)->delete();
+            }
 
             // Delete scenario groups if no other questions link to them
             $deletedScenariosCount = 0;
@@ -2176,19 +2402,23 @@ class QuestionsController extends Controller
                 ? $request->reviewed_at
                 : ($status === 'published' ? now() : null);
 
+            $selectFields = [
+                'question',
+                'question_presentation_type_id',
+                'scenario_group_id',
+                'scenario_question_order',
+            ];
+            if (Schema::hasColumn('exam_question_tbl', 'ai_provider_id')) {
+                $selectFields[] = 'ai_provider_id';
+            }
+            if (Schema::hasColumn('exam_question_tbl', 'ai_model_id')) {
+                $selectFields[] = 'ai_model_id';
+            }
+
             $existingQuestion = DB::table('exam_question_tbl')
                 ->where('id', '=', $request->id)
-                ->select(
-                    'question',
-                    'question_presentation_type_id',
-                    'scenario_group_id',
-                    'scenario_question_order'
-                )
+                ->select($selectFields)
                 ->first();
-
-
-
-
 
             if (! $existingQuestion) {
                 DB::rollBack();
@@ -2203,39 +2433,48 @@ class QuestionsController extends Controller
             $scenarioData = $this->resolveQuestionScenarioData($request, $existingQuestion);
     
             // Update the main question
+            $updateFields = [
+                'question' => $questionStatement,
+                'question_um' => $request->question_um,
+                'topic_id' => $request->topic_id,
+                'question_type' => $request->question_type,
+                'exercise_question' => $request->has('exercise_question') ? ($request->exercise_question ? 1 : 0) : ($existingQuestion->exercise_question ?? 0),
+                'marks' => $request->marks !== null && $request->marks !== '' ? round((float) $request->marks, 2) : ($existingQuestion->marks ?? 1.00),
+                'difficulty' => $request->difficulty ?? ($existingQuestion->difficulty ?? 3),
+                'question_lang' => $request->has('question_lang') ? ($request->question_lang ? 1 : 0) : ($existingQuestion->question_lang ?? 0),
+                'question_um_lang' => $request->has('question_um_lang') ? ($request->question_um_lang ? 1 : 0) : ($existingQuestion->question_um_lang ?? 1),
+                'cognitive_domain' => $request->cognitive_domain ?? ($existingQuestion->cognitive_domain ?? 1),
+                'topic_content' => $request->topic_content ?? ($existingQuestion->topic_content ?? 1),
+                'status' => $status,
+                'reviewed_by' => $reviewedBy,
+                'reviewed_at' => $reviewedAt,
+                'explanation' => $request->explanation,
+                'explanation_um' => $request->explanation_um,
+                'explanation_video_url' => $request->explanation_video_url,
+                'book_id' => $request->book_id,
+                'unit_id' => $request->unit_id,
+                'activate' => $request->has('activate')
+                    ? ($request->activate ? 1 : 0)
+                    : ($status !== 'archived' ? 1 : 0),
+                'is_mcq' => $request->is_mcq ? 1 : 0,
+                'has_diagram' => $request->has('has_diagram') ? ($request->has_diagram ? 1 : 0) : 0,
+                'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
+                'scenario_group_id' => $scenarioData['scenario_group_id'],
+                'scenario_question_order' => $scenarioData['scenario_question_order'] ?? 0,
+                'updated_at' => now(),
+                'is_alp_question' => $request->has('is_alp_question') ? ($request->has_alp_question ? 1 : 0) : ($existingQuestion->is_alp_question ?? 1),
+            ];
+
+            if (Schema::hasColumn('exam_question_tbl', 'ai_provider_id')) {
+                $updateFields['ai_provider_id'] = $request->has('ai_provider_id') ? ($request->filled('ai_provider_id') ? (int) $request->ai_provider_id : null) : ($existingQuestion->ai_provider_id ?? null);
+            }
+            if (Schema::hasColumn('exam_question_tbl', 'ai_model_id')) {
+                $updateFields['ai_model_id'] = $request->has('ai_model_id') ? ($request->filled('ai_model_id') ? (int) $request->ai_model_id : null) : ($existingQuestion->ai_model_id ?? null);
+            }
+
             DB::table('exam_question_tbl')
-                ->where('id', '=', $request->id) // Apply the where condition first
-                ->update($this->withAuditColumns('exam_question_tbl', [
-                    'question' => $questionStatement,
-                    'question_um' => $request->question_um,
-                    'topic_id' => $request->topic_id,
-                    'question_type' => $request->question_type,
-                    'exercise_question' => $request->has('exercise_question') ? ($request->exercise_question ? 1 : 0) : ($existingQuestion->exercise_question ?? 0),
-                    'marks' => $request->marks !== null && $request->marks !== '' ? round((float) $request->marks, 2) : ($existingQuestion->marks ?? 1.00),
-                    'difficulty' => $request->difficulty ?? ($existingQuestion->difficulty ?? 3),
-                    'question_lang' => $request->has('question_lang') ? ($request->question_lang ? 1 : 0) : ($existingQuestion->question_lang ?? 0),
-                    'question_um_lang' => $request->has('question_um_lang') ? ($request->question_um_lang ? 1 : 0) : ($existingQuestion->question_um_lang ?? 1),
-                    'cognitive_domain' => $request->cognitive_domain ?? ($existingQuestion->cognitive_domain ?? 1),
-                    'topic_content' => $request->topic_content ?? ($existingQuestion->topic_content ?? 1),
-                    'status' => $status,
-                    'reviewed_by' => $reviewedBy,
-                    'reviewed_at' => $reviewedAt,
-                    'explanation' => $request->explanation,
-                    'explanation_um' => $request->explanation_um,
-                    'explanation_video_url' => $request->explanation_video_url,
-                    'book_id' => $request->book_id,
-                    'unit_id' => $request->unit_id,
-                    'activate' => $request->has('activate')
-                        ? ($request->activate ? 1 : 0)
-                        : ($status !== 'archived' ? 1 : 0),
-                    'is_mcq' => $request->is_mcq ? 1 : 0,
-                    'has_diagram' => $request->has('has_diagram') ? ($request->has_diagram ? 1 : 0) : 0,
-                    'question_presentation_type_id' => $scenarioData['question_presentation_type_id'],
-                    'scenario_group_id' => $scenarioData['scenario_group_id'],
-                    'scenario_question_order' => $scenarioData['scenario_question_order'] ?? 0,
-                    'updated_at' => now(),
-                    'is_alp_question' => $request->has('is_alp_question') ? ($request->is_alp_question ? 1 : 0) : ($existingQuestion->is_alp_question ?? 1),
-                ], $userId, false));
+                ->where('id', '=', $request->id)
+                ->update($this->withAuditColumns('exam_question_tbl', $updateFields, $userId, false));
 
                
                     $existingRecord = DB::table('exam_answer_tbl')
@@ -2361,6 +2600,12 @@ if ($existingRecord) {
     public function repeatQuestion(Request $request){
 
         try{
+            if (!$this->canAccessQuestionScope($request, 'questions.create', $this->questionContextById($request->id))) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized. You are not allowed to repeat questions for this scope.',
+                ], 403);
+            }
 
             $userId = $this->authenticatedUserId($request);
 
@@ -2457,6 +2702,15 @@ if ($existingRecord) {
     public function activateBoardQuestion(Request $request){
 
         try{
+            $boardLink = DB::table('exam_question_board_tbl')->where('id', $request->id)->first();
+            $questionId = $boardLink?->question_id;
+            if (!$this->canAccessQuestionScope($request, 'questions.activate', $questionId ? $this->questionContextById($questionId) : null)) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized. You are not allowed to activate board questions for this scope.',
+                ], 403);
+            }
+
             $userId = $this->authenticatedUserId($request);
 
             $activate = DB::table('exam_question_board_tbl')
@@ -2482,6 +2736,15 @@ if ($existingRecord) {
     }
     public function updateBoardQuestion(Request $request){
         try{
+            $boardLink = DB::table('exam_question_board_tbl')->where('id', $request->id)->first();
+            $questionId = $boardLink?->question_id;
+            if (!$this->canAccessQuestionScope($request, 'questions.update', $questionId ? $this->questionContextById($questionId) : null)) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unauthorized. You are not allowed to update board questions for this scope.',
+                ], 403);
+            }
+
             $userId = $this->authenticatedUserId($request);
 
             $question = DB::table('exam_question_board_tbl')
@@ -2520,40 +2783,113 @@ if ($existingRecord) {
 
 
         }
-        catch(\Exception $e){
+        catch(\Throwable $e){
+            Log::error('QuestionsController@getTest failed: ' . $e->getMessage(), [
+                'exception' => $e,
+            ]);
 
-            return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while retrieving test question.',
+            ], 500);
 
 
         }
     }
 
     public function saveTest(Request $request){
+        if (!$this->canAccessQuestionScope($request, 'questions.create', null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Administrator access required.',
+            ], 403);
+        }
+
         try{
             $userId = $this->authenticatedUserId($request);
+            $questionType = (int) ($request->input('question_type', 1));
+            $isMcq = $questionType === 1 || (int) $request->input('is_mcq', 0) === 1;
+
+            $presentationTypeId = $request->input('question_presentation_type_id');
+            if ($isMcq) {
+                if (empty($presentationTypeId)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Question presentation type is required for MCQs.',
+                    ], 422);
+                }
+
+                $presType = DB::table('question_presentation_type_tbl')
+                    ->where('id', (int) $presentationTypeId)
+                    ->first();
+
+                if (!$presType) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Selected question presentation type was not found.',
+                    ], 422);
+                }
+
+                if (empty($presType->activate)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Selected question presentation type is inactive.',
+                    ], 422);
+                }
+            }
 
             $question = DB::table('exam_question_tbl')
             ->insertGetId($this->withAuditColumns('exam_question_tbl', [
                 'question' => $request -> question,
                 'question_um' => $request -> question,
-                'topic_id' =>  1,
-                'question_type' => 1,
-                'exercise_question' => 1,
-                'marks' => 1,
+                'topic_id' =>  (int) ($request->input('topic_id', 1)),
+                'question_type' => $questionType,
+                'exercise_question' => (int) ($request->input('exercise_question', 1)),
+                'marks' => (float) ($request->input('marks', 1)),
+                'question_presentation_type_id' => $isMcq ? (int) $presentationTypeId : ($presentationTypeId ? (int) $presentationTypeId : null),
                 'activate' => 1,
                 'created_at' => now(),
                 'updated_at' => now(), 
 
             ], $userId));
 
-            return response()->json(['success' => true, 'message' => 'Question and options saved successfully.']);
-
+            return response()->json([
+                'success' => true,
+                'message' => 'Question and options saved successfully.',
+                'question_id' => $question,
+            ]);
 
         }
         catch(\Exception $e){
-            return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error saving question.', 'error' => $e->getMessage()], 500);
 
         }
+    }
+
+    public function deleteQuestion(Request $request, $id = null)
+    {
+        $questionId = (int) ($id ?? $request->input('id') ?? $request->route('id'));
+        if (!$questionId) {
+            return response()->json(['success' => false, 'message' => 'Question ID is required.'], 400);
+        }
+
+        $context = $this->questionContextById($questionId);
+        if (!$context) {
+            return response()->json(['success' => false, 'message' => 'Question not found.'], 404);
+        }
+
+        if (!$this->canAccessQuestionScope($request, 'questions.update', $context)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized. Administrator access required.'], 403);
+        }
+
+        DB::table('exam_question_tbl')
+            ->where('id', $questionId)
+            ->update($this->withAuditColumns('exam_question_tbl', [
+                'activate' => 0,
+                'updated_at' => now(),
+            ], $this->authenticatedUserId($request), false));
+
+        return response()->json(['success' => true, 'message' => 'Question deleted successfully.']);
     }
 
     public function getSLOQuestionsByTopic(Request $request){
@@ -2785,6 +3121,8 @@ if ($existingRecord) {
             $scenarioGroupId = (int) $existingQuestion->scenario_group_id;
         }
 
+        $isMcq = $this->isMcqQuestionRequest($request);
+
         $hasPresentationTypeInput = array_key_exists('question_presentation_type_id', $request->all());
         $presentationTypeId = null;
 
@@ -2794,6 +3132,37 @@ if ($existingRecord) {
                 : null;
         } elseif ($existingQuestion?->question_presentation_type_id) {
             $presentationTypeId = (int) $existingQuestion->question_presentation_type_id;
+        }
+
+        // Future records: Presentation type is compulsory for newly created MCQs
+        if ($isMcq && $existingQuestion === null) {
+            if (!$request->filled('question_presentation_type_id') || $presentationTypeId === null) {
+                throw new \InvalidArgumentException('Question presentation type is required for MCQs.');
+            }
+
+            $presentationType = DB::table('question_presentation_type_tbl')
+                ->where('id', $presentationTypeId)
+                ->first();
+
+            if (! $presentationType) {
+                throw new \InvalidArgumentException('Selected question presentation type was not found.');
+            }
+
+            if (! (bool) $presentationType->activate) {
+                throw new \InvalidArgumentException('Selected question presentation type is inactive.');
+            }
+        } elseif ($presentationTypeId !== null) {
+            $presentationType = DB::table('question_presentation_type_tbl')
+                ->where('id', $presentationTypeId)
+                ->first();
+
+            if (! $presentationType) {
+                throw new \InvalidArgumentException('Selected question presentation type was not found.');
+            }
+
+            if (! (bool) $presentationType->activate) {
+                throw new \InvalidArgumentException('Selected question presentation type is inactive.');
+            }
         }
 
         if (! $scenarioGroupId) {
@@ -2912,9 +3281,10 @@ if ($existingRecord) {
     private function managedStorageUrlPrefixes(): array
     {
         $prefixes = [];
+        $cdnUrl = config('filesystems.cdn_url');
 
-        if (env('CDN_URL')) {
-            $prefixes[] = rtrim(env('CDN_URL'), '/') . '/';
+        if ($cdnUrl) {
+            $prefixes[] = rtrim($cdnUrl, '/') . '/';
         }
 
         try {
@@ -2932,14 +3302,16 @@ if ($existingRecord) {
         return array_values(array_unique($prefixes));
     }
 
+    private function resolveAdminUser(Request $request): ?\App\Models\User
+    {
+        return app(QuestionAuthoringSecurityService::class)->resolveAdminUser($request);
+    }
+
     private function authenticatedUserId(Request $request): ?int
     {
-        $user = $request->user()
-            ?: auth('api')->user()
-            ?: auth('web_api')->user()
-            ?: auth()->user();
+        $admin = $this->resolveAdminUser($request);
 
-        return $user?->id ? (int) $user->id : null;
+        return $admin?->id ? (int) $admin->id : null;
     }
 
     private function withAuditColumns(string $table, array $data, ?int $userId, bool $isCreate = true): array
@@ -2995,179 +3367,32 @@ if ($existingRecord) {
 
     private function canAccessQuestionScope(Request $request, string $permissionName, ?array $context): bool
     {
-        $scopes = $this->questionPermissionScopes($request, $permissionName);
-
-        if ($scopes === null || $scopes->isEmpty()) {
-            return true;
-        }
-
-        if (!$context) {
-            return false;
-        }
-
-        foreach ($scopes as $scope) {
-            $contextKey = $this->scopeContextKey($scope->scope_type);
-
-            if ($contextKey && isset($context[$contextKey]) && (int) $context[$contextKey] === (int) $scope->scope_id) {
-                return true;
-            }
-        }
-
-        return false;
+        return app(QuestionAuthoringSecurityService::class)->canAccessQuestionScope($request, $permissionName, $context);
     }
 
     private function questionPermissionScopes(Request $request, string $permissionName)
     {
-        $user = $request->user() ?: auth()->user();
+        return app(QuestionAuthoringSecurityService::class)->questionPermissionScopes($request, $permissionName);
+    }
 
-        if (!$user || empty($user->role_id)) {
-            return collect();
-        }
-
-        $user->loadMissing('role');
-
-        $roleName = str_replace(['-', ' '], '_', strtolower(trim((string) $user->role?->name)));
-        if ($roleName === 'super_admin') {
-            return null;
-        }
-
-        return DB::table('role_permission_scopes as scopes')
-            ->join('permissions', 'permissions.id', '=', 'scopes.permission_id')
-            ->where('scopes.role_id', $user->role_id)
-            ->where('permissions.name', $permissionName)
-            ->get(['scopes.scope_type', 'scopes.scope_id']);
+    private function scenarioGroupContextById($id): ?array
+    {
+        return app(QuestionAuthoringSecurityService::class)->scenarioGroupContextById($id);
     }
 
     private function questionContextFromRequest(Request $request): ?array
     {
-        $context = [
-            'topic_id' => $request->filled('topic_id') ? (int) $request->topic_id : null,
-            'unit_id' => $request->filled('unit_id') ? (int) $request->unit_id : null,
-            'book_id' => $request->filled('book_id') ? (int) $request->book_id : null,
-            'question_type' => $request->filled('question_type') ? (int) $request->question_type : null,
-            'cognitive_domain' => $request->filled('cognitive_domain') ? (int) $request->cognitive_domain : null,
-            'topic_content' => $request->filled('topic_content') ? (int) $request->topic_content : null,
-            'subject_id' => null,
-            'class_id' => null,
-            'curriculum_board_id' => null,
-        ];
-
-        if ($context['topic_id']) {
-            $topicContext = DB::table('book_unit_topic_tbl as topics')
-                ->leftJoin('book_unit_tbl as units', 'units.id', '=', 'topics.unit_id')
-                ->leftJoin('book_tbl as books', 'books.id', '=', 'units.book_id')
-                ->where('topics.id', $context['topic_id'])
-                ->select(
-                    'topics.id as topic_id',
-                    'units.id as unit_id',
-                    'books.id as book_id',
-                    'books.subject_id',
-                    'books.class_id',
-                    'books.curriculum_board_id'
-                )
-                ->first();
-
-
-
-
-
-            if ($topicContext) {
-                $context['unit_id'] = $context['unit_id'] ?: (int) $topicContext->unit_id;
-                $context['book_id'] = $context['book_id'] ?: (int) $topicContext->book_id;
-                $context['subject_id'] = $topicContext->subject_id ? (int) $topicContext->subject_id : null;
-                $context['class_id'] = $topicContext->class_id ? (int) $topicContext->class_id : null;
-                $context['curriculum_board_id'] = $topicContext->curriculum_board_id ? (int) $topicContext->curriculum_board_id : null;
-            }
-        }
-
-        if ($context['unit_id'] && !$context['book_id']) {
-            $unitContext = DB::table('book_unit_tbl')
-                ->where('id', $context['unit_id'])
-                ->select('book_id')
-                ->first();
-
-
-
-
-
-            $context['book_id'] = $unitContext?->book_id ? (int) $unitContext->book_id : null;
-        }
-
-        if ($context['book_id']) {
-            $bookContext = DB::table('book_tbl')
-                ->where('id', $context['book_id'])
-                ->select('subject_id', 'class_id', 'curriculum_board_id')
-                ->first();
-
-
-
-
-
-            if ($bookContext) {
-                $context['subject_id'] = $bookContext->subject_id ? (int) $bookContext->subject_id : null;
-                $context['class_id'] = $bookContext->class_id ? (int) $bookContext->class_id : null;
-                $context['curriculum_board_id'] = $bookContext->curriculum_board_id ? (int) $bookContext->curriculum_board_id : null;
-            }
-        }
-
-        return $context;
+        return app(QuestionAuthoringSecurityService::class)->questionContextFromRequest($request);
     }
 
     private function questionContextById($questionId): ?array
     {
-        $question = DB::table('exam_question_tbl as q')
-            ->leftJoin('book_unit_topic_tbl as topics', 'topics.id', '=', 'q.topic_id')
-            ->leftJoin('book_unit_tbl as units', function ($join) {
-                $join->on('units.id', '=', DB::raw('COALESCE(q.unit_id, topics.unit_id)'));
-            })
-            ->leftJoin('book_tbl as books', function ($join) {
-                $join->on('books.id', '=', DB::raw('COALESCE(q.book_id, units.book_id)'));
-            })
-            ->where('q.id', $questionId)
-            ->select(
-                'q.topic_id',
-                DB::raw('COALESCE(q.unit_id, topics.unit_id) as unit_id'),
-                DB::raw('COALESCE(q.book_id, units.book_id) as book_id'),
-                'books.subject_id',
-                'books.class_id',
-                'books.curriculum_board_id',
-                'q.question_type',
-                'q.cognitive_domain',
-                'q.topic_content'
-            )
-            ->first();
-
-        if (!$question) {
-            return null;
-        }
-
-        return [
-            'topic_id' => $question->topic_id ? (int) $question->topic_id : null,
-            'unit_id' => $question->unit_id ? (int) $question->unit_id : null,
-            'book_id' => $question->book_id ? (int) $question->book_id : null,
-            'subject_id' => $question->subject_id ? (int) $question->subject_id : null,
-            'class_id' => $question->class_id ? (int) $question->class_id : null,
-            'curriculum_board_id' => $question->curriculum_board_id ? (int) $question->curriculum_board_id : null,
-            'question_type' => $question->question_type ? (int) $question->question_type : null,
-            'cognitive_domain' => $question->cognitive_domain ? (int) $question->cognitive_domain : null,
-            'topic_content' => $question->topic_content ? (int) $question->topic_content : null,
-        ];
+        return app(QuestionAuthoringSecurityService::class)->questionContextById($questionId);
     }
 
     private function scopeContextKey(string $scopeType): ?string
     {
-        return match ($scopeType) {
-            'curriculum_board' => 'curriculum_board_id',
-            'class' => 'class_id',
-            'subject' => 'subject_id',
-            'book' => 'book_id',
-            'unit' => 'unit_id',
-            'topic' => 'topic_id',
-            'question_type' => 'question_type',
-            'cognitive_domain' => 'cognitive_domain',
-            'topic_content' => 'topic_content',
-            default => null,
-        };
+        return app(QuestionAuthoringSecurityService::class)->scopeContextKey($scopeType);
     }
 
     

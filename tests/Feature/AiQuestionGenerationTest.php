@@ -37,10 +37,10 @@ class AiQuestionGenerationTest extends TestCase
             'subject_tbl' => 'subject_name', 'class_tbl' => 'class_name', 'book_tbl' => 'subject_id class_id curriculum_board_id',
             'book_unit_tbl' => 'book_id', 'book_unit_topic_tbl' => 'unit_id topic_name',
             'question_type_tbl' => 'type_name is_mcq activate', 'question_presentation_type_tbl' => 'type_name allows_multiple_mcqs activate',
-            'exam_question_tbl' => 'question question_um topic_id question_type exercise_question marks difficulty question_lang question_um_lang cognitive_domain topic_content status reviewed_by reviewed_at explanation explanation_um explanation_video_url book_id unit_id activate is_mcq has_diagram question_presentation_type_id scenario_group_id scenario_question_order is_alp_question created_by updated_by',
+            'exam_question_tbl' => 'question question_um topic_id question_type exercise_question marks difficulty question_lang question_um_lang cognitive_domain topic_content status reviewed_by reviewed_at explanation explanation_um explanation_video_url book_id unit_id activate is_mcq has_diagram question_presentation_type_id scenario_group_id scenario_question_order is_alp_question ai_provider_id ai_model_id source ai_question_generation_id created_by updated_by',
             'exam_answer_tbl' => 'question_id answer answer_um answer_lang answer_um_lang',
             'exam_question_options_tbl' => 'question_id option option_um is_answer option_lang',
-            'question_scenario_groups_tbl' => 'title scenario_text scenario_text_um scenario_image question_presentation_type_id topic_id unit_id book_id activate created_by updated_by',
+            'question_scenario_groups_tbl' => 'title scenario_text scenario_text_um scenario_image question_presentation_type_id topic_id unit_id book_id activate ai_provider_id ai_model_id created_by updated_by',
         ] as $tableName => $columns) {
             Schema::create($tableName, function (Blueprint $table) use ($columns) {
                 $table->id();
@@ -80,7 +80,7 @@ class AiQuestionGenerationTest extends TestCase
 
     private function input(array $extra = []): array
     {
-        return array_replace(['topic_id' => 1, 'question_type' => 1, 'count' => 1, 'language' => 'en', 'source_text' => 'Force equals mass multiplied by acceleration.'], $extra);
+        return array_replace(['topic_id' => 1, 'question_type' => 1, 'question_presentation_type_id' => 1, 'count' => 1, 'language' => 'en', 'source_text' => 'Force equals mass multiplied by acceleration.'], $extra);
     }
 
     private function draft(bool $mcq = true, int $count = 1): array

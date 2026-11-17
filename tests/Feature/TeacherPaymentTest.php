@@ -20,29 +20,38 @@ class TeacherPaymentTest extends TestCase
             'driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true,
         ]]);
         DB::purge('teacher_payment_test');
-        foreach (['users', 'institute_tbl', 'city_tbl', 'payment_accounts'] as $name) {
+        foreach (['users', 'institute_tbl', 'city_tbl'] as $name) {
             Schema::create($name, fn (Blueprint $t) => $t->id());
         }
+        Schema::create('class_tbl', function (Blueprint $t) {
+            $t->id(); $t->string('class_name')->nullable(); $t->string('class_name_um')->nullable();
+            $t->boolean('activate')->default(true); $t->timestamps();
+        });
+        Schema::create('payment_accounts', function (Blueprint $t) { $t->id(); $t->string('title')->nullable(); $t->string('method')->nullable(); $t->boolean('is_active')->default(true); $t->integer('display_order')->default(0); $t->string('account_title')->nullable(); $t->string('account_number')->nullable(); $t->string('iban')->nullable(); $t->string('bank_name')->nullable(); $t->text('instructions')->nullable(); });
         Schema::create('web_users', function (Blueprint $t) {
-            $t->id(); $t->string('name'); $t->string('role'); $t->string('status'); $t->softDeletes(); $t->timestamps();
+            $t->id(); $t->string('name'); $t->string('role'); $t->string('status'); $t->string('phone')->nullable(); $t->string('last_token')->nullable(); $t->timestamp('last_login_at')->nullable(); $t->softDeletes(); $t->timestamps();
         });
         Schema::create('offered_classes', function (Blueprint $t) {
-            $t->id(); $t->decimal('Price', 10, 2); $t->decimal('discount_price', 10, 2)->nullable();
+            $t->id(); $t->unsignedBigInteger('class_id')->nullable(); $t->decimal('Price', 10, 2); $t->decimal('discount_price', 10, 2)->nullable();
             $t->boolean('is_active')->default(true); $t->boolean('is_free')->default(false); $t->date('session_end')->nullable();
+            $t->date('session_start')->nullable(); $t->integer('display_order')->default(0);
         });
         Schema::create('offered_programs', function (Blueprint $t) {
-            $t->id(); $t->unsignedBigInteger('offered_class_id'); $t->string('title'); $t->boolean('is_active')->default(true);
+            $t->id(); $t->unsignedBigInteger('offered_class_id'); $t->string('title'); $t->boolean('is_active')->default(true); $t->string('slug')->nullable(); $t->integer('display_order')->default(0);
         });
         foreach (['2026_03_24_175741_create_user_subscriptions_table.php', '2026_03_24_200045_create_subscription_payment_requests_table.php',
-            '2026_09_17_000001_create_teacher_profiles_table.php', '2026_09_17_000002_add_teacher_payments.php'] as $file) {
+            '2026_09_17_000001_create_teacher_profiles_table.php', '2026_09_17_000002_add_teacher_payments.php',
+            '2026_11_10_000004_add_teacher_collection_permission_to_profiles.php',
+            '2026_11_10_000005_create_subscription_payment_request_events_table.php'] as $file) {
             (require database_path('migrations/'.$file))->up();
         }
         WebUser::create(['name' => 'Student', 'role' => 'student', 'status' => 'active']);
-        WebUser::create(['name' => 'Teacher', 'role' => 'teacher', 'status' => 'active']);
-        WebUser::create(['name' => 'Other teacher', 'role' => 'teacher', 'status' => 'active']);
+        WebUser::create(['name' => 'Teacher', 'role' => 'teacher', 'status' => 'active', 'phone' => '03000000002']);
+        WebUser::create(['name' => 'Other teacher', 'role' => 'teacher', 'status' => 'active', 'phone' => '03000000003']);
         foreach ([2, 3] as $id) {
             $profile = TeacherProfile::create(['web_user_id' => $id]);
-            $profile->forceFill(['status' => 'active', 'collection_code' => 'COL-'.$id])->save();
+            $profile->forceFill(['status' => 'active', 'collection_code' => sprintf('COL-%06d', $id),
+                'can_collect_student_subscriptions' => true])->save();
         }
         DB::table('offered_classes')->insert(['id' => 1, 'Price' => 1000, 'discount_price' => 800]);
         DB::table('offered_programs')->insert(['id' => 1, 'offered_class_id' => 1, 'title' => 'Biology']);
@@ -53,7 +62,7 @@ class TeacherPaymentTest extends TestCase
     private function submit()
     {
         return $this->postJson('/web_api/auth/save-payment-request', [
-            'payment_method' => 'teacher', 'offered_program_id' => 1, 'collection_code' => 'COL-2', 'amount' => 1,
+            'payment_method' => 'teacher', 'offered_program_id' => 1, 'collection_code' => 'COL-000002',
         ]);
     }
 

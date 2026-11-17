@@ -75,7 +75,7 @@ trait SelectsLmsMcqQuestions
 
         $groupPosition = array_flip($scenarioGroupIds);
 
-        $questions = DB::table('exam_question_tbl as questions')
+        $rawQuestions = DB::table('exam_question_tbl as questions')
             ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
             ->whereIn('questions.scenario_group_id', $scenarioGroupIds)
             ->whereIn('topics.unit_id', $unitIds)
@@ -83,7 +83,29 @@ trait SelectsLmsMcqQuestions
             ->where('questions.activate', 1)
             ->select('questions.id', 'questions.scenario_group_id', 'questions.scenario_question_order')
             ->distinct()
-            ->get()
+            ->get();
+
+        if ($rawQuestions->isEmpty()) {
+            return null;
+        }
+
+        $grouped = $rawQuestions->groupBy('scenario_group_id');
+        $selectedQuestions = collect();
+
+        foreach ($scenarioGroupIds as $gid) {
+            $groupMembers = $grouped->get($gid, collect());
+            if ($groupMembers->isEmpty()) {
+                continue;
+            }
+            if ($groupMembers->count() > 4) {
+                $sampled = $groupMembers->shuffle()->take(4);
+            } else {
+                $sampled = $groupMembers;
+            }
+            $selectedQuestions = $selectedQuestions->concat($sampled);
+        }
+
+        $questions = $selectedQuestions
             ->sort(function ($a, $b) use ($groupPosition) {
                 return [
                     $groupPosition[(int) $a->scenario_group_id],

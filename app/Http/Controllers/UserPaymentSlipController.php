@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class UserPaymentSlipController extends Controller
 {
@@ -15,6 +16,13 @@ class UserPaymentSlipController extends Controller
     public function uploadPaymentSlip(Request $request)
     {
         $user = Auth::guard('web_api')->user();
+        if (!$user) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
         try {
             DB::beginTransaction();
     
@@ -101,11 +109,15 @@ class UserPaymentSlipController extends Controller
     
         } catch (\Exception $e) {
             DB::rollBack();
-    
+
+            Log::error('Payment slip upload failed', [
+                'user_id' => $user?->id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => -1,
-                'error' => $e->getMessage(),
-                'user' => $user,
+                'message' => 'Payment slip upload failed. Please try again later.',
             ], 500);
         }
     }
@@ -153,10 +165,14 @@ public function uploadDepositSlipImage(Request $request){
             'file_size' => $file->getSize(),
         ]);
     } catch (\Exception $e) {
+        Log::error('Deposit slip image upload failed', [
+            'user_id' => Auth::guard('web_api')->id(),
+            'error' => $e->getMessage(),
+        ]);
+
         return response()->json([
             'success' => 0,
-            'message' => 'Failed to upload deposit slip to S3.',
-            'error' => $e->getMessage(),
+            'message' => 'Failed to upload deposit slip to storage.',
         ], 500);
     }
 }

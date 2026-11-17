@@ -40,6 +40,20 @@ class ExamQuestion extends Model
         return $this->belongsTo(AiQuestionGeneration::class, 'ai_question_generation_id');
     }
 
+    public function aiProvider(){
+        return $this->belongsTo(AiProvider::class, 'ai_provider_id');
+    }
 
+    public function aiModel(){
+        return $this->belongsTo(AiModel::class, 'ai_model_id');
+    }
 
+    public function sloTopic(){
+        return $this->belongsTo(SloTopic::class, 'slo_topic_id');
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(QuestionReport::class, 'question_id');
+    }
 }

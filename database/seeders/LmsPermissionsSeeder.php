@@ -17,8 +17,11 @@ class LmsPermissionsSeeder extends Seeder
             'dashboard.view',
             'teachers.view',
             'teachers.approve',
+            'academic-reports.view',
             'teacher-settlements.view',
             'teacher-settlements.review',
+            'teacher-collection-permissions.view',
+            'teacher-collection-permissions.manage',
 
             'ai-models.view',
             'questions.generate',
@@ -68,6 +71,8 @@ class LmsPermissionsSeeder extends Seeder
             'web-users.create',
             'web-users.update',
             'web-users.approve-subscription',
+            'student-payment-requests.view',
+            'student-payment-requests.review',
             'web-users.verify',
 
             'classes.view',
@@ -98,8 +103,12 @@ class LmsPermissionsSeeder extends Seeder
             'tst-past-papers.view',
             'tst-past-papers.create',
             'tst-past-papers.update',
+            'tst-past-papers.assign-curriculum',
             'tst-past-papers.activate',
             'tst-past-papers.delete',
+
+            'legacy-past-papers.view',
+            'legacy-past-papers.assign-curriculum',
 
             'books.view',
             'books.create',
@@ -115,6 +124,18 @@ class LmsPermissionsSeeder extends Seeder
             'topics.create',
             'topics.update',
             'topics.activate',
+
+            'slo-domains.view',
+            'slo-domains.create',
+            'slo-domains.update',
+            'slo-domains.activate',
+            'slo-domains.delete',
+
+            'slo-topics.view',
+            'slo-topics.create',
+            'slo-topics.update',
+            'slo-topics.activate',
+            'slo-topics.delete',
 
             'topic-content.view',
             'topic-content.create',
@@ -244,7 +265,7 @@ class LmsPermissionsSeeder extends Seeder
         }
 
         $superAdminRole = Role::firstOrCreate(['name' => 'super_admin']);
-        $superAdminRole->permissions()->sync(
+        $superAdminRole->permissions()->syncWithoutDetaching(
             Permission::whereIn('name', $permissions)->pluck('id')->all()
         );
     }

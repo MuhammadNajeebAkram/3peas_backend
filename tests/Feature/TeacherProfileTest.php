@@ -25,6 +25,7 @@ class TeacherProfileTest extends TestCase
             DB::table($name)->insert(['id' => 1]);
         }
         (require database_path('migrations/2026_09_17_000001_create_teacher_profiles_table.php'))->up();
+        (require database_path('migrations/2026_11_10_000004_add_teacher_collection_permission_to_profiles.php'))->up();
     }
 
     public function test_profile_starts_pending_and_teacher_code_survives_updates(): void
@@ -34,12 +35,13 @@ class TeacherProfileTest extends TestCase
         $this->assertMatchesRegularExpression('/^TCH-[A-Z0-9]{12}$/', $code);
         $this->assertSame('pending', $profile->fresh()->status);
         $this->assertNull($profile->fresh()->collection_code);
+        $this->assertFalse($profile->fresh()->can_collect_student_subscriptions);
         $this->assertSame(1, $profile->institute->id);
         $this->assertSame(1, $profile->city->id);
         $profile->city_id = null;
         $profile->save();
         $this->assertSame($code, $profile->fresh()->teacher_code);
-        foreach (['status', 'collection_code', 'teacher_code', 'approved_by', 'approved_at', 'admin_note'] as $field) {
+        foreach (['status', 'collection_code', 'teacher_code', 'approved_by', 'approved_at', 'admin_note', 'can_collect_student_subscriptions'] as $field) {
             $this->assertFalse($profile->isFillable($field));
         }
     }

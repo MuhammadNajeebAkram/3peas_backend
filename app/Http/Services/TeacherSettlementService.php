@@ -41,15 +41,7 @@ class TeacherSettlementService
 
     public function summary(int $teacherId): array
     {
-        $payments = SubscriptionPaymentRequest::where('teacher_profile_id', $teacherId)->where('payment_method', 'teacher');
-        $collected = self::cents((clone $payments)->where('status', 'approved')->whereNotNull('confirmed_at')->sum('final_amount'));
-        $settled = self::cents(TeacherSettlement::where('teacher_profile_id', $teacherId)->where('status', 'confirmed')->sum('amount'));
-        $pending = self::cents(TeacherSettlement::where('teacher_profile_id', $teacherId)->where('status', 'pending')->sum('amount'));
-        return ['currency' => 'PKR', 'collected' => self::money($collected), 'settled' => self::money($settled),
-            'outstanding' => self::money($collected - $settled), 'pending_settlement' => self::money($pending),
-            'available_to_settle' => self::money($collected - $settled - $pending),
-            'pending_payment_requests' => (clone $payments)->where('status', 'pending')->count(),
-            'confirmed_payment_requests' => (clone $payments)->where('status', 'approved')->count()];
+        return app(TeacherFinancialReportService::class)->summary($teacherId);
     }
 
     public function submit(int $teacherId, array $data, ?UploadedFile $proof): TeacherSettlement

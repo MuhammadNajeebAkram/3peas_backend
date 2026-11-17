@@ -23,6 +23,8 @@ class QuestionScenarioGroup extends Model
         'activate',
         'created_by',
         'updated_by',
+        'ai_provider_id',
+        'ai_model_id',
     ];
 
     protected $casts = [
@@ -32,6 +34,16 @@ class QuestionScenarioGroup extends Model
     public function presentationType()
     {
         return $this->belongsTo(QuestionPresentationType::class, 'question_presentation_type_id');
+    }
+
+    public function aiProvider()
+    {
+        return $this->belongsTo(AiProvider::class, 'ai_provider_id');
+    }
+
+    public function aiModel()
+    {
+        return $this->belongsTo(AiModel::class, 'ai_model_id');
     }
 
     public function questions()

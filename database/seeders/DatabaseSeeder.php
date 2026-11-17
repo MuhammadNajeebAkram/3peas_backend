@@ -18,7 +18,11 @@ class DatabaseSeeder extends Seeder
             DashboardItemsSeeder::class,
             SuperAdminRoleSeeder::class,
             TeacherPermissionsSeeder::class,
+            TeacherSubscriptionPlanSeeder::class,
+            TeacherSubscriptionAdminPermissionsSeeder::class,
+            StudentPaymentRequestPermissionsSeeder::class,
             AiProviderSeeder::class,
+            QuestionReportPermissionsSeeder::class,
         ]);
 
         // User::factory(10)->create();

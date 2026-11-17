@@ -15,7 +15,7 @@ class LogAdminActivity
         $response = $next($request);
 
         if ($this->shouldLog($request, $response)) {
-            $this->logActivity($request);
+            $this->logActivity($request, $response);
         }
 
         return $response;
@@ -44,7 +44,7 @@ class LogAdminActivity
             && !str_contains($path, 'media/presign');
     }
 
-    private function logActivity(Request $request): void
+    private function logActivity(Request $request, Response $response): void
     {
         try {
             $adminUserId = $this->authenticatedUserId($request);
@@ -58,7 +58,7 @@ class LogAdminActivity
                 'action' => $this->resolveAction($request),
                 'module' => $this->resolveModule($request),
                 'reference_type' => $this->resolveReferenceType($request),
-                'reference_id' => $this->resolveReferenceId($request),
+                'reference_id' => $this->resolveReferenceId($request) ?? $this->resolveResponseReferenceId($response),
                 'ip_address' => $request->ip(),
                 'user_agent' => substr((string) $request->userAgent(), 0, 1000),
                 'created_at' => now(),
@@ -89,9 +89,16 @@ class LogAdminActivity
         return match (true) {
             str_contains($actionSource, 'update') => 'updated',
             str_contains($actionSource, 'delete') => 'deleted',
+            str_contains($actionSource, 'reactivate') => 'reactivated',
             str_contains($actionSource, 'activate') => 'status_updated',
             str_contains($actionSource, 'approve') => 'approved',
             str_contains($actionSource, 'review') => 'reviewed',
+            str_contains($actionSource, 'assign') => 'assigned',
+            str_contains($actionSource, 'extend') => 'extended',
+            str_contains($actionSource, 'suspend') => 'suspended',
+            str_contains($actionSource, 'cancel') => 'cancelled',
+            str_contains($actionSource, 'default') => 'default_changed',
+            str_contains($actionSource, 'status') => 'status_updated',
             str_contains($actionSource, 'sync') => 'synced',
             str_contains($actionSource, 'payment') || str_contains($actionSource, 'pay') => 'payment_recorded',
             str_contains($actionSource, 'add') || str_contains($actionSource, 'save') || str_contains($actionSource, 'create') => 'created',
@@ -124,6 +131,21 @@ class LogAdminActivity
             }
         }
 
+        foreach ($request->route()?->parameters() ?? [] as $value) {
+            if (is_numeric($value)) return (int) $value;
+        }
+
+        return null;
+    }
+
+    private function resolveResponseReferenceId(Response $response): ?int
+    {
+        if (!method_exists($response, 'getContent')) return null;
+        $payload = json_decode((string) $response->getContent(), true);
+        foreach ([$payload['data']['id'] ?? null, $payload['data']['subscription']['id'] ?? null,
+            $payload['subscription']['id'] ?? null, $payload['teacher']['id'] ?? null] as $value) {
+            if (is_numeric($value)) return (int) $value;
+        }
         return null;
     }
 

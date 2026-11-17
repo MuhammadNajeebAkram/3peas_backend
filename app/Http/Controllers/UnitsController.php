@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BookUnit;
+use App\Models\Book;
 use App\Models\OfferedProgram;
 use App\Models\UserSubscription;
 use App\Http\Services\BookService;
@@ -544,5 +545,119 @@ class UnitsController extends Controller
         }
     }
 
-   
+    /**
+     * Bulk import Units from structured JSON array.
+     */
+    public function bulkImportUnitsForAdmin(Request $request)
+    {
+        $request->validate([
+            'units' => 'required|array|min:1',
+            'book_id' => 'nullable|integer|exists:book_tbl,id',
+            'update_existing' => 'nullable|boolean',
+        ]);
+
+        $defaultBookId = $request->book_id;
+        $updateExisting = $request->boolean('update_existing', true);
+
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($request->units as $index => $item) {
+                $idxLabel = "Unit #" . ($index + 1);
+
+                $bookId = $item['book_id'] ?? $defaultBookId;
+                if (!$bookId && !empty($item['book_name'])) {
+                    $bookId = Book::where('book_name', trim($item['book_name']))->value('id');
+                }
+
+                if (!$bookId) {
+                    $errors[] = "$idxLabel: Missing or unresolvable Book.";
+                    $skipped++;
+                    continue;
+                }
+
+                $unitName = trim($item['unit_name'] ?? $item['name'] ?? $item['title'] ?? '');
+                if (!$unitName) {
+                    $errors[] = "$idxLabel: Missing required 'unit_name'.";
+                    $skipped++;
+                    continue;
+                }
+
+                $unitNo = !empty($item['unit_no']) && is_numeric($item['unit_no'])
+                    ? (int) $item['unit_no']
+                    : null;
+
+                $isAlp = isset($item['is_alp'])
+                    ? filter_var($item['is_alp'], FILTER_VALIDATE_BOOLEAN)
+                    : true;
+
+                $activate = isset($item['activate'])
+                    ? filter_var($item['activate'], FILTER_VALIDATE_BOOLEAN)
+                    : 1;
+
+                // Match existing by book and unit name, or by book and unit number
+                $existing = BookUnit::where('book_id', $bookId)
+                    ->where(function ($q) use ($unitName, $unitNo) {
+                        $q->where('unit_name', $unitName);
+                        if ($unitNo !== null) {
+                            $q->orWhere('unit_no', $unitNo);
+                        }
+                    })
+                    ->first();
+
+                if ($existing) {
+                    if (!$updateExisting) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $existing->unit_name = $unitName;
+                    if ($unitNo !== null) {
+                        $existing->unit_no = $unitNo;
+                    }
+                    $existing->is_alp = $isAlp;
+                    $existing->activate = $activate;
+                    $existing->save();
+
+                    $updated++;
+                } else {
+                    if ($unitNo === null) {
+                        $maxNo = BookUnit::where('book_id', $bookId)->max('unit_no');
+                        $unitNo = ($maxNo ? $maxNo : 0) + 1;
+                    }
+
+                    BookUnit::create([
+                        'book_id' => $bookId,
+                        'unit_name' => $unitName,
+                        'unit_no' => $unitNo,
+                        'is_alp' => $isAlp,
+                        'activate' => $activate,
+                    ]);
+
+                    $imported++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => 1,
+                'message' => "Import complete. $imported created, $updated updated, $skipped skipped.",
+                'total_imported' => $imported,
+                'total_updated' => $updated,
+                'total_skipped' => $skipped,
+                'errors' => $errors,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => 0,
+                'error' => 'Failed to import units: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

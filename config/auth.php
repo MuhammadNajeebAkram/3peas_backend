@@ -130,4 +130,18 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | JWT and LMS Cookie Names & Settings
+    |--------------------------------------------------------------------------
+    */
+    'cookies' => [
+        'admin' => env('ADMIN_JWT_COOKIE_NAME', 'admin_auth_token'),
+        'lms' => env('LMS_JWT_COOKIE_NAME', 'lms_auth_token'),
+        'default' => env('JWT_COOKIE_NAME', 'auth_token'),
+        'lms_domain' => env('LMS_JWT_COOKIE_DOMAIN', null),
+        'lms_secure' => env('LMS_JWT_COOKIE_SECURE', null),
+        'lms_samesite' => env('LMS_JWT_COOKIE_SAMESITE', 'Lax'),
+    ],
+
 ];

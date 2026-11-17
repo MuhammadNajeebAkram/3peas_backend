@@ -86,10 +86,257 @@ Route::prefix('auth')->group(function () {
         Route::get('/teacher/profile', [\App\Http\Controllers\TeacherAccountController::class, 'show']);
         Route::post('/teacher/profile', [\App\Http\Controllers\TeacherAccountController::class, 'update']);
         Route::get('/teacher/dashboard', [\App\Http\Controllers\TeacherAccountController::class, 'dashboard']);
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage'])->prefix('teacher/classes')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassController::class, 'store'])->middleware('throttle:20,1');
+            Route::get('/{id}', [\App\Http\Controllers\Teacher\TeacherClassController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [\App\Http\Controllers\Teacher\TeacherClassController::class, 'update'])->whereNumber('id');
+            Route::delete('/{id}', [\App\Http\Controllers\Teacher\TeacherClassController::class, 'destroy'])->whereNumber('id');
+        });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:students.enroll'])->prefix('teacher/classes/{classId}')->whereNumber('classId')->group(function () {
+            Route::get('/students', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'students']);
+            Route::get('/enrollment-requests', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'requests']);
+            Route::get('/enrollment-history', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'history']);
+            Route::get('/enrollments/{enrollmentId}', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'show'])->whereNumber('enrollmentId');
+            Route::post('/enrollments/{enrollmentId}/approve', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'approve'])->whereNumber('enrollmentId');
+            Route::post('/enrollments/{enrollmentId}/reject', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'reject'])->whereNumber('enrollmentId');
+            Route::post('/enrollments/{enrollmentId}/remove', [\App\Http\Controllers\Teacher\TeacherClassEnrollmentController::class, 'remove'])->whereNumber('enrollmentId');
+        });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage'])->prefix('teacher/classes/{classId}/resources')->whereNumber('classId')->group(function () {
+            Route::get('/overview', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'overview']);
+            Route::get('/textbooks', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'textbooks']);
+            Route::get('/textbooks/{bookId}', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'textbookDetail'])->whereNumber('bookId');
+            Route::get('/units', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'units']);
+            Route::get('/topics/{topicId}/content', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'topicContent'])->whereNumber('topicId');
+            Route::get('/slos', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'slos']);
+            Route::get('/past-papers', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'pastPapers']);
+            Route::get('/past-papers/{source}/{identifier}', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'pastPaperDetail'])
+                ->whereIn('source', ['structured', 'catalog'])
+                ->where('identifier', '[A-Za-z0-9\-]+');
+            Route::get('/past-papers/{source}/{identifier}/pages/{pageId}/file', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'streamPastPaperPage'])
+                ->whereIn('source', ['structured', 'catalog'])
+                ->where('identifier', '[A-Za-z0-9\-]+')
+                ->whereNumber('pageId');
+            Route::get('/model-papers', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'modelPapers']);
+            Route::get('/model-papers/{paperId}', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'modelPaperDetail'])->whereNumber('paperId');
+        });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:question_bank.access'])->prefix('teacher/classes/{classId}/resources')->whereNumber('classId')->group(function () {
+            Route::get('/questions', [\App\Http\Controllers\Teacher\TeacherClassResourceController::class, 'questions']);
+        });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:tests.create'])->prefix('teacher/classes/{classId}/tests')->whereNumber('classId')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'index']);
+            Route::get('/{testId}', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'show'])->whereNumber('testId');
+            Route::delete('/{testId}', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'destroy'])->whereNumber('testId');
+            Route::post('/{testId}/publish', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'publish'])->whereNumber('testId');
+            Route::post('/{testId}/close', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'closeTest'])->whereNumber('testId');
+            Route::post('/{testId}/archive', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'archiveTest'])->whereNumber('testId');
+            Route::get('/{testId}/assignments', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'listAssignments'])->whereNumber('testId');
+            Route::get('/{testId}/assignments/{assignmentId}', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'showAssignment'])
+                ->whereNumber(['testId', 'assignmentId']);
+            Route::get('/{testId}/assignments/{assignmentId}/attempts/{attemptId}', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'showStudentAttempt'])
+                ->whereNumber(['testId', 'assignmentId', 'attemptId']);
+
+            Route::middleware('teacher.feature:question_bank.access')->group(function () {
+                Route::get('/meta', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'meta']);
+                Route::get('/question-bank', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'questionBank']);
+                Route::get('/stimulus-groups/{groupId}', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'showStimulusGroup'])->whereNumber('groupId');
+                Route::post('/auto-select', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'autoSelect']);
+                Route::post('/question-review', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'reviewQuestions']);
+                Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'store']);
+                Route::put('/{testId}', [\App\Http\Controllers\Teacher\TeacherClassTestController::class, 'update'])->whereNumber('testId');
+            });
+        });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:tests.assign'])
+            ->prefix('teacher/classes/{classId}/tests/{testId}/assignments')
+            ->whereNumber(['classId', 'testId'])
+            ->group(function () {
+                Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'assignTest']);
+                Route::post('/{assignmentId}/release-results', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'releaseResults'])->whereNumber('assignmentId');
+                Route::post('/{assignmentId}/close', [\App\Http\Controllers\Teacher\TeacherClassTestDeliveryController::class, 'closeAssignment'])->whereNumber('assignmentId');
+            });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:announcements.manage'])
+            ->prefix('teacher/classes/{classId}/announcements')
+            ->whereNumber('classId')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'store']);
+                Route::get('/{announcementId}', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'show'])->whereNumber('announcementId');
+                Route::put('/{announcementId}', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'update'])->whereNumber('announcementId');
+                Route::post('/{announcementId}/publish', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'publish'])->whereNumber('announcementId');
+                Route::post('/{announcementId}/pin', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'pin'])->whereNumber('announcementId');
+                Route::post('/{announcementId}/archive', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'archive'])->whereNumber('announcementId');
+                Route::delete('/{announcementId}', [\App\Http\Controllers\Teacher\TeacherClassAnnouncementController::class, 'destroy'])->whereNumber('announcementId');
+            });
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:announcements.manage'])
+            ->prefix('teacher/classes/{classId}/discussions')
+            ->whereNumber('classId')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'store']);
+                Route::get('/reports', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'reports']);
+                Route::post('/reports/{reportId}/resolve', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'resolveReport'])->whereNumber('reportId');
+                Route::get('/{discussionId}', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'show'])->whereNumber('discussionId');
+                Route::put('/{discussionId}', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'update'])->whereNumber('discussionId');
+                Route::delete('/{discussionId}', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'destroy'])->whereNumber('discussionId');
+                Route::post('/{discussionId}/pin', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'pin'])->whereNumber('discussionId');
+                Route::post('/{discussionId}/closed', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'setClosed'])->whereNumber('discussionId');
+                Route::post('/{discussionId}/replies', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'storeReply'])->whereNumber('discussionId');
+                Route::put('/{discussionId}/replies/{replyId}', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'updateReply'])->whereNumber(['discussionId', 'replyId']);
+                Route::delete('/{discussionId}/replies/{replyId}', [\App\Http\Controllers\Teacher\TeacherClassDiscussionController::class, 'destroyReply'])->whereNumber(['discussionId', 'replyId']);
+            });
+        Route::prefix('student/announcements')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassAnnouncementController::class, 'index']);
+            Route::get('/{announcementId}', [\App\Http\Controllers\Student\StudentClassAnnouncementController::class, 'show'])->whereNumber('announcementId');
+            Route::post('/{announcementId}/read', [\App\Http\Controllers\Student\StudentClassAnnouncementController::class, 'markRead'])->whereNumber('announcementId');
+        });
+        Route::prefix('student/classes/{classId}/discussions')->whereNumber('classId')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'store']);
+            Route::get('/{discussionId}', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'show'])->whereNumber('discussionId');
+            Route::put('/{discussionId}', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'update'])->whereNumber('discussionId');
+            Route::delete('/{discussionId}', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'destroy'])->whereNumber('discussionId');
+            Route::post('/{discussionId}/replies', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'storeReply'])->whereNumber('discussionId');
+            Route::put('/{discussionId}/replies/{replyId}', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'updateReply'])->whereNumber(['discussionId', 'replyId']);
+            Route::delete('/{discussionId}/replies/{replyId}', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'destroyReply'])->whereNumber(['discussionId', 'replyId']);
+            Route::post('/{discussionId}/report', [\App\Http\Controllers\Student\StudentClassDiscussionController::class, 'report'])->whereNumber('discussionId');
+        });
+        Route::prefix('messages')->group(function () {
+            Route::get('/recipients', [\App\Http\Controllers\PrivateMessageController::class, 'recipients']);
+            Route::get('/conversations', [\App\Http\Controllers\PrivateMessageController::class, 'index']);
+            Route::post('/conversations', [\App\Http\Controllers\PrivateMessageController::class, 'storeConversation']);
+            Route::get('/conversations/{conversationId}/messages', [\App\Http\Controllers\PrivateMessageController::class, 'messages'])->whereNumber('conversationId');
+            Route::post('/conversations/{conversationId}/messages', [\App\Http\Controllers\PrivateMessageController::class, 'sendMessage'])->whereNumber('conversationId')->middleware('throttle:60,1');
+            Route::post('/conversations/{conversationId}/read', [\App\Http\Controllers\PrivateMessageController::class, 'markRead'])->whereNumber('conversationId');
+        });
+        Route::prefix('student/tests')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassTestController::class, 'index']);
+            Route::get('/{assignmentId}', [\App\Http\Controllers\Student\StudentClassTestController::class, 'show'])->whereNumber('assignmentId');
+            Route::post('/{assignmentId}/start', [\App\Http\Controllers\Student\StudentClassTestController::class, 'start'])->whereNumber('assignmentId');
+            Route::get('/{assignmentId}/attempts/{attemptId}', [\App\Http\Controllers\Student\StudentClassTestController::class, 'attemptDetail'])->whereNumber(['assignmentId', 'attemptId']);
+            Route::put('/{assignmentId}/attempts/{attemptId}/answers', [\App\Http\Controllers\Student\StudentClassTestController::class, 'saveAnswers'])->whereNumber(['assignmentId', 'attemptId']);
+            Route::post('/{assignmentId}/attempts/{attemptId}/submit', [\App\Http\Controllers\Student\StudentClassTestController::class, 'submit'])->whereNumber(['assignmentId', 'attemptId']);
+        });
+        Route::prefix('student/classes')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassEnrollmentController::class, 'index']);
+            Route::post('/join', [\App\Http\Controllers\Student\StudentClassEnrollmentController::class, 'join'])->middleware('throttle:20,1');
+            Route::get('/{enrollmentId}', [\App\Http\Controllers\Student\StudentClassEnrollmentController::class, 'show'])->whereNumber('enrollmentId');
+            Route::post('/{enrollmentId}/leave', [\App\Http\Controllers\Student\StudentClassEnrollmentController::class, 'leave'])->whereNumber('enrollmentId');
+        });
+
+        // Question Reporting for Student & Teacher Portals
+        Route::prefix('question-reports')->group(function () {
+            Route::post('/', [\App\Http\Controllers\Student\QuestionReportController::class, 'store'])->middleware('throttle:30,1');
+            Route::get('/my-reports', [\App\Http\Controllers\Student\QuestionReportController::class, 'myReports']);
+        });
+
+        // Phase 7F — Teacher Assignments, Calendar & Attendance
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage'])
+            ->prefix('teacher/classes/{classId}')
+            ->whereNumber('classId')
+            ->group(function () {
+                Route::prefix('assignments')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'index']);
+                    Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'store']);
+                    Route::get('/{assignmentId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'show'])->whereNumber('assignmentId');
+                    Route::post('/{assignmentId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'update'])->whereNumber('assignmentId');
+                    Route::put('/{assignmentId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'update'])->whereNumber('assignmentId');
+                    Route::delete('/{assignmentId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'destroy'])->whereNumber('assignmentId');
+                    Route::post('/{assignmentId}/publish', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'publish'])->whereNumber('assignmentId');
+                    Route::post('/{assignmentId}/close', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'close'])->whereNumber('assignmentId');
+                    Route::post('/{assignmentId}/reopen', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'reopen'])->whereNumber('assignmentId');
+                    Route::post('/{assignmentId}/archive', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'archive'])->whereNumber('assignmentId');
+                    Route::delete('/{assignmentId}/attachments/{attachmentId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'deleteAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+                    Route::get('/{assignmentId}/attachments/{attachmentId}/download', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'downloadAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+                    Route::get('/{assignmentId}/submissions', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'submissions'])->whereNumber('assignmentId');
+                    Route::get('/{assignmentId}/submissions/{studentWebUserId}', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'submissionDetail'])->whereNumber(['assignmentId', 'studentWebUserId']);
+                    Route::post('/{assignmentId}/submissions/{studentWebUserId}/evaluate', [\App\Http\Controllers\Teacher\TeacherAssignmentEvaluationController::class, 'evaluate'])->whereNumber(['assignmentId', 'studentWebUserId']);
+                    Route::get('/{assignmentId}/submission-attachments/{attachmentId}/download', [\App\Http\Controllers\Teacher\TeacherClassAssignmentController::class, 'downloadSubmissionAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+                });
+
+                Route::prefix('calendar')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'index']);
+                    Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'store']);
+                    Route::get('/{eventId}', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'show'])->whereNumber('eventId');
+                    Route::post('/{eventId}', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'update'])->whereNumber('eventId');
+                    Route::put('/{eventId}', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'update'])->whereNumber('eventId');
+                    Route::post('/{eventId}/cancel', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'cancel'])->whereNumber('eventId');
+                    Route::post('/{eventId}/archive', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'archive'])->whereNumber('eventId');
+                    Route::get('/{eventId}/attachment/download', [\App\Http\Controllers\Teacher\TeacherClassCalendarController::class, 'downloadAttachment'])->whereNumber('eventId');
+                });
+
+                Route::prefix('attendance')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'index']);
+                    Route::post('/', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'store']);
+                    Route::get('/{sessionId}', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'show'])->whereNumber('sessionId');
+                    Route::post('/{sessionId}/mark', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'mark'])->whereNumber('sessionId');
+                    Route::post('/{sessionId}/finalize', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'finalize'])->whereNumber('sessionId');
+                    Route::post('/{sessionId}/reopen', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'reopen'])->whereNumber('sessionId');
+                    Route::get('/students/{studentWebUserId}/history', [\App\Http\Controllers\Teacher\TeacherClassAttendanceController::class, 'studentHistory'])->whereNumber('studentWebUserId');
+                });
+            });
+
+        // Phase 7G — Teacher Gradebook & Class Academic Performance
+        Route::middleware([\App\Http\Middleware\EnsureTeacherActive::class, 'teacher.feature:classes.manage', 'teacher.feature:reports.basic'])
+            ->prefix('teacher/classes/{classId}')
+            ->whereNumber('classId')
+            ->group(function () {
+                Route::get('/gradebook', [\App\Http\Controllers\Teacher\TeacherClassGradebookController::class, 'gradebook']);
+                Route::get('/gradebook/config', [\App\Http\Controllers\Teacher\TeacherClassGradebookController::class, 'config']);
+                Route::put('/gradebook/config', [\App\Http\Controllers\Teacher\TeacherClassGradebookController::class, 'updateConfig']);
+                Route::post('/gradebook/exclusions', [\App\Http\Controllers\Teacher\TeacherClassGradebookController::class, 'toggleExclusion']);
+                Route::get('/performance', [\App\Http\Controllers\Teacher\TeacherClassGradebookController::class, 'performance']);
+            });
+
+        // Phase 7F — Student Assignments, Calendar & Attendance
+        Route::prefix('student/assignments')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'index']);
+            Route::get('/{assignmentId}', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'show'])->whereNumber('assignmentId');
+            Route::post('/{assignmentId}/draft', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'saveDraft'])->whereNumber('assignmentId');
+            Route::post('/{assignmentId}/submit', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'submit'])->whereNumber('assignmentId');
+            Route::delete('/{assignmentId}/attachments/{attachmentId}', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'deleteAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+            Route::get('/{assignmentId}/attachments/{attachmentId}/download', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'downloadAssignmentAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+            Route::get('/{assignmentId}/submission-attachments/{attachmentId}/download', [\App\Http\Controllers\Student\StudentClassAssignmentController::class, 'downloadOwnSubmissionAttachment'])->whereNumber(['assignmentId', 'attachmentId']);
+        });
+
+        Route::prefix('student/calendar')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassCalendarController::class, 'index']);
+            Route::get('/{eventId}/attachment/download', [\App\Http\Controllers\Student\StudentClassCalendarController::class, 'downloadAttachment'])->whereNumber('eventId');
+        });
+
+        Route::prefix('student/attendance')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentClassAttendanceController::class, 'index']);
+        });
+
+        // Phase 7G — Student Performance & Assessment Results Summary
+        Route::prefix('student/performance')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentPerformanceController::class, 'index']);
+            Route::get('/assessments/{assessmentId}', [\App\Http\Controllers\Student\StudentPerformanceController::class, 'showAssessment'])->whereNumber('assessmentId');
+        });
+
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [\App\Http\Controllers\WebUserNotificationController::class, 'index']);
+            Route::post('/read-all', [\App\Http\Controllers\WebUserNotificationController::class, 'markAllRead']);
+            Route::post('/{id}/read', [\App\Http\Controllers\WebUserNotificationController::class, 'markRead'])->whereNumber('id');
+        });
+        Route::middleware(\App\Http\Middleware\EnsureTeacherActive::class)->prefix('teacher/subscription')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\TeacherSubscriptionController::class, 'show']);
+            Route::get('/features', [\App\Http\Controllers\Teacher\TeacherSubscriptionController::class, 'features']);
+            Route::get('/usage', [\App\Http\Controllers\Teacher\TeacherSubscriptionController::class, 'usage']);
+        });
         Route::get('/teacher/collections', [\App\Http\Controllers\TeacherSettlementController::class, 'collections']);
         Route::get('/teacher/settlements', [\App\Http\Controllers\TeacherSettlementController::class, 'index']);
         Route::post('/teacher/settlements', [\App\Http\Controllers\TeacherSettlementController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/teacher/settlements/{id}/proof', [\App\Http\Controllers\TeacherSettlementController::class, 'proof'])->whereNumber('id');
+        Route::prefix('teacher/finances')->group(function () {
+            Route::get('/summary', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'summary']);
+            Route::get('/chart', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'chart']);
+            Route::get('/payments', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'payments']);
+            Route::get('/payments/{id}', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'paymentDetail'])->whereNumber('id');
+            Route::get('/settlements/summary', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'settlementSummary']);
+            Route::get('/settlements', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'settlements']);
+            Route::get('/report', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'report']);
+            Route::get('/export', [\App\Http\Controllers\Teacher\TeacherFinancialController::class, 'export'])->middleware('throttle:20,1');
+        });
         Route::post('/complete-profile', [WebUserAuthController::class, 'completeProfile']);
         Route::post('/lms-logout', [WebUserAuthController::class, 'logout']);
         Route::get('/get-user-offered-boards', [OfferedClassesController::class, 'getUserOfferedBoards']);
@@ -126,10 +373,15 @@ Route::prefix('auth')->group(function () {
         });
         
         Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest'])->middleware('throttle:10,1');
+        Route::get('/subscription-offerings', [UserPaymentController::class, 'offerings']);
+        Route::get('/subscription-payment-requests', [UserPaymentController::class, 'mine']);
+        Route::get('/subscription-payment-requests/{id}/proof', [\App\Http\Controllers\PaymentEvidenceController::class, 'student'])->whereNumber('id');
         Route::get('/payments/methods', [\App\Http\Controllers\TeacherPaymentController::class, 'methods']);
         Route::post('/payments/teacher/lookup', [\App\Http\Controllers\TeacherPaymentController::class, 'lookup'])->middleware('throttle:20,1');
         Route::get('/payments/teacher/requests', [\App\Http\Controllers\TeacherPaymentController::class, 'mine']);
         Route::get('/teacher/payment-requests', [\App\Http\Controllers\TeacherPaymentController::class, 'index']);
+        Route::get('/teacher/payment-requests/{id}', [\App\Http\Controllers\TeacherPaymentController::class, 'show'])->whereNumber('id');
+        Route::get('/teacher/payment-requests/{id}/proof', [\App\Http\Controllers\PaymentEvidenceController::class, 'teacher'])->whereNumber('id');
         Route::post('/teacher/payment-requests/{id}/approve', [\App\Http\Controllers\TeacherPaymentController::class, 'approve'])->whereNumber('id');
         Route::post('/teacher/payment-requests/{id}/reject', [\App\Http\Controllers\TeacherPaymentController::class, 'reject'])->whereNumber('id');
 
@@ -267,9 +519,6 @@ Route::post('/activate_topic', [TopicsController::class, 'activateTopic']);
 
 Route::get('/get_all_question_types', [QuestionTypesController::class, 'getAllTypes']);
 Route::get('/get_activate_question_types', [QuestionTypesController::class, 'getActivateQuestionTypes']);
-Route::post('/add_question_types', [QuestionTypesController::class, 'saveType']);
-Route::post('/update_question_type', [QuestionTypesController::class, 'editType']);
-Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType']);
 
 Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']);
 Route::post('/get_questions_by_topic', [QuestionsController::class, 'getQuestionsByTopic']);
@@ -279,17 +528,6 @@ Route::post('/get_questions_by_board', [QuestionsController::class, 'getQuestion
 Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestionDataById']);
 Route::post('/get_question_scenario_groups', [QuestionsController::class, 'getQuestionScenarioGroups']);
 Route::post('/get_question_scenario_group_by_id', [QuestionsController::class, 'getQuestionScenarioGroupById']);
-Route::post('/save_question_scenario_group', [QuestionsController::class, 'saveQuestionScenarioGroup']);
-Route::post('/update_question_scenario_group', [QuestionsController::class, 'updateQuestionScenarioGroup']);
-Route::post('/activate_question_scenario_group', [QuestionsController::class, 'activateQuestionScenarioGroup']);
-Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
-Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
-Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
-Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
-Route::post('/activate_question', [QuestionsController::class, 'activateQuestion']);
-Route::post('/get_board_questions_by_id', [QuestionsController::class, 'getBoardQuestionsByQuestion']);
-Route::post('/activate_board_question', [QuestionsController::class, 'activateBoardQuestion']);
-Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion']);
 
 Route::post('/get-slo-topic-content-questions', [QuestionsController::class, 'getSLOQuestionsByTopic']);
 
@@ -405,9 +643,3 @@ Route::post('/get_bank_accounts', [BankAccountController::class, 'getBankAccount
 
 Route::post('/get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
 Route::post('/get_study_subjects', [StudyGroupController::class, 'getStudySubjects']);
-
-
-
-
-Route::get('/get_test', [QuestionsController::class, 'getTest']);
-Route::post('/save_test', [QuestionsController::class, 'saveTest']);

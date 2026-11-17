@@ -451,7 +451,7 @@ private function processExternalImages($content, $s3Directory)
             $imageUrl = $matches[1];
             $extension = $matches[2];
 
-            $cdnUrl = env('CDN_URL');
+            $cdnUrl = config('filesystems.cdn_url');
 
             // Skip if already on your CDN or S3
             if (($cdnUrl && str_contains($imageUrl, rtrim($cdnUrl, '/'))) ||

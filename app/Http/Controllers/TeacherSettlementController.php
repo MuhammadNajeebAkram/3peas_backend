@@ -31,10 +31,16 @@ class TeacherSettlementController extends Controller
 
     private function listing(Request $request, ?int $teacherId)
     {
-        $data = $request->validate(['status' => 'sometimes|in:pending,confirmed,rejected']);
+        $data = $request->validate([
+            'status' => 'sometimes|in:pending,confirmed,rejected',
+            'from' => 'sometimes|nullable|date_format:Y-m-d',
+            'to' => 'sometimes|nullable|date_format:Y-m-d|after_or_equal:from',
+        ]);
         $query = TeacherSettlement::with('allocations');
         if ($teacherId !== null) $query->where('teacher_profile_id', $teacherId);
         if (isset($data['status'])) $query->where('status', $data['status']);
+        if (!empty($data['from'])) $query->whereDate('paid_at', '>=', $data['from']);
+        if (!empty($data['to'])) $query->whereDate('paid_at', '<=', $data['to']);
         return response()->json($query->latest('id')->paginate(20));
     }
 
@@ -87,6 +93,13 @@ class TeacherSettlementController extends Controller
     public function adminProof(int $id)
     {
         return $this->download(TeacherSettlement::findOrFail($id));
+    }
+
+    public function adminTeacherSettlementProof(int $id, int $settlementId)
+    {
+        TeacherProfile::findOrFail($id);
+        $settlement = TeacherSettlement::where('teacher_profile_id', $id)->findOrFail($settlementId);
+        return $this->download($settlement);
     }
 
     private function download(TeacherSettlement $settlement)

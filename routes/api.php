@@ -9,6 +9,11 @@ use App\Http\Controllers\AiRequestController;
 use App\Http\Controllers\QuestionExplanationController;
 use App\Http\Controllers\AiQuestionGenerationController;
 use App\Http\Controllers\AdminActivityLogController;
+use App\Http\Controllers\AdminTeacherSubscriptionController;
+use App\Http\Controllers\AdminTeacherSubscriptionPlanController;
+use App\Http\Controllers\AdminTeacherCollectionPermissionController;
+use App\Http\Controllers\AdminStudentPaymentRequestController;
+use App\Http\Controllers\PaymentEvidenceController;
 use App\Http\Controllers\AdminLoginLogController;
 use App\Http\Controllers\AdminUserProfileController;
 use App\Http\Controllers\AdminUserPreferenceController;
@@ -24,6 +29,8 @@ use App\Http\Controllers\Authentication\WebUserAuthController;
 use App\Http\Controllers\BooksController;
 use App\Http\Controllers\UnitsController;
 use App\Http\Controllers\TopicsController;
+use App\Http\Controllers\SloDomainController;
+use App\Http\Controllers\SloTopicController;
 use App\Http\Controllers\QuestionTypesController;
 use App\Http\Controllers\QuestionPresentationTypeController;
 use App\Http\Controllers\QuestionsController;
@@ -56,6 +63,7 @@ use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\TopicContentController;
 use App\Http\Controllers\OfferedProgramController;
 use App\Http\Controllers\RolePermissionController;
+use App\Http\Controllers\LegacyPastPaperController;
 use App\Http\Controllers\TstPastPaperController;
 use App\Http\Middleware\CheckFrontendApiKey;
 
@@ -80,8 +88,14 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/{id}', [\App\Http\Controllers\AdminTeacherController::class, 'show'])->whereNumber('id')->middleware('permission:teachers.view');
             Route::post('/{id}/activate', [\App\Http\Controllers\AdminTeacherController::class, 'activate'])->whereNumber('id')->middleware('permission:teachers.approve');
             Route::post('/{id}/status', [\App\Http\Controllers\AdminTeacherController::class, 'status'])->whereNumber('id')->middleware('permission:teachers.approve');
-            Route::post('/{id}/collection-code', [\App\Http\Controllers\AdminTeacherController::class, 'code'])->whereNumber('id')->middleware('permission:teachers.approve');
+            Route::post('/{id}/collection-code', [\App\Http\Controllers\AdminTeacherController::class, 'code'])->whereNumber('id')
+                ->middleware(['permission:teachers.approve', 'permission:teacher-collection-permissions.manage']);
             Route::get('/{id}/collections', [\App\Http\Controllers\TeacherSettlementController::class, 'adminCollections'])->whereNumber('id')->middleware('permission:teacher-settlements.view');
+            Route::get('/{id}/payments', [\App\Http\Controllers\AdminTeacherController::class, 'payments'])->whereNumber('id')->middleware('permission:teachers.view');
+            Route::get('/{id}/payments/{paymentId}', [\App\Http\Controllers\AdminTeacherController::class, 'paymentDetail'])->whereNumber(['id', 'paymentId'])->middleware('permission:teachers.view');
+            Route::get('/{id}/payments/{paymentId}/proof', [PaymentEvidenceController::class, 'adminTeacherPayment'])->whereNumber(['id', 'paymentId'])->middleware('permission:teachers.view');
+            Route::get('/{id}/settlements', [\App\Http\Controllers\AdminTeacherController::class, 'settlements'])->whereNumber('id')->middleware('permission:teachers.view');
+            Route::get('/{id}/settlements/{settlementId}/proof', [\App\Http\Controllers\TeacherSettlementController::class, 'adminTeacherSettlementProof'])->whereNumber(['id', 'settlementId'])->middleware('permission:teachers.view');
         });
         Route::prefix('teacher-settlements')->group(function () {
             Route::get('/', [\App\Http\Controllers\TeacherSettlementController::class, 'adminIndex'])->middleware('permission:teacher-settlements.view');
@@ -89,8 +103,63 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/{id}/confirm', [\App\Http\Controllers\TeacherSettlementController::class, 'confirm'])->whereNumber('id')->middleware('permission:teacher-settlements.review');
             Route::post('/{id}/reject', [\App\Http\Controllers\TeacherSettlementController::class, 'reject'])->whereNumber('id')->middleware('permission:teacher-settlements.review');
         });
+        Route::prefix('teacher-subscription-plans')->group(function () {
+            Route::get('/', [AdminTeacherSubscriptionPlanController::class, 'index'])->middleware('permission:teacher-subscription-plans.view');
+            Route::post('/', [AdminTeacherSubscriptionPlanController::class, 'store'])->middleware(['permission:teacher-subscription-plans.manage', 'throttle:30,1']);
+            Route::get('/{id}', [AdminTeacherSubscriptionPlanController::class, 'show'])->whereNumber('id')->middleware('permission:teacher-subscription-plans.view');
+            Route::put('/{id}', [AdminTeacherSubscriptionPlanController::class, 'update'])->whereNumber('id')->middleware(['permission:teacher-subscription-plans.manage', 'throttle:30,1']);
+            Route::patch('/{id}/status', [AdminTeacherSubscriptionPlanController::class, 'status'])->whereNumber('id')->middleware('permission:teacher-subscription-plans.manage');
+            Route::patch('/{id}/default', [AdminTeacherSubscriptionPlanController::class, 'makeDefault'])->whereNumber('id')->middleware('permission:teacher-subscription-plans.manage');
+        });
+        Route::prefix('teacher-collection-permissions')->group(function () {
+            Route::get('/{teacherProfileId}', [AdminTeacherCollectionPermissionController::class, 'show'])
+                ->whereNumber('teacherProfileId')->middleware('permission:teacher-collection-permissions.view,teacher-collection-permissions.manage');
+            Route::post('/{teacherProfileId}/enable', [AdminTeacherCollectionPermissionController::class, 'enable'])
+                ->whereNumber('teacherProfileId')->middleware('permission:teacher-collection-permissions.manage');
+            Route::post('/{teacherProfileId}/disable', [AdminTeacherCollectionPermissionController::class, 'disable'])
+                ->whereNumber('teacherProfileId')->middleware('permission:teacher-collection-permissions.manage');
+        });
+        Route::prefix('academic-reports')->middleware('permission:academic-reports.view')->group(function () {
+            Route::get('/overview', [\App\Http\Controllers\Admin\AdminAcademicReportController::class, 'overview']);
+            Route::get('/classes', [\App\Http\Controllers\Admin\AdminAcademicReportController::class, 'classes']);
+            Route::get('/classes/{classId}', [\App\Http\Controllers\Admin\AdminAcademicReportController::class, 'classReport'])->whereNumber('classId');
+            Route::get('/students/{studentWebUserId}', [\App\Http\Controllers\Admin\AdminAcademicReportController::class, 'studentReport'])->whereNumber('studentWebUserId');
+        });
+        Route::prefix('question-reports')->group(function () {
+            Route::get('/summary', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'summary'])
+                ->middleware('permission:question-reports.view,question-reports.manage');
+            Route::get('/', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'index'])
+                ->middleware('permission:question-reports.view,question-reports.manage');
+            Route::get('/questions/{questionId}/count', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'questionReportCount'])
+                ->whereNumber('questionId')->middleware('permission:question-reports.view,question-reports.manage');
+            Route::get('/{id}', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'show'])
+                ->whereNumber('id')->middleware('permission:question-reports.view,question-reports.manage');
+            Route::post('/{id}/status', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'updateStatus'])
+                ->whereNumber('id')->middleware('permission:question-reports.manage');
+            Route::post('/{id}/notes', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'addNote'])
+                ->whereNumber('id')->middleware('permission:question-reports.manage');
+            Route::post('/bulk-status', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'bulkUpdate'])
+                ->middleware('permission:question-reports.manage');
+        });
+        Route::prefix('teacher-subscriptions')->group(function () {
+            Route::get('/', [AdminTeacherSubscriptionController::class, 'index'])->middleware('permission:teacher-subscriptions.view');
+            Route::get('/{teacherProfileId}/history', [AdminTeacherSubscriptionController::class, 'history'])->whereNumber('teacherProfileId')->middleware('permission:teacher-subscriptions.history.view');
+            Route::get('/{teacherProfileId}', [AdminTeacherSubscriptionController::class, 'show'])->whereNumber('teacherProfileId')->middleware('permission:teacher-subscriptions.view');
+            Route::post('/{teacherProfileId}/assign', [AdminTeacherSubscriptionController::class, 'assign'])->whereNumber('teacherProfileId')->middleware(['permission:teacher-subscriptions.manage', 'throttle:10,1']);
+            Route::post('/{subscriptionId}/extend', [AdminTeacherSubscriptionController::class, 'extend'])->whereNumber('subscriptionId')->middleware(['permission:teacher-subscriptions.manage', 'throttle:10,1']);
+            Route::post('/{subscriptionId}/suspend', [AdminTeacherSubscriptionController::class, 'suspend'])->whereNumber('subscriptionId')->middleware('permission:teacher-subscriptions.manage');
+            Route::post('/{subscriptionId}/reactivate', [AdminTeacherSubscriptionController::class, 'reactivate'])->whereNumber('subscriptionId')->middleware('permission:teacher-subscriptions.manage');
+            Route::post('/{subscriptionId}/cancel', [AdminTeacherSubscriptionController::class, 'cancel'])->whereNumber('subscriptionId')->middleware('permission:teacher-subscriptions.manage');
+        });
+        Route::prefix('student-payment-requests')->group(function () {
+            Route::get('/', [AdminStudentPaymentRequestController::class, 'index'])->middleware('permission:student-payment-requests.view,student-payment-requests.review');
+            Route::get('/{id}', [AdminStudentPaymentRequestController::class, 'show'])->whereNumber('id')->middleware('permission:student-payment-requests.view,student-payment-requests.review');
+            Route::get('/{id}/proof', [PaymentEvidenceController::class, 'admin'])->whereNumber('id')->middleware('permission:student-payment-requests.view,student-payment-requests.review');
+            Route::post('/{id}/approve', [AdminStudentPaymentRequestController::class, 'approve'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
+            Route::post('/{id}/reject', [AdminStudentPaymentRequestController::class, 'reject'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
+        });
         Route::prefix('ai-providers')->group(function () {
-            Route::get('/all', [AiProviderController::class, 'index'])->middleware('permission:ai-providers.view');
+            Route::get('/all', [AiProviderController::class, 'index'])->middleware('permission:ai-providers.view,questions.create');
             Route::post('/add', [AiProviderController::class, 'store'])->middleware('permission:ai-providers.create');
             Route::get('/{id}', [AiProviderController::class, 'show'])->whereNumber('id')->middleware('permission:ai-providers.view');
             Route::post('/update/{id}', [AiProviderController::class, 'update'])->whereNumber('id')->middleware('permission:ai-providers.update');
@@ -98,8 +167,8 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/test/{id}', [AiProviderController::class, 'testConnection'])->whereNumber('id')->middleware(['permission:ai-providers.test', 'throttle:10,1']);
         });
         Route::prefix('ai-models')->group(function () {
-            Route::get('/all', [AiModelController::class, 'index'])->middleware('permission:ai-models.view');
-            Route::get('/active', [AiModelController::class, 'active'])->middleware('permission:ai-models.view');
+            Route::get('/all', [AiModelController::class, 'index'])->middleware('permission:ai-models.view,questions.create');
+            Route::get('/active', [AiModelController::class, 'active'])->middleware('permission:ai-models.view,questions.create');
             Route::post('/add', [AiModelController::class, 'store'])->middleware('permission:ai-models.create');
             Route::get('/{id}', [AiModelController::class, 'show'])->whereNumber('id')->middleware('permission:ai-models.view');
             Route::post('/update/{id}', [AiModelController::class, 'update'])->whereNumber('id')->middleware('permission:ai-models.update');
@@ -187,7 +256,7 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/all', [WebUserAuthController::class, 'getAllUsersDataByAdmin'])->middleware('permission:web-users.view');
             Route::post('/create', [WebUserAuthController::class, 'saveUserDataByAdmin'])->middleware('permission:web-users.create');
             Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin'])->middleware('permission:web-users.update');
-            Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin'])->middleware('permission:web-users.approve-subscription');
+            Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin'])->middleware('permission:student-payment-requests.review');
             Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin'])->middleware('permission:web-users.view');
 
         });
@@ -253,6 +322,7 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/all', [UnitsController::class, 'getUnitsForAdmin'])->middleware('permission:units.view');
             Route::get('/active', [UnitsController::class, 'getActiveUnitsForAdmin'])->middleware('permission:units.view');
             Route::post('/add', [UnitsController::class, 'saveUnitForAdmin'])->middleware('permission:units.create');
+            Route::post('/bulk-import', [UnitsController::class, 'bulkImportUnitsForAdmin'])->middleware('permission:units.create');
             Route::post('/update/{id}', [UnitsController::class, 'updateUnitForAdmin'])->middleware('permission:units.update');
             Route::post('/activate', [UnitsController::class, 'activateUnitForAdmin'])->middleware('permission:units.activate');
         });
@@ -261,8 +331,30 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/all', [TopicsController::class, 'getTopicsForAdmin'])->middleware('permission:topics.view');
             Route::get('/active', [TopicsController::class, 'getActiveTopicsForAdmin'])->middleware('permission:topics.view');
             Route::post('/add', [TopicsController::class, 'saveTopicForAdmin'])->middleware('permission:topics.create');
+            Route::post('/bulk-import', [TopicsController::class, 'bulkImportTopicsForAdmin'])->middleware('permission:topics.create');
             Route::post('/update/{id}', [TopicsController::class, 'updateTopicForAdmin'])->middleware('permission:topics.update');
             Route::post('/activate', [TopicsController::class, 'activateTopicForAdmin'])->middleware('permission:topics.activate');
+        });
+
+        Route::prefix('slo-domain')->group(function () {
+            Route::get('/all', [SloDomainController::class, 'getDomainsForAdmin'])->middleware('permission:slo-domains.view');
+            Route::get('/active', [SloDomainController::class, 'getActiveDomains'])->middleware('permission:slo-domains.view');
+            Route::post('/add', [SloDomainController::class, 'saveDomainForAdmin'])->middleware('permission:slo-domains.create');
+            Route::post('/bulk-import', [SloDomainController::class, 'bulkImportDomainsForAdmin'])->middleware('permission:slo-domains.create');
+            Route::post('/update/{id}', [SloDomainController::class, 'updateDomainForAdmin'])->middleware('permission:slo-domains.update');
+            Route::post('/activate', [SloDomainController::class, 'activateDomainForAdmin'])->middleware('permission:slo-domains.activate');
+            Route::delete('/delete/{id}', [SloDomainController::class, 'deleteDomainForAdmin'])->middleware('permission:slo-domains.delete');
+        });
+
+        Route::prefix('slo-topic')->group(function () {
+            Route::get('/all', [SloTopicController::class, 'getTopicsForAdmin'])->middleware('permission:slo-topics.view');
+            Route::get('/active', [SloTopicController::class, 'getActiveTopics'])->middleware('permission:slo-topics.view');
+            Route::get('/by-unit/{unit_id}', [SloTopicController::class, 'getSloTopicsByUnit'])->middleware('permission:slo-topics.view');
+            Route::post('/add', [SloTopicController::class, 'saveTopicForAdmin'])->middleware('permission:slo-topics.create');
+            Route::post('/bulk-import', [SloTopicController::class, 'bulkImportTopicsForAdmin'])->middleware('permission:slo-topics.create');
+            Route::post('/update/{id}', [SloTopicController::class, 'updateTopicForAdmin'])->middleware('permission:slo-topics.update');
+            Route::post('/activate', [SloTopicController::class, 'activateTopicForAdmin'])->middleware('permission:slo-topics.activate');
+            Route::delete('/delete/{id}', [SloTopicController::class, 'deleteTopicForAdmin'])->middleware('permission:slo-topics.delete');
         });
 
         Route::prefix('board')->group(function () {
@@ -287,13 +379,24 @@ Route::prefix('admin/auth')->group(function () {
         Route::prefix('tst-past-papers')->group(function () {
             Route::get('/all', [TstPastPaperController::class, 'getAllPastPapersForAdmin'])->middleware('permission:tst-past-papers.view');
             Route::post('/add', [TstPastPaperController::class, 'savePastPaperForAdmin'])->middleware('permission:tst-past-papers.create');
-            Route::get('/{id}', [TstPastPaperController::class, 'getPastPaperForAdminById'])->middleware('permission:tst-past-papers.view');
+            Route::post('/bulk-curriculum-board', [TstPastPaperController::class, 'bulkAssignCurriculumBoard'])->middleware('permission:tst-past-papers.assign-curriculum,tst-past-papers.update');
+            Route::get('/{id}/curriculum-audit', [TstPastPaperController::class, 'curriculumAudit'])->whereNumber('id')->middleware('permission:tst-past-papers.view');
+            Route::post('/{id}/curriculum-board', [TstPastPaperController::class, 'assignCurriculumBoard'])->whereNumber('id')->middleware('permission:tst-past-papers.assign-curriculum,tst-past-papers.update');
+            Route::get('/{id}', [TstPastPaperController::class, 'getPastPaperForAdminById'])->whereNumber('id')->middleware('permission:tst-past-papers.view');
             Route::post('/update/{id}', [TstPastPaperController::class, 'updatePastPaperForAdmin'])->middleware('permission:tst-past-papers.update');
             Route::post('/activate/{id}', [TstPastPaperController::class, 'activatePastPaperForAdmin'])->middleware('permission:tst-past-papers.activate');
             Route::delete('/delete/{id}', [TstPastPaperController::class, 'deletePastPaperForAdmin'])->middleware('permission:tst-past-papers.delete');
             Route::post('/{pastPaperId}/pages/add', [TstPastPaperController::class, 'savePageForAdmin'])->middleware('permission:tst-past-papers.update');
             Route::post('/pages/update/{pageId}', [TstPastPaperController::class, 'updatePageForAdmin'])->middleware('permission:tst-past-papers.update');
             Route::delete('/pages/delete/{pageId}', [TstPastPaperController::class, 'deletePageForAdmin'])->middleware('permission:tst-past-papers.update');
+        });
+
+        Route::prefix('legacy-past-papers')->group(function () {
+            Route::get('/all', [LegacyPastPaperController::class, 'index'])->middleware('permission:legacy-past-papers.view');
+            Route::post('/bulk-curriculum-board', [LegacyPastPaperController::class, 'bulkAssignCurriculumBoard'])->middleware('permission:legacy-past-papers.assign-curriculum');
+            Route::get('/{id}/curriculum-audit', [LegacyPastPaperController::class, 'curriculumAudit'])->whereNumber('id')->middleware('permission:legacy-past-papers.view');
+            Route::post('/{id}/curriculum-board', [LegacyPastPaperController::class, 'assignCurriculumBoard'])->whereNumber('id')->middleware('permission:legacy-past-papers.assign-curriculum');
+            Route::get('/{id}', [LegacyPastPaperController::class, 'show'])->whereNumber('id')->middleware('permission:legacy-past-papers.view');
         });
 
         Route::prefix('question-type')->group(function () {
@@ -346,6 +449,8 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/validate-import-package', [QuestionsController::class, 'validateImportPackage'])->middleware('permission:questions.create');
             Route::post('/update', [QuestionsController::class, 'updateQuestion'])->middleware('permission:questions.update');
             Route::post('/activate', [QuestionsController::class, 'activateQuestion'])->middleware('permission:questions.activate');
+            Route::delete('/delete/{id}', [QuestionsController::class, 'deleteQuestion'])->whereNumber('id')->middleware('permission:questions.update');
+            Route::delete('/{id}', [QuestionsController::class, 'deleteQuestion'])->whereNumber('id')->middleware('permission:questions.update');
             Route::post('/scenario-groups', [QuestionsController::class, 'getQuestionScenarioGroups'])->middleware('permission:questions.view');
             Route::post('/scenario-groups/detail', [QuestionsController::class, 'getQuestionScenarioGroupById'])->middleware('permission:questions.view');
             Route::post('/scenario-groups/save', [QuestionsController::class, 'saveQuestionScenarioGroup'])->middleware('permission:questions.create');
@@ -444,12 +549,16 @@ Route::post('/save-new-topic', [TopicsController::class, 'saveNewTopic']);
 Route::get('/get-new-topics-by-unit/{unit_id}', [TopicsController::class, 'getNewTopicsByUnit']); 
 Route::post('/update-new-topic', [TopicsController::class, 'updateNewTopic']);
 
+Route::get('/get_all_slo_domains', [SloDomainController::class, 'getActiveDomains']);
+Route::get('/get_all_slo_topics', [SloTopicController::class, 'getActiveTopics']);
+Route::get('/get_slo_topics_by_unit/{unit_id}', [SloTopicController::class, 'getSloTopicsByUnit']);
+
 
 Route::get('/get_all_question_types', [QuestionTypesController::class, 'getAllTypes']);
 Route::get('/get_activate_question_types', [QuestionTypesController::class, 'getActivateQuestionTypes']);
-Route::post('/add_question_types', [QuestionTypesController::class, 'saveType']);
-Route::post('/update_question_type', [QuestionTypesController::class, 'editType']);
-Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType']);
+Route::post('/add_question_types', [QuestionTypesController::class, 'saveType'])->middleware('permission:question-types.create');
+Route::post('/update_question_type', [QuestionTypesController::class, 'editType'])->middleware('permission:question-types.update');
+Route::post('/activate_question_type', [QuestionTypesController::class, 'activateType'])->middleware('permission:question-types.activate');
 
 Route::get('/get_all_questions', [QuestionsController::class, 'getAllQuestions']);
 Route::post('/get_questions_by_filters', [QuestionsController::class, 'getQuestionsByFilters']);
@@ -460,17 +569,17 @@ Route::post('/get_questions_by_board', [QuestionsController::class, 'getQuestion
 Route::post('/get_question_data_by_id', [QuestionsController::class, 'getQuestionDataById']);
 Route::post('/get_question_scenario_groups', [QuestionsController::class, 'getQuestionScenarioGroups']);
 Route::post('/get_question_scenario_group_by_id', [QuestionsController::class, 'getQuestionScenarioGroupById']);
-Route::post('/save_question_scenario_group', [QuestionsController::class, 'saveQuestionScenarioGroup']);
-Route::post('/update_question_scenario_group', [QuestionsController::class, 'updateQuestionScenarioGroup']);
-Route::post('/activate_question_scenario_group', [QuestionsController::class, 'activateQuestionScenarioGroup']);
-Route::post('/save_question', [QuestionsController::class, 'saveQuestion']);
-Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion']);
-Route::post('/update_question', [QuestionsController::class, 'updateQuestion']);
-Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion']);
-Route::post('/activate_question', [QuestionsController::class, 'activateQuestion']);
-Route::post('/get_board_questions_by_id', [QuestionsController::class, 'getBoardQuestionsByQuestion']);
-Route::post('/activate_board_question', [QuestionsController::class, 'activateBoardQuestion']);
-Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion']);
+Route::post('/save_question_scenario_group', [QuestionsController::class, 'saveQuestionScenarioGroup'])->middleware('permission:questions.create');
+Route::post('/update_question_scenario_group', [QuestionsController::class, 'updateQuestionScenarioGroup'])->middleware('permission:questions.update');
+Route::post('/activate_question_scenario_group', [QuestionsController::class, 'activateQuestionScenarioGroup'])->middleware('permission:questions.activate');
+Route::post('/save_question', [QuestionsController::class, 'saveQuestion'])->middleware('permission:questions.create');
+Route::post('/save_repeat_question', [QuestionsController::class, 'repeatQuestion'])->middleware('permission:questions.create');
+Route::post('/update_question', [QuestionsController::class, 'updateQuestion'])->middleware('permission:questions.update');
+Route::post('/repeat_question', [QuestionsController::class, 'repeatQuestion'])->middleware('permission:questions.create');
+Route::post('/activate_question', [QuestionsController::class, 'activateQuestion'])->middleware('permission:questions.activate');
+Route::post('/get_board_questions_by_id', [QuestionsController::class, 'getBoardQuestionsByQuestion'])->middleware('permission:questions.view');
+Route::post('/activate_board_question', [QuestionsController::class, 'activateBoardQuestion'])->middleware('permission:questions.activate');
+Route::post('/update_board_question', [QuestionsController::class, 'updateBoardQuestion'])->middleware('permission:questions.update');
 
 
 Route::post('/save_news', [NewsController::class, 'saveNews']);
@@ -622,5 +731,5 @@ Route::get('/get_top_active_blog_title', [BlogsController::class, 'getActiveTopB
 Route::get('/get_blogs_content_by_slug/{slug}', [BlogsController::class, 'getBlogsContentBySlug']);
 
 
-Route::get('/get_test', [QuestionsController::class, 'getTest']);
-Route::post('/save_test', [QuestionsController::class, 'saveTest']);
+Route::get('/get_test', [QuestionsController::class, 'getTest'])->middleware('permission:questions.view');
+Route::post('/save_test', [QuestionsController::class, 'saveTest'])->middleware('permission:questions.create');

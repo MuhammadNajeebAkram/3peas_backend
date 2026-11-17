@@ -25,4 +25,9 @@ class TeacherSettlement extends Model
     {
         return $this->hasMany(TeacherSettlementAllocation::class);
     }
+
+    public function paymentAccount()
+    {
+        return $this->belongsTo(PaymentAccount::class);
+    }
 }

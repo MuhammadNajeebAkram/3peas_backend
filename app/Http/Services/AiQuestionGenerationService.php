@@ -38,9 +38,16 @@ class AiQuestionGenerationService
         if (! $type) {
             throw ValidationException::withMessages(['question_type' => 'Select an active question type.']);
         }
-        $presentation = isset($data['question_presentation_type_id'])
+        $presentation = isset($data['question_presentation_type_id']) && $data['question_presentation_type_id'] !== ''
             ? DB::table('question_presentation_type_tbl')->where('id', $data['question_presentation_type_id'])->where('activate', true)->first() : null;
-        if (isset($data['question_presentation_type_id']) && ! $presentation) {
+        if ($type->is_mcq) {
+            if (empty($data['question_presentation_type_id'])) {
+                throw ValidationException::withMessages(['question_presentation_type_id' => 'Question presentation type is required for MCQs.']);
+            }
+            if (! $presentation) {
+                throw ValidationException::withMessages(['question_presentation_type_id' => 'Select an active presentation type.']);
+            }
+        } elseif (isset($data['question_presentation_type_id']) && ! $presentation) {
             throw ValidationException::withMessages(['question_presentation_type_id' => 'Select an active presentation type.']);
         }
         $scenario = (bool) ($data['scenario_based'] ?? false);
@@ -204,10 +211,19 @@ class AiQuestionGenerationService
                     $saved[$index] = $body['question_id'];
                     // Record AI provenance. Set here (not via the request payload) so
                     // the normal question editor can never claim a question is AI-made.
-                    DB::table('exam_question_tbl')->where('id', $body['question_id'])->update([
+                    $genModelId = $generation->request?->ai_model_id;
+                    $genProviderId = $generation->request?->ai_model?->ai_provider_id;
+                    $aiUpdates = [
                         'source' => 'ai',
                         'ai_question_generation_id' => $generation->id,
-                    ]);
+                    ];
+                    if ($genProviderId) {
+                        $aiUpdates['ai_provider_id'] = $genProviderId;
+                    }
+                    if ($genModelId) {
+                        $aiUpdates['ai_model_id'] = $genModelId;
+                    }
+                    DB::table('exam_question_tbl')->where('id', $body['question_id'])->update($aiUpdates);
                 }
                 $generation->saved_questions = $saved;
                 $generation->save();

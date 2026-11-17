@@ -79,9 +79,9 @@ class AttachJwtFromCookie
     private function resolveCookieName(?string $context): string
     {
         return match ($context) {
-            'admin' => env('ADMIN_JWT_COOKIE_NAME', 'admin_auth_token'),
-            'lms' => env('LMS_JWT_COOKIE_NAME', 'lms_auth_token'),
-            default => env('JWT_COOKIE_NAME', 'auth_token'),
+            'admin' => (string) config('auth.cookies.admin', 'admin_auth_token'),
+            'lms' => (string) config('auth.cookies.lms', 'lms_auth_token'),
+            default => (string) config('auth.cookies.default', 'auth_token'),
         };
     }
 

@@ -30,7 +30,9 @@ class QuestionBulkImportTest extends TestCase
         DB::purge('question_import_test');
 
         $tables = [
-            'exam_question_tbl' => 'question question_um topic_id unit_id book_id question_type exercise_question cognitive_domain topic_content difficulty marks status reviewed_by reviewed_at explanation explanation_um explanation_video_url activate is_mcq has_diagram question_presentation_type_id scenario_group_id scenario_question_order is_alp_question source created_by updated_by created_at updated_at question_lang question_um_lang',
+            'users' => 'name email role_id',
+            'roles' => 'name',
+            'exam_question_tbl' => 'question question_um topic_id unit_id book_id question_type exercise_question cognitive_domain topic_content difficulty marks status reviewed_by reviewed_at explanation explanation_um explanation_video_url activate is_mcq has_diagram question_presentation_type_id scenario_group_id scenario_question_order is_alp_question source ai_provider_id ai_model_id created_by updated_by created_at updated_at question_lang question_um_lang',
             'book_unit_topic_tbl' => 'unit_id topic_name topic_name_um topic_no slo_no activate is_alp created_at updated_at',
             'book_unit_tbl' => 'book_id unit_name',
             'book_tbl' => 'book_name class_id subject_id curriculum_board_id',
@@ -39,11 +41,12 @@ class QuestionBulkImportTest extends TestCase
             'subject_tbl' => 'subject_name',
             'question_type_tbl' => 'type_name',
             'question_presentation_type_tbl' => 'type_name code allows_multiple_mcqs activate sort_order',
-            'question_scenario_groups_tbl' => 'title scenario_text scenario_text_um scenario_image question_presentation_type_id topic_id unit_id book_id activate created_by updated_by created_at updated_at',
+            'question_scenario_groups_tbl' => 'title scenario_text scenario_text_um scenario_image question_presentation_type_id topic_id unit_id book_id activate ai_provider_id ai_model_id created_by updated_by created_at updated_at',
             'exam_question_board_tbl' => 'question_id board_id session_id year group_id activate created_by updated_by created_at updated_at',
             'exam_answer_tbl' => 'question_id answer answer_um answer_lang answer_um_lang created_by updated_by created_at updated_at',
             'exam_question_options_tbl' => 'question_id option option_um is_answer option_lang created_by updated_by created_at updated_at',
             'permissions' => 'name',
+            'role_permissions' => 'role_id permission_id',
             'role_permission_scopes' => 'role_id permission_id scope_type scope_id',
         ];
 
@@ -78,15 +81,23 @@ class QuestionBulkImportTest extends TestCase
 
     protected function createMockUser()
     {
-        $user = new class {
-            public $id = 1;
-            public $role_id = 1;
-            public $role;
-            public function loadMissing($relations) {}
-            public function hasRole($role) { return true; }
-            public function can($permission) { return true; }
-        };
-        $user->role = (object) ['name' => 'super_admin'];
+        $role = DB::table('roles')->where('name', 'super_admin')->first();
+        if (!$role) {
+            $roleId = DB::table('roles')->insertGetId(['name' => 'super_admin']);
+            $role = (object) ['id' => $roleId, 'name' => 'super_admin'];
+        }
+
+        $roleModel = new \App\Models\Role();
+        $roleModel->id = (int) $role->id;
+        $roleModel->name = 'super_admin';
+
+        $user = new \App\Models\User();
+        $user->id = 1;
+        $user->name = 'Super Admin';
+        $user->email = 'admin@test.local';
+        $user->role_id = $roleModel->id;
+        $user->setRelation('role', $roleModel);
+
         return $user;
     }
 
@@ -192,6 +203,7 @@ class QuestionBulkImportTest extends TestCase
             'book_id' => 1,
             'unit_id' => 1,
             'topic_id' => 1,
+            'default_presentation_type_id' => 1,
             'questions' => [
                 [
                     'client_id' => 'unique-retry-key-999',
@@ -230,6 +242,7 @@ class QuestionBulkImportTest extends TestCase
         $payload = [
             'book_id' => 1,
             'unit_id' => 1,
+            'default_presentation_type_id' => 1,
             'auto_create_topics' => true,
             'questions' => [
                 [
@@ -340,6 +353,7 @@ class QuestionBulkImportTest extends TestCase
             'book_id' => 1,
             'unit_id' => 1,
             'topic_id' => 1,
+            'default_presentation_type_id' => 1,
             'scenarios' => [
                 [
                     'index' => 0,

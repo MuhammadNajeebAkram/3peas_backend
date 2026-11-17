@@ -264,7 +264,7 @@ class AuthController extends Controller
 
     private function cookieName(): string
     {
-        return env('ADMIN_JWT_COOKIE_NAME', 'admin_auth_token');
+        return (string) config('auth.cookies.admin', 'admin_auth_token');
     }
 
     private function cookieDomain(): ?string

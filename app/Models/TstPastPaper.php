@@ -13,6 +13,7 @@ class TstPastPaper extends Model
         'paper_title',
         'paper_slug',
         'board_id',
+        'curriculum_board_id',
         'subject_id',
         'class_id',
         'session_id',
@@ -24,6 +25,7 @@ class TstPastPaper extends Model
     ];
 
     protected $casts = [
+        'curriculum_board_id' => 'integer',
         'is_active' => 'boolean',
         'group' => 'integer',
         'year' => 'integer',
@@ -39,6 +41,11 @@ class TstPastPaper extends Model
     public function board()
     {
         return $this->belongsTo(ExamBoard::class, 'board_id');
+    }
+
+    public function curriculumBoard()
+    {
+        return $this->belongsTo(CurriculumBoard::class, 'curriculum_board_id');
     }
 
     public function subject()

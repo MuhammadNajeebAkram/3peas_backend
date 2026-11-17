@@ -38,7 +38,10 @@ class QuestionExportTest extends TestCase
             'exam_answer_tbl' => 'question_id answer answer_um',
             'exam_question_options_tbl' => 'question_id option option_um is_answer',
             'permissions' => 'name',
+            'roles' => 'name display_name created_at updated_at',
+            'role_permissions' => 'role_id permission_id',
             'role_permission_scopes' => 'role_id permission_id scope_type scope_id',
+            'users' => 'name email password role_id is_active created_at updated_at',
         ];
         foreach ($tables as $name => $columns) {
             Schema::create($name, function (Blueprint $table) use ($columns) {
@@ -102,18 +105,27 @@ class QuestionExportTest extends TestCase
             ['id' => 1, 'name' => 'questions.report.view'],
             ['id' => 2, 'name' => 'questions.report.export'],
         ]);
+        DB::table('roles')->insert([
+            ['id' => 1, 'name' => 'reporter', 'display_name' => 'Reporter', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('role_permissions')->insert([
+            ['role_id' => 1, 'permission_id' => 1],
+            ['role_id' => 1, 'permission_id' => 2],
+        ]);
         DB::table('role_permission_scopes')->insert([
             ['role_id' => 1, 'permission_id' => 1, 'scope_type' => 'book', 'scope_id' => 1],
             ['role_id' => 1, 'permission_id' => 2, 'scope_type' => 'topic', 'scope_id' => 2],
         ]);
-        $user = new class {
-            public $role_id = 1;
-            public $role;
-            public function loadMissing($relations) {}
-        };
-        $user->role = (object) ['name' => 'reporter'];
+        $user = \App\Models\User::create([
+            'id' => 1,
+            'name' => 'Reporter Admin',
+            'email' => 'reporter@example.com',
+            'password' => bcrypt('secret'),
+            'role_id' => 1,
+            'is_active' => 1,
+        ]);
         $request = Request::create('/', 'POST');
-        $request->setUserResolver(fn () => $user);
+        $request->setUserResolver(fn ($guard = null) => $user);
         $this->assertSame(0, (new QuestionsController)->exportQuestions($request)->getData(true)['total']);
         DB::table('role_permission_scopes')->where('permission_id', 2)->update(['scope_id' => 1]);
         $this->assertSame(55, (new QuestionsController)->exportQuestions($request)->getData(true)['total']);
@@ -124,18 +136,47 @@ class QuestionExportTest extends TestCase
         $route = app('router')->getRoutes()->match(Request::create('/api/admin/auth/question/export', 'POST'));
         $this->assertContains('permission:questions.report.view', $route->gatherMiddleware());
         $this->assertContains('permission:questions.report.export', $route->gatherMiddleware());
-        foreach ([[], ['questions.view'], ['questions.report.view'], ['questions.report.export'], ['questions.report.view', 'questions.report.export']] as $permissions) {
-            $user = new class {
-                public $role;
-                public function loadMissing($relations) {}
-            };
-            $user->role = (object) ['name' => 'reporter', 'permissions' => collect($permissions)->map(fn ($name) => (object) ['name' => $name])];
-            $auth = \Mockery::mock();
-            $auth->shouldReceive('user')->andReturn($user);
-            Auth::swap($auth);
+
+        DB::table('permissions')->insertOrIgnore([
+            ['id' => 10, 'name' => 'questions.report.view'],
+            ['id' => 11, 'name' => 'questions.report.export'],
+            ['id' => 12, 'name' => 'questions.view'],
+        ]);
+
+        foreach ([[], ['questions.view'], ['questions.report.view'], ['questions.report.export'], ['questions.report.view', 'questions.report.export']] as $idx => $permissions) {
+            $roleId = 100 + $idx;
+            $userId = 100 + $idx;
+            DB::table('roles')->insert([
+                'id' => $roleId,
+                'name' => 'role_' . $idx,
+                'display_name' => 'Role ' . $idx,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            foreach ($permissions as $pName) {
+                $pId = DB::table('permissions')->where('name', $pName)->value('id');
+                if ($pId) {
+                    DB::table('role_permissions')->insert([
+                        'role_id' => $roleId,
+                        'permission_id' => $pId,
+                    ]);
+                }
+            }
+            $user = \App\Models\User::create([
+                'id' => $userId,
+                'name' => 'User ' . $idx,
+                'email' => 'user' . $idx . '@example.com',
+                'password' => bcrypt('secret'),
+                'role_id' => $roleId,
+                'is_active' => 1,
+            ]);
+
             $middleware = new CheckPermission;
-            $response = $middleware->handle(Request::create('/'), fn ($request) =>
-                $middleware->handle($request, fn () => response()->json(['success' => 1]), 'questions.report.export'),
+            $request = Request::create('/');
+            $request->setUserResolver(fn ($guard = null) => $user);
+
+            $response = $middleware->handle($request, fn ($req) =>
+                $middleware->handle($req, fn () => response()->json(['success' => 1]), 'questions.report.export'),
                 'questions.report.view');
             $this->assertSame(count($permissions) === 2 ? 200 : 403, $response->getStatusCode());
         }
