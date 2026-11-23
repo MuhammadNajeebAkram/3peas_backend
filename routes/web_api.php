@@ -52,6 +52,7 @@ use App\Http\Controllers\Stats\StudentUnitProgressSummaryController;
 use App\Http\Controllers\Stats\StudentStudyTimeController;
 use App\Http\Controllers\Tests\PracticeSessionController;
 use App\Http\Controllers\Tests\TestController;
+use App\Http\Controllers\Tests\AssessmentConfigController;
 use App\Http\Middleware\EnsurePaymentVerified;
 use App\Http\Middleware\AttachJwtFromCookie;
 use App\Http\Middleware\AuthenticateJwtCookieGuard;
@@ -313,6 +314,15 @@ Route::prefix('auth')->group(function () {
             Route::get('/assessments/{assessmentId}', [\App\Http\Controllers\Student\StudentPerformanceController::class, 'showAssessment'])->whereNumber('assessmentId');
         });
 
+        // Phase 1E.2.B — Student Freemium Discovery & Quota APIs
+        Route::prefix('freemium')->group(function () {
+            Route::get('/entitlements', [\App\Http\Controllers\Api\Student\Freemium\StudentFreemiumAccessController::class, 'entitlements']);
+            Route::get('/free-resources', [\App\Http\Controllers\Api\Student\Freemium\StudentFreemiumAccessController::class, 'freeResources']);
+            Route::post('/evaluate-access', [\App\Http\Controllers\Api\Student\Freemium\StudentFreemiumAccessController::class, 'evaluateAccess']);
+            Route::get('/quota-allowances', [\App\Http\Controllers\Api\Student\Freemium\StudentFreemiumQuotaController::class, 'quotaAllowances']);
+            Route::get('/tests/{testId}/eligibility', [\App\Http\Controllers\Api\Student\Freemium\StudentFreemiumQuotaController::class, 'testEligibility'])->whereNumber('testId');
+        });
+
         Route::prefix('notifications')->group(function () {
             Route::get('/', [\App\Http\Controllers\WebUserNotificationController::class, 'index']);
             Route::post('/read-all', [\App\Http\Controllers\WebUserNotificationController::class, 'markAllRead']);
@@ -357,15 +367,35 @@ Route::prefix('auth')->group(function () {
         });
 
         Route::prefix('tests')->group(function () {
+            Route::get('/assessment-configuration', [AssessmentConfigController::class, 'getAssessmentConfiguration']);
+            Route::post('/assessment-configuration', [AssessmentConfigController::class, 'getAssessmentConfiguration']);
+            Route::get('/academic-hierarchy', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getAcademicHierarchy']);
+            Route::post('/academic-hierarchy', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getAcademicHierarchy']);
+            Route::get('/topics', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getTopics']);
+            Route::post('/topics', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getTopics']);
+            Route::get('/questions', [\App\Http\Controllers\Tests\QuestionExplorerController::class, 'getQuestions']);
+            Route::post('/questions', [\App\Http\Controllers\Tests\QuestionExplorerController::class, 'getQuestions']);
             Route::post('/generate-selected-units-formal-test', [TestController::class, 'generateSelectedUnitsFormalTestForLms']);
             Route::post('/generate-full-book-formal-test', [TestController::class, 'generateFullBookFormalTestForLms']);
+            Route::post('/generate-full-book-mock-test', [TestController::class, 'generateFullBookMockTestForLms']);
             Route::get('/get-recent-attempts', [TestController::class, 'getRecentAttemptsForLms']);
+            Route::get('/formal-tests/{testId}', [TestController::class, 'getFormalTestForLms'])->whereNumber('testId');
             Route::post('/save-formal-test-question-progress', [TestController::class, 'saveFormalTestQuestionProgressForLms']);
             Route::post('/submit-formal-test', [TestController::class, 'submitFormalTestForLms']);
             Route::post('/generate-selected-units-practice-session', [PracticeSessionController::class, 'generateSelectedUnitsPracticeSessionForLms']);
             Route::post('/generate-full-book-practice-session', [PracticeSessionController::class, 'generateFullBookPracticeSessionForLms']);
+            Route::get('/practice-sessions/{sessionId}', [PracticeSessionController::class, 'getPracticeSessionForLms'])->whereNumber('sessionId');
             Route::post('/save-practice-session-question-progress', [PracticeSessionController::class, 'savePracticeSessionQuestionProgressForLms']);
             Route::post('/submit-practice-session', [PracticeSessionController::class, 'submitPracticeSessionForLms']);
+        });
+
+        Route::prefix('question-explorer')->group(function () {
+            Route::get('/academic-hierarchy', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getAcademicHierarchy']);
+            Route::post('/academic-hierarchy', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getAcademicHierarchy']);
+            Route::get('/topics', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getTopics']);
+            Route::post('/topics', [\App\Http\Controllers\Tests\AcademicHierarchyController::class, 'getTopics']);
+            Route::get('/questions', [\App\Http\Controllers\Tests\QuestionExplorerController::class, 'getQuestions']);
+            Route::post('/questions', [\App\Http\Controllers\Tests\QuestionExplorerController::class, 'getQuestions']);
         });
 
         Route::prefix('activities')->group(function () {

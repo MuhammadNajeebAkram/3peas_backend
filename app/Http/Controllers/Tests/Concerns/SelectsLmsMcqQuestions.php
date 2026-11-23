@@ -19,21 +19,114 @@ trait SelectsLmsMcqQuestions
      *
      * @return array{questions: Collection, scenario_group_ids: array<int>}|null
      */
-    private function selectLmsMcqQuestions(array $unitIds, int $requestedCount, string $mcqFormat): ?array
+    /**
+     * Calculate target scenario question count (multiple of 4) and straight count
+     * for format 'all' based on the requested scenario percentage with lower-multiple tie breaking.
+     *
+     * @param int $totalQuestions Total requested questions (Q)
+     * @param int $scenarioPercentage Requested scenario percentage (P: 0 to 100, increments of 5, default 30)
+     * @return array{scenario_questions: int, straight_questions: int, scenario_groups: int}
+     *
+     * @throws \InvalidArgumentException When percentage is invalid or 100% with total not divisible by 4
+     */
+    public static function calculateScenarioAndStraightCounts(int $totalQuestions, int $scenarioPercentage = 30): array
     {
-        if ($mcqFormat === 'scenario') {
-            return $this->selectLmsScenarioMcqQuestions($unitIds, $requestedCount);
+        if ($scenarioPercentage < 0 || $scenarioPercentage > 100 || ($scenarioPercentage % 5 !== 0)) {
+            throw new \InvalidArgumentException(
+                'The scenario percentage must be an integer between 0 and 100 in increments of 5.'
+            );
         }
 
-        $questions = DB::table('exam_question_tbl as questions')
+        if ($scenarioPercentage === 100) {
+            if ($totalQuestions % 4 !== 0) {
+                throw new \InvalidArgumentException(
+                    'When scenario percentage is 100%, total questions must be a multiple of 4.'
+                );
+            }
+            return [
+                'scenario_questions' => $totalQuestions,
+                'straight_questions' => 0,
+                'scenario_groups'    => (int) ($totalQuestions / 4),
+            ];
+        }
+
+        if ($scenarioPercentage === 0 || $totalQuestions < 4) {
+            return [
+                'scenario_questions' => 0,
+                'straight_questions' => $totalQuestions,
+                'scenario_groups'    => 0,
+            ];
+        }
+
+        $target = ($totalQuestions * $scenarioPercentage) / 100.0;
+        $lower = (int) (floor($target / 4.0) * 4);
+        $upper = $lower + 4;
+        $midpoint = $lower + 2.0;
+
+        // If target <= midpoint (including exact halfway tie), pick lower multiple; otherwise upper
+        $scenarioCount = ($target <= $midpoint) ? $lower : $upper;
+
+        if ($scenarioCount > $totalQuestions) {
+            $scenarioCount = (int) (floor($totalQuestions / 4.0) * 4);
+        }
+
+        $straightCount = $totalQuestions - $scenarioCount;
+
+        return [
+            'scenario_questions' => $scenarioCount,
+            'straight_questions' => $straightCount,
+            'scenario_groups'    => (int) ($scenarioCount / 4),
+        ];
+    }
+
+    /**
+     * Select standalone straight MCQs (where scenario_group_id IS NULL).
+     *
+     * @param array<int> $unitIds
+     * @param int $requestedCount
+     * @param array<int>|null $topicIds
+     * @param bool $allowExercise
+     * @param bool $allowSupplementary
+     * @return array{questions: Collection, scenario_group_ids: array<int>}|null
+     */
+    private function selectLmsStraightMcqQuestions(
+        array $unitIds,
+        int $requestedCount,
+        ?array $topicIds = null,
+        bool $allowExercise = true,
+        bool $allowSupplementary = true
+    ): ?array {
+        if ($requestedCount <= 0) {
+            return [
+                'questions'          => collect(),
+                'scenario_group_ids' => [],
+            ];
+        }
+
+        if (!$allowExercise && !$allowSupplementary) {
+            return null;
+        }
+
+        $query = DB::table('exam_question_tbl as questions')
             ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
             ->whereIn('topics.unit_id', $unitIds)
             ->where('questions.is_mcq', 1)
             ->where('questions.activate', 1)
-            ->when($mcqFormat === 'straight', function ($query) {
-                $query->whereNull('questions.scenario_group_id');
-            })
-            ->select('questions.id')
+            ->whereNull('questions.scenario_group_id');
+
+        if (!empty($topicIds)) {
+            $query->whereIn('questions.topic_id', $topicIds);
+        }
+
+        if (!$allowExercise && $allowSupplementary) {
+            $query->where(function ($q) {
+                $q->where('questions.exercise_question', 0)->orWhereNull('questions.exercise_question');
+            });
+        } elseif ($allowExercise && !$allowSupplementary) {
+            $query->where('questions.exercise_question', 1);
+        }
+
+        $questions = $query->select('questions.id')
             ->distinct()
             ->inRandomOrder()
             ->limit($requestedCount)
@@ -44,67 +137,197 @@ trait SelectsLmsMcqQuestions
         }
 
         return [
-            'questions' => $questions->values(),
+            'questions'          => $questions->values(),
             'scenario_group_ids' => [],
         ];
     }
 
-    private function selectLmsScenarioMcqQuestions(array $unitIds, int $scenarioCount): ?array
-    {
-        $scenarioGroupIds = DB::table('question_scenario_groups_tbl as scenario_groups')
-            ->where('scenario_groups.activate', 1)
-            ->whereExists(function ($query) use ($unitIds) {
-                $query->selectRaw('1')
-                    ->from('exam_question_tbl as questions')
-                    ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
-                    ->whereColumn('questions.scenario_group_id', 'scenario_groups.id')
-                    ->whereIn('topics.unit_id', $unitIds)
-                    ->where('questions.is_mcq', 1)
-                    ->where('questions.activate', 1);
-            })
-            ->inRandomOrder()
-            ->limit($scenarioCount)
-            ->pluck('scenario_groups.id')
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
+    /**
+     * Unified MCQ selection:
+     * - 'straight': Standalone MCQs only (scenario_group_id IS NULL)
+     * - 'scenario': Complete 4-question scenario groups (scenario_group_id IS NOT NULL)
+     * - 'all': Approximately 30% scenario questions (in complete 4-question groups) and remaining straight MCQs
+     *
+     * @param array<int> $unitIds
+     * @param int $requestedCount
+     * @param string $mcqFormat
+     * @param array<int>|null $topicIds
+     * @param bool $allowExercise
+     * @param bool $allowSupplementary
+     * @param int $scenarioPercentage
+     * @return array{questions: Collection, scenario_group_ids: array<int>}
+     *
+     * @throws \InvalidArgumentException On insufficient questions or format violations
+     */
+    private function selectLmsMcqQuestions(
+        array $unitIds,
+        int $requestedCount,
+        string $mcqFormat,
+        ?array $topicIds = null,
+        bool $allowExercise = true,
+        bool $allowSupplementary = true,
+        int $scenarioPercentage = 30
+    ): ?array {
+        if ($mcqFormat === 'scenario') {
+            if ($requestedCount % 4 !== 0) {
+                throw new \InvalidArgumentException(
+                    'The requested question count cannot be fulfilled using complete four-question scenario groups. Total questions must be a multiple of 4.'
+                );
+            }
+            $scenarioCount = (int) ($requestedCount / 4);
+            $selection = $this->selectLmsScenarioMcqQuestions(
+                $unitIds,
+                $scenarioCount,
+                $topicIds,
+                $allowExercise,
+                $allowSupplementary
+            );
+            if ($selection === null) {
+                throw new \InvalidArgumentException(
+                    'Not enough complete active scenario groups available for the selected chapter. Each scenario group requires at least 4 active questions. Try fewer scenarios.'
+                );
+            }
+            return $selection;
+        }
 
-        if (count($scenarioGroupIds) < $scenarioCount) {
+        if ($mcqFormat === 'straight') {
+            $selection = $this->selectLmsStraightMcqQuestions(
+                $unitIds,
+                $requestedCount,
+                $topicIds,
+                $allowExercise,
+                $allowSupplementary
+            );
+            if ($selection === null) {
+                throw new \InvalidArgumentException(
+                    'Not enough active straight MCQs available for the selected chapter. Try fewer questions.'
+                );
+            }
+            return $selection;
+        }
+
+        // mcqFormat === 'all': configurable scenario percentage (in complete 4-question groups) + remaining straight MCQs
+        $counts = self::calculateScenarioAndStraightCounts($requestedCount, $scenarioPercentage);
+        $scenarioQs = $counts['scenario_questions'];
+        $scenarioGroups = $counts['scenario_groups'];
+        $straightQs = $counts['straight_questions'];
+
+        $selectedScenarioQuestions = collect();
+        $selectedScenarioGroupIds = [];
+
+        if ($scenarioGroups > 0) {
+            $scenarioSelection = $this->selectLmsScenarioMcqQuestions(
+                $unitIds,
+                $scenarioGroups,
+                $topicIds,
+                $allowExercise,
+                $allowSupplementary
+            );
+            if ($scenarioSelection === null) {
+                throw new \InvalidArgumentException(
+                    "Not enough complete active scenario groups available for the selected chapter to fulfill the {$scenarioPercentage}% scenario requirement ({$scenarioQs} questions across {$scenarioGroups} groups required). Each scenario group requires at least 4 active questions. Try a lower scenario percentage or straight format."
+                );
+            }
+            $selectedScenarioQuestions = $scenarioSelection['questions'];
+            $selectedScenarioGroupIds = $scenarioSelection['scenario_group_ids'];
+        }
+
+        $selectedStraightQuestions = collect();
+        if ($straightQs > 0) {
+            $straightSelection = $this->selectLmsStraightMcqQuestions(
+                $unitIds,
+                $straightQs,
+                $topicIds,
+                $allowExercise,
+                $allowSupplementary
+            );
+            if ($straightSelection === null) {
+                throw new \InvalidArgumentException(
+                    "Not enough active straight MCQs available for the selected chapter to fulfill the remaining {$straightQs} straight questions. Try fewer questions or a higher scenario percentage."
+                );
+            }
+            $selectedStraightQuestions = $straightSelection['questions'];
+        }
+
+        $combinedQuestions = $selectedScenarioQuestions->concat($selectedStraightQuestions)->values();
+
+        return [
+            'questions'          => $combinedQuestions,
+            'scenario_group_ids' => $selectedScenarioGroupIds,
+        ];
+    }
+
+    private function selectLmsScenarioMcqQuestions(
+        array $unitIds,
+        int $scenarioCount,
+        ?array $topicIds = null,
+        bool $allowExercise = true,
+        bool $allowSupplementary = true
+    ): ?array {
+        if (!$allowExercise && !$allowSupplementary) {
             return null;
         }
 
-        $groupPosition = array_flip($scenarioGroupIds);
-
-        $rawQuestions = DB::table('exam_question_tbl as questions')
+        // 1. Fetch all active scenario questions within the requested units/topics that satisfy permissions
+        $rawQuery = DB::table('exam_question_tbl as questions')
             ->join('book_unit_topic_tbl as topics', 'topics.id', '=', 'questions.topic_id')
-            ->whereIn('questions.scenario_group_id', $scenarioGroupIds)
+            ->join('question_scenario_groups_tbl as scenario_groups', 'scenario_groups.id', '=', 'questions.scenario_group_id')
+            ->where('scenario_groups.activate', 1)
             ->whereIn('topics.unit_id', $unitIds)
             ->where('questions.is_mcq', 1)
-            ->where('questions.activate', 1)
-            ->select('questions.id', 'questions.scenario_group_id', 'questions.scenario_question_order')
-            ->distinct()
-            ->get();
+            ->where('questions.activate', 1);
 
-        if ($rawQuestions->isEmpty()) {
+        if (!empty($topicIds)) {
+            $rawQuery->whereIn('questions.topic_id', $topicIds);
+        }
+
+        if (!$allowExercise && $allowSupplementary) {
+            $rawQuery->where(function ($sub) {
+                $sub->where('questions.exercise_question', 0)->orWhereNull('questions.exercise_question');
+            });
+        } elseif ($allowExercise && !$allowSupplementary) {
+            $rawQuery->where('questions.exercise_question', 1);
+        }
+
+        $eligibleQuestions = $rawQuery->select([
+            'questions.id',
+            'questions.scenario_group_id',
+            'questions.scenario_question_order',
+        ])->distinct()->get();
+
+        if ($eligibleQuestions->isEmpty()) {
             return null;
         }
 
-        $grouped = $rawQuestions->groupBy('scenario_group_id');
-        $selectedQuestions = collect();
+        // 2. Group by scenario_group_id and filter ONLY to groups with at least 4 eligible questions
+        $grouped = $eligibleQuestions->groupBy('scenario_group_id');
+        $qualifyingGroupIds = [];
 
-        foreach ($scenarioGroupIds as $gid) {
-            $groupMembers = $grouped->get($gid, collect());
-            if ($groupMembers->isEmpty()) {
-                continue;
+        foreach ($grouped as $sgId => $groupMembers) {
+            if ($groupMembers->count() >= 4) {
+                $qualifyingGroupIds[] = (int) $sgId;
             }
-            if ($groupMembers->count() > 4) {
-                $sampled = $groupMembers->shuffle()->take(4);
-            } else {
-                $sampled = $groupMembers;
-            }
+        }
+
+        // Rule 6 & 10: Groups with fewer than 4 eligible questions excluded. Fails if insufficient complete groups.
+        if (count($qualifyingGroupIds) < $scenarioCount) {
+            return null;
+        }
+
+        // 3. Randomly select $scenarioCount scenario group IDs from qualifying groups
+        shuffle($qualifyingGroupIds);
+        $selectedScenarioGroupIds = array_slice($qualifyingGroupIds, 0, $scenarioCount);
+        $groupPosition = array_flip($selectedScenarioGroupIds);
+
+        // 4. For each selected scenario group, select EXACTLY 4 questions
+        $selectedQuestions = collect();
+        foreach ($selectedScenarioGroupIds as $sgId) {
+            $members = $grouped->get($sgId);
+            $sampled = $members->shuffle()->take(4);
             $selectedQuestions = $selectedQuestions->concat($sampled);
         }
 
+        // 5. Stable order within group (by scenario_question_order, then id)
         $questions = $selectedQuestions
             ->sort(function ($a, $b) use ($groupPosition) {
                 return [
@@ -119,13 +342,9 @@ trait SelectsLmsMcqQuestions
             })
             ->values();
 
-        if ($questions->isEmpty()) {
-            return null;
-        }
-
         return [
-            'questions' => $questions,
-            'scenario_group_ids' => $scenarioGroupIds,
+            'questions'          => $questions,
+            'scenario_group_ids' => $selectedScenarioGroupIds,
         ];
     }
 }

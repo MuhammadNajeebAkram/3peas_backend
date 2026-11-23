@@ -325,7 +325,10 @@ class QuestionExplanationTest extends TestCase
         DB::table('exam_question_options_tbl')->where('id', 1)->update(['option' => '7 N']);
         $this->postJson(self::SAVE, $payload)->assertConflict();
         DB::table('exam_question_options_tbl')->where('id', 1)->update(['option' => '6 N']);
-        $this->postJson(self::SAVE, $payload)->assertOk()->assertJsonPath('data.explanation_um', $payload['explanation_um']);
+        $this->postJson(self::SAVE, $payload)->assertOk()
+            ->assertJsonPath('data.explanation_um', app(\App\Http\Services\QuestionExplanationService::class)->toTiptapHtml($payload['explanation_um']));
+        $this->assertSame(app(\App\Http\Services\QuestionExplanationService::class)->toTiptapHtml($payload['explanation']), DB::table('exam_question_tbl')->value('explanation'));
+        $this->assertStringContainsString('data-type="inline-math"', (string) DB::table('exam_question_tbl')->value('explanation'));
     }
 
     public function test_invalid_questions_models_and_concurrent_requests_do_not_call_openai(): void

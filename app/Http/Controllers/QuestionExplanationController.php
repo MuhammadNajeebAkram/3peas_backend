@@ -73,7 +73,7 @@ class QuestionExplanationController extends Controller
             foreach ($service->fields($data['language']) as $field) {
                 abort_unless(hash_equals((string) data_get($record->metadata, 'explanation_hashes.'.$field, ''), $hashes[$field]),
                     409, 'The saved explanation changed after generation. Reload and generate a new draft.');
-                $question->$field = $data[$field];
+                $question->$field = $service->toTiptapHtml($data[$field]);
             }
             $question->save();
             $record->metadata = array_merge($record->metadata ?? [], ['saved_by' => $request->user()->id, 'saved_at' => now()->toIso8601String()]);

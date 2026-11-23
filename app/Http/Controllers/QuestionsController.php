@@ -6,6 +6,9 @@ use App\Models\ExamQuestion;
 use App\Models\StudentActivity;
 use App\Http\Services\AwsUploadService;
 use App\Http\Services\QuestionAuthoringSecurityService;
+use App\Http\Services\Freemium\FreemiumEvaluationResult;
+use App\Http\Services\Freemium\DTOs\UnifiedAccessDecision;
+use App\Http\Services\Freemium\UnifiedEntitlementResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -2924,36 +2927,279 @@ if ($existingRecord) {
 
     //----------------- new lms -----------------------
 
-    public function getQuestionsByTopicForLMS(Request $request, $topic_id){
-        try{
-            $questions = ExamQuestion::with(['answers', 'answerOptions', 'questionType', 'scenarioGroup'])
-                ->where('topic_id', $topic_id)
-                ->where('activate', 1)
-                ->orderBy('question_type', 'asc')
-                ->get();
+    public function getQuestionsByTopicForLMS(Request $request, $topic_id)
+    {
+        try {
+            $student = $request->user();
 
+            if (!$student || $student->role !== 'student' || $student->status !== 'active') {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Active student account required.',
+                ], 403);
+            }
+
+            // 1. Resolve DB-grounded topic hierarchy
             $topicContext = DB::table('book_unit_topic_tbl as topics')
                 ->join('book_unit_tbl as units', 'units.id', '=', 'topics.unit_id')
                 ->join('book_tbl as books', 'books.id', '=', 'units.book_id')
                 ->join('subject_tbl as subjects', 'subjects.id', '=', 'books.subject_id')
-                ->where('topics.id', $topic_id)
-                ->select(
+                ->where('topics.id', (int) $topic_id)
+                ->where('topics.activate', 1)
+                ->where('units.activate', 1)
+                ->where('books.activate', 1)
+                ->select([
                     'topics.id as topic_id',
                     'topics.topic_name',
                     'topics.topic_no',
                     'units.id as unit_id',
                     'units.unit_name',
                     'units.unit_no',
+                    'books.id as book_id',
+                    'books.class_id',
+                    'books.curriculum_board_id',
                     'subjects.id as subject_id',
-                    'subjects.subject_name'
-                )
+                    'subjects.subject_name',
+                ])
                 ->first();
 
+            if (!$topicContext) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Topic not found or inactive.',
+                ], 404);
+            }
 
+            // 2. Validate client-supplied academic hierarchy parameters if present
+            if ($request->filled('unit_id') && (int) $request->input('unit_id') !== (int) $topicContext->unit_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Topic does not belong to the requested unit.',
+                ], 422);
+            }
 
+            if ($request->filled('book_id') && (int) $request->input('book_id') !== (int) $topicContext->book_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Topic does not belong to the requested book.',
+                ], 422);
+            }
 
+            if ($request->filled('subject_id') && (int) $request->input('subject_id') !== (int) $topicContext->subject_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Topic does not belong to the requested subject.',
+                ], 422);
+            }
 
-            if ($topicContext && $request->user()) {
+            if ($request->filled('class_id') && (int) $request->input('class_id') !== (int) $topicContext->class_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Topic does not belong to the requested class.',
+                ], 422);
+            }
+
+            if ($request->filled('curriculum_board_id') && (int) $request->input('curriculum_board_id') !== (int) $topicContext->curriculum_board_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Topic does not belong to the requested curriculum board.',
+                ], 422);
+            }
+
+            $offeredProgramId = $request->integer('offered_program_id') ?: ($request->integer('program_id') ?: null);
+            if ($offeredProgramId) {
+                $programValid = DB::table('offered_programs as programs')
+                    ->join('offered_classes as classes', 'classes.id', '=', 'programs.offered_class_id')
+                    ->join('program_subjects as prog_subs', 'prog_subs.offered_program_id', '=', 'programs.id')
+                    ->where('programs.id', $offeredProgramId)
+                    ->where('programs.is_active', 1)
+                    ->where('classes.class_id', $topicContext->class_id)
+                    ->where('classes.curriculum_board_id', $topicContext->curriculum_board_id)
+                    ->where('prog_subs.subject_id', $topicContext->subject_id)
+                    ->where('prog_subs.is_active', 1)
+                    ->exists();
+
+                if (!$programValid) {
+                    return response()->json([
+                        'success' => 0,
+                        'message' => 'Hierarchy mismatch: Program does not cover the requested topic subject/class/board.',
+                    ], 422);
+                }
+            }
+
+            // 3. Resolve unified entitlement BEFORE loading question content
+            $context = [
+                'topic_id'            => (int) $topicContext->topic_id,
+                'chapter_id'          => (int) $topicContext->unit_id,
+                'book_id'             => (int) $topicContext->book_id,
+                'subject_id'          => (int) $topicContext->subject_id,
+                'class_id'            => (int) $topicContext->class_id,
+                'curriculum_board_id' => (int) $topicContext->curriculum_board_id,
+            ];
+            if ($offeredProgramId) {
+                $context['offered_program_id'] = $offeredProgramId;
+            }
+
+            /** @var UnifiedEntitlementResolver $resolver */
+            $resolver = app(UnifiedEntitlementResolver::class);
+
+            $mcqDecision           = $resolver->resolve($student, $context, 'perm_mcqs');
+            $shortDecision         = $resolver->resolve($student, $context, 'perm_short_questions');
+            $longDecision          = $resolver->resolve($student, $context, 'perm_long_questions');
+            $exerciseDecision      = $resolver->resolve($student, $context, 'perm_exercise_questions');
+            $supplementaryDecision = $resolver->resolve($student, $context, 'perm_supplementary_questions');
+            $answersDecision       = $resolver->resolve($student, $context, 'perm_answers');
+            $explanationsDecision  = $resolver->resolve($student, $context, 'perm_explanations');
+            $topicContentsDecision = $resolver->resolve($student, $context, 'perm_topic_contents');
+
+            // Fail-closed: If student is denied all question format permissions, reject with 403
+            if ($mcqDecision->isDenied() && $shortDecision->isDenied() && $longDecision->isDenied()) {
+                return response()->json([
+                    'success'     => 0,
+                    'message'     => $mcqDecision->getDenialReason() ?: 'An active subscription is required to access these questions.',
+                    'code'        => 'ACCESS_DENIED',
+                    'upgrade_url' => $mcqDecision->getUpgradeProgramSlug()
+                        ? "/lms/subscribe/{$mcqDecision->getUpgradeProgramSlug()}"
+                        : null,
+                ], 403);
+            }
+
+            // Fail-closed: If both exercise and supplementary questions are explicitly denied under Freemium rules, reject with 403
+            $isPaid = $mcqDecision->isPaid() || $shortDecision->isPaid() || $longDecision->isPaid();
+            if (!$isPaid
+                && $exerciseDecision->isDenied() && $exerciseDecision->getOrigin() === UnifiedAccessDecision::ORIGIN_FREEMIUM_RULE
+                && $supplementaryDecision->isDenied() && $supplementaryDecision->getOrigin() === UnifiedAccessDecision::ORIGIN_FREEMIUM_RULE
+            ) {
+                return response()->json([
+                    'success'       => 0,
+                    'message'       => 'Access denied: Both exercise and supplementary questions are restricted under your current subscription or campaign.',
+                    'code'          => 'ACCESS_DENIED',
+                    'denial_reason' => 'Both exercise and supplementary questions are denied.',
+                    'diagnostic'    => 'perm_exercise_questions and perm_supplementary_questions are both denied.',
+                    'upgrade_url'   => $exerciseDecision->getUpgradeProgramSlug()
+                        ? "/lms/subscribe/{$exerciseDecision->getUpgradeProgramSlug()}"
+                        : null,
+                ], 403);
+            }
+
+            // Client explicit question_type filter check
+            if ($request->filled('question_type')) {
+                $requestedType = (int) $request->input('question_type');
+                if ($requestedType === 1 && $mcqDecision->isDenied()) {
+                    return response()->json([
+                        'success'     => 0,
+                        'message'     => $mcqDecision->getDenialReason() ?: 'Access to MCQs is not allowed under your current subscription or campaign.',
+                        'code'        => 'ACCESS_DENIED',
+                        'upgrade_url' => $mcqDecision->getUpgradeProgramSlug() ? "/lms/subscribe/{$mcqDecision->getUpgradeProgramSlug()}" : null,
+                    ], 403);
+                }
+                if ($requestedType === 2 && $shortDecision->isDenied()) {
+                    return response()->json([
+                        'success'     => 0,
+                        'message'     => $shortDecision->getDenialReason() ?: 'Access to short questions is not allowed under your current subscription or campaign.',
+                        'code'        => 'ACCESS_DENIED',
+                        'upgrade_url' => $shortDecision->getUpgradeProgramSlug() ? "/lms/subscribe/{$shortDecision->getUpgradeProgramSlug()}" : null,
+                    ], 403);
+                }
+                if ($requestedType === 3 && $longDecision->isDenied()) {
+                    return response()->json([
+                        'success'     => 0,
+                        'message'     => $longDecision->getDenialReason() ?: 'Access to long questions is not allowed under your current subscription or campaign.',
+                        'code'        => 'ACCESS_DENIED',
+                        'upgrade_url' => $longDecision->getUpgradeProgramSlug() ? "/lms/subscribe/{$longDecision->getUpgradeProgramSlug()}" : null,
+                    ], 403);
+                }
+            }
+
+            // 4. Access GRANTED: Query and filter questions
+            $query = ExamQuestion::with(['answers', 'answerOptions', 'questionType', 'scenarioGroup'])
+                ->where('topic_id', $topic_id)
+                ->where('activate', 1);
+
+            // 4a. Filter by format permissions (MCQ, Short, Long)
+            $query->where(function ($q) use ($mcqDecision, $shortDecision, $longDecision) {
+                $hasClause = false;
+                if ($mcqDecision->isAllowed()) {
+                    $q->orWhere('is_mcq', 1)->orWhere('question_type', 1);
+                    $hasClause = true;
+                }
+                if ($shortDecision->isAllowed()) {
+                    $q->orWhere(function ($sub) {
+                        $sub->where('question_type', 2)
+                            ->orWhereHas('questionType', function ($qt) {
+                                $qt->whereRaw('LOWER(type_name) LIKE ?', ['%short%']);
+                            });
+                    });
+                    $hasClause = true;
+                }
+                if ($longDecision->isAllowed()) {
+                    $q->orWhere(function ($sub) {
+                        $sub->where('question_type', 3)
+                            ->orWhereHas('questionType', function ($qt) {
+                                $qt->whereRaw('LOWER(type_name) LIKE ?', ['%long%']);
+                            });
+                    });
+                    $hasClause = true;
+                }
+                if (!$hasClause) {
+                    $q->whereRaw('0 = 1');
+                }
+            });
+
+            // 4b. Filter by exercise / supplementary permissions
+            $isPaid = $mcqDecision->isPaid() || $shortDecision->isPaid() || $longDecision->isPaid();
+            if (!$isPaid) {
+                if ($exerciseDecision->isDenied() && $exerciseDecision->getOrigin() === UnifiedAccessDecision::ORIGIN_FREEMIUM_RULE) {
+                    $query->where(function ($q) {
+                        $q->where('exercise_question', 0)->orWhereNull('exercise_question');
+                    });
+                }
+                if ($supplementaryDecision->isDenied() && $supplementaryDecision->getOrigin() === UnifiedAccessDecision::ORIGIN_FREEMIUM_RULE) {
+                    $query->where('exercise_question', 1);
+                }
+            }
+
+            if ($request->filled('question_type')) {
+                $query->where('question_type', (int) $request->input('question_type'));
+            }
+
+            $questions = $query->orderBy('question_type', 'asc')->get();
+
+            // 4c. Apply Correct-Answer, Explanation, and Topic-Content Protections
+            $canAnswers = $answersDecision->isAllowed();
+            $canExplanations = $explanationsDecision->isAllowed();
+            $canTopicContents = $topicContentsDecision->isAllowed();
+
+            foreach ($questions as $question) {
+                // Correct-answer protection: Never expose is_answer or answers relation when perm_answers is denied
+                if (!$canAnswers) {
+                    if ($question->relationLoaded('answerOptions')) {
+                        foreach ($question->answerOptions as $option) {
+                            unset($option->is_answer);
+                            $option->offsetUnset('is_answer');
+                            $option->makeHidden('is_answer');
+                        }
+                    }
+                    $question->setRelation('answers', collect([]));
+                }
+
+                // Explanation protection: Hide solutions and explanations when perm_explanations is denied
+                if (!$canExplanations) {
+                    $question->explanation = null;
+                    $question->explanation_um = null;
+                    $question->explanation_video_url = null;
+                    $question->makeHidden(['explanation', 'explanation_um', 'explanation_video_url']);
+                }
+
+                // Topic content protection: Hide protected topic content when perm_topic_contents is denied
+                if (!$canTopicContents) {
+                    $question->topic_content = null;
+                    $question->makeHidden(['topic_content']);
+                }
+            }
+
+            // 5. Record activity
+            if ($request->user()) {
                 $unitLabel = $topicContext->unit_no
                     ? 'Unit ' . $topicContext->unit_no
                     : $topicContext->unit_name;
@@ -2981,7 +3227,7 @@ if ($existingRecord) {
                         . ' and '
                         . $topicLabel
                         . '.',
-                    'offered_program_id' => $request->integer('offered_program_id') ?: null,
+                    'offered_program_id' => $offeredProgramId,
                     'subject_id' => $topicContext->subject_id,
                     'unit_id' => $topicContext->unit_id,
                     'reference_id' => $topicContext->topic_id,
@@ -2999,14 +3245,13 @@ if ($existingRecord) {
                 ]);
             }
 
-                return response()->json($questions);
+            return response()->json($questions);
 
-
-        } catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => 0,
                 'error' => $e->getMessage(),
-            ]);
+            ], 500);
         }
     }
 

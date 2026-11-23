@@ -7,6 +7,7 @@ use App\Models\Book;
 use App\Models\OfferedProgram;
 use App\Models\UserSubscription;
 use App\Http\Services\BookService;
+use App\Http\Services\Freemium\UnifiedEntitlementResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -281,23 +282,12 @@ class UnitsController extends Controller
     public function getUnitsOfUserSubjectForLMS($program_id, $subject_id)
     {
         try {
-            $user = auth($this->guard)->user();
+            $user = request()->user() ?: auth($this->guard)->user();
 
-            if (!$user) {
+            if (!$user || $user->role !== 'student' || $user->status !== 'active') {
                 return response()->json([
                     'success' => 0,
-                    'message' => 'Unauthorized',
-                ], 401);
-            }
-
-            $hasSubscription = UserSubscription::where('user_id', $user->id)
-                ->where('offered_program_id', $program_id)
-                ->exists();
-
-            if (!$hasSubscription) {
-                return response()->json([
-                    'success' => 0,
-                    'message' => 'You are not subscribed to this program.',
+                    'message' => 'Active student account required.',
                 ], 403);
             }
 
@@ -305,7 +295,7 @@ class UnitsController extends Controller
                     'offeredClass:id,class_id,curriculum_board_id',
                     'programSubjects',
                 ])
-                ->where('id', $program_id)
+                ->where('id', (int) $program_id)
                 ->where('is_active', true)
                 ->first();
 
@@ -328,6 +318,29 @@ class UnitsController extends Controller
                 ], 404);
             }
 
+            // Unified Entitlement Resolution (Replaces weak UserSubscription::exists() check)
+            $context = [
+                'offered_program_id'  => (int) $program->id,
+                'class_id'            => (int) $program->offeredClass->class_id,
+                'curriculum_board_id' => (int) $program->offeredClass->curriculum_board_id,
+                'subject_id'          => (int) $subject_id,
+            ];
+
+            /** @var UnifiedEntitlementResolver $resolver */
+            $resolver = app(UnifiedEntitlementResolver::class);
+            $decision = $resolver->resolve($user, $context, 'perm_mcqs');
+
+            if ($decision->isDenied()) {
+                return response()->json([
+                    'success'     => 0,
+                    'message'     => $decision->getDenialReason() ?: 'You are not subscribed to this program.',
+                    'code'        => 'ACCESS_DENIED',
+                    'upgrade_url' => $decision->getUpgradeProgramSlug()
+                        ? "/lms/subscribe/{$decision->getUpgradeProgramSlug()}"
+                        : "/lms/subscribe/{$program->slug}",
+                ], 403);
+            }
+
             $units = BookUnit::with('book:id,book_name')
                 ->where('activate', 1)
                 ->whereHas('book', function ($query) use ($program, $subject_id) {
@@ -346,7 +359,6 @@ class UnitsController extends Controller
                         'unit_no' => $unit->unit_no,
                         'book_id' => $unit->book_id,
                         'book_name' => $unit->book?->book_name,
-                        //'is_alp' => (bool) $unit->is_alp,
                     ];
                 })
                 ->values();

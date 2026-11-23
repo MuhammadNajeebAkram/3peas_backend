@@ -486,6 +486,59 @@ Route::prefix('admin/auth')->group(function () {
         Route::prefix('heard-about')->group(function () {
             Route::get('/active', [HeardAboutController::class, 'getActiveHeardAboutForAdmin'])->middleware('permission:heard-about.view');
         });
+
+        // Freemium Admin Management APIs
+        Route::prefix('freemium')->group(function () {
+            // Campaigns
+            Route::prefix('campaigns')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'index'])->middleware('permission:freemium.view');
+                Route::post('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'store'])->middleware('permission:freemium.create');
+                Route::get('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'show'])->whereNumber('id')->middleware('permission:freemium.view');
+                Route::put('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::patch('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::patch('/{id}/status', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'updateStatus'])->whereNumber('id')->middleware('permission:freemium.activate');
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumCampaignController::class, 'destroy'])->whereNumber('id')->middleware('permission:freemium.delete');
+            });
+
+            // Access Rules
+            Route::prefix('rules')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'index'])->middleware('permission:freemium.view');
+                Route::post('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'store'])->middleware('permission:freemium.create');
+                Route::get('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'show'])->whereNumber('id')->middleware('permission:freemium.view');
+                Route::put('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::patch('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumRuleController::class, 'destroy'])->whereNumber('id')->middleware('permission:freemium.delete');
+            });
+
+            // Exam Quotas
+            Route::prefix('quotas')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'index'])->middleware('permission:freemium.view');
+                Route::post('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'store'])->middleware('permission:freemium.create');
+                Route::get('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'show'])->whereNumber('id')->middleware('permission:freemium.view');
+                Route::put('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::patch('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'update'])->whereNumber('id')->middleware('permission:freemium.update');
+                Route::delete('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumQuotaController::class, 'destroy'])->whereNumber('id')->middleware('permission:freemium.delete');
+            });
+
+            // Student Grants
+            Route::prefix('grants')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumGrantController::class, 'index'])->middleware('permission:freemium.view');
+                Route::post('/assign', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumGrantController::class, 'assign'])->middleware('permission:freemium.create');
+                Route::get('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumGrantController::class, 'show'])->whereNumber('id')->middleware('permission:freemium.view');
+                Route::post('/{id}/revoke', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumGrantController::class, 'revoke'])->whereNumber('id')->middleware('permission:freemium.update');
+            });
+
+            // Audit Logs (Read-only)
+            Route::prefix('audit-logs')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumAuditController::class, 'index'])->middleware('permission:freemium.view');
+                Route::get('/{id}', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumAuditController::class, 'show'])->whereNumber('id')->middleware('permission:freemium.view');
+            });
+
+            // Analytics
+            Route::prefix('analytics')->group(function () {
+                Route::get('/summary', [\App\Http\Controllers\Api\Admin\Freemium\AdminFreemiumAnalyticsController::class, 'summary'])->middleware('permission:freemium.analytics');
+            });
+        });
     });
 });
 

@@ -14,7 +14,7 @@ class ExamQuestion extends Model
         return $this->belongsTo(BookUnitTopic::class);
     }
     public function questionType(){
-        return $this->belongsTo(QuestionType::class);
+        return $this->belongsTo(QuestionType::class, 'question_type');
     }
     public function cognitiveDomain(){
 

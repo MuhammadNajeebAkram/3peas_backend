@@ -239,6 +239,59 @@ PROMPT;
         return hash('sha256', json_encode([$relevant, $context['options']], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
+    public function toTiptapHtml(?string $text): string
+    {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return '';
+        }
+
+        if (preg_match('/<span\s+[^>]*data-type=["\'](?:inline-math|block-math)["\']/i', $text)
+            || preg_match('/<div\s+[^>]*data-type=["\'](?:inline-math|block-math)["\']/i', $text)) {
+            return $text;
+        }
+
+        $lines = preg_split('/(?:\r\n|\r|\n)/', $text);
+        $paragraphs = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            $tokens = [];
+            $prefix = 'MATH_'.bin2hex(random_bytes(6)).'_';
+
+            $lineWithTokens = preg_replace_callback(
+                '/\\\\\[([\s\S]+?)\\\\\]|\\\\\(([\s\S]+?)\\\\\)|\$\$([\s\S]+?)\$\$|(?<!\\\\)\$([^\r\n$]+?)(?<!\\\\)\$/u',
+                function ($matches) use (&$tokens, $prefix) {
+                    $isBlock = ! empty($matches[1]) || ! empty($matches[3]);
+                    $latex = ! empty($matches[1]) ? $matches[1] : (! empty($matches[2]) ? $matches[2] : (! empty($matches[3]) ? $matches[3] : $matches[4]));
+                    $cleanLatex = trim($latex);
+                    $escapedLatex = htmlspecialchars($cleanLatex, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+                    $replacement = $isBlock
+                        ? '<div data-type="block-math" data-latex="'.$escapedLatex.'"></div>'
+                        : '<span data-type="inline-math" data-latex="'.$escapedLatex.'"></span>';
+
+                    $token = $prefix.count($tokens).'_TOKEN';
+                    $tokens[$token] = $replacement;
+
+                    return $token;
+                },
+                $line
+            );
+
+            $escapedLine = htmlspecialchars($lineWithTokens, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $htmlLine = strtr($escapedLine, $tokens);
+
+            $paragraphs[] = '<p>'.$htmlLine.'</p>';
+        }
+
+        return implode('', $paragraphs);
+    }
+
     public function explanationHashes(array $context): array
     {
         return ['explanation' => hash('sha256', (string) ($context['question']['explanation'] ?? '')),

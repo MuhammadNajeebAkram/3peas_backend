@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Services\BookService;
+use App\Http\Services\Freemium\UnifiedEntitlementResolver;
 use App\Models\BookUnitTopic;
 use App\Models\BookUnit;
 use App\Models\SloTopic;
@@ -373,21 +374,172 @@ class TopicsController extends Controller
 
     //---------------- new lms -------------------
 
-    public function getTopicsByUnitForLMS($unit_id){
-        try{
-            $topics = BookUnitTopic::where('unit_id', $unit_id)
-            ->where('activate', 1)
-            ->select('id', 'topic_name', 'topic_no', 'slo_no')
-            ->get();
+    public function getTopicsByUnitForLMS($request, $unit_id = null)
+    {
+        try {
+            if (!($request instanceof Request)) {
+                $actualUnitId = $request;
+                $request = request();
+                $unit_id = $actualUnitId;
+            }
+
+            $student = $request->user();
+
+            if (!$student || $student->role !== 'student' || $student->status !== 'active') {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Active student account required.',
+                ], 403);
+            }
+
+            // 1. Resolve DB-grounded unit hierarchy
+            $unitRow = DB::table('book_unit_tbl as units')
+                ->join('book_tbl as books', 'books.id', '=', 'units.book_id')
+                ->join('subject_tbl as subjects', 'subjects.id', '=', 'books.subject_id')
+                ->where('units.id', (int) $unit_id)
+                ->where('units.activate', 1)
+                ->where('books.activate', 1)
+                ->select([
+                    'units.id as unit_id',
+                    'units.unit_name',
+                    'units.unit_no',
+                    'books.id as book_id',
+                    'books.class_id',
+                    'books.curriculum_board_id',
+                    'subjects.id as subject_id',
+                    'subjects.subject_name',
+                ])
+                ->first();
+
+            if (!$unitRow) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Unit not found or inactive.',
+                ], 404);
+            }
+
+            // 2. Validate client-supplied academic hierarchy parameters if present
+            if ($request->filled('book_id') && (int) $request->input('book_id') !== (int) $unitRow->book_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Unit does not belong to the requested book.',
+                ], 422);
+            }
+
+            if ($request->filled('subject_id') && (int) $request->input('subject_id') !== (int) $unitRow->subject_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Unit does not belong to the requested subject.',
+                ], 422);
+            }
+
+            if ($request->filled('class_id') && (int) $request->input('class_id') !== (int) $unitRow->class_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Unit does not belong to the requested class.',
+                ], 422);
+            }
+
+            if ($request->filled('curriculum_board_id') && (int) $request->input('curriculum_board_id') !== (int) $unitRow->curriculum_board_id) {
+                return response()->json([
+                    'success' => 0,
+                    'message' => 'Hierarchy mismatch: Unit does not belong to the requested curriculum board.',
+                ], 422);
+            }
+
+            $offeredProgramId = $request->integer('offered_program_id') ?: ($request->integer('program_id') ?: null);
+            if ($offeredProgramId) {
+                $programValid = DB::table('offered_programs as programs')
+                    ->join('offered_classes as classes', 'classes.id', '=', 'programs.offered_class_id')
+                    ->join('program_subjects as prog_subs', 'prog_subs.offered_program_id', '=', 'programs.id')
+                    ->where('programs.id', $offeredProgramId)
+                    ->where('programs.is_active', 1)
+                    ->where('classes.class_id', $unitRow->class_id)
+                    ->where('classes.curriculum_board_id', $unitRow->curriculum_board_id)
+                    ->where('prog_subs.subject_id', $unitRow->subject_id)
+                    ->where('prog_subs.is_active', 1)
+                    ->exists();
+
+                if (!$programValid) {
+                    return response()->json([
+                        'success' => 0,
+                        'message' => 'Hierarchy mismatch: Program does not cover the requested unit subject/class/board.',
+                    ], 422);
+                }
+            }
+
+            // 3. Resolve unified entitlement BEFORE loading topics
+            $context = [
+                'chapter_id'          => (int) $unitRow->unit_id,
+                'book_id'             => (int) $unitRow->book_id,
+                'subject_id'          => (int) $unitRow->subject_id,
+                'class_id'            => (int) $unitRow->class_id,
+                'curriculum_board_id' => (int) $unitRow->curriculum_board_id,
+            ];
+            if ($offeredProgramId) {
+                $context['offered_program_id'] = $offeredProgramId;
+            }
+
+            /** @var UnifiedEntitlementResolver $resolver */
+            $resolver = app(UnifiedEntitlementResolver::class);
+            $decision = $resolver->resolve($student, $context, 'perm_mcqs');
+
+            if ($decision->isDenied()) {
+                return response()->json([
+                    'success'     => 0,
+                    'message'     => $decision->getDenialReason() ?: 'An active subscription is required to access these topics.',
+                    'code'        => 'ACCESS_DENIED',
+                    'upgrade_url' => $decision->getUpgradeProgramSlug()
+                        ? "/lms/subscribe/{$decision->getUpgradeProgramSlug()}"
+                        : null,
+                ], 403);
+            }
+
+            // 4. Access GRANTED: Topic selection validation and loading
+            $allUnitTopics = BookUnitTopic::where('unit_id', $unit_id)
+                ->where('activate', 1)
+                ->select('id', 'topic_name', 'topic_no', 'slo_no')
+                ->get();
+
+            if ($request->filled('topic_ids') && $request->input('topic_ids') !== 'all') {
+                $rawTopicIds = $request->input('topic_ids');
+                if (is_string($rawTopicIds)) {
+                    $rawTopicIds = explode(',', $rawTopicIds);
+                }
+                $requestedTopicIds = array_values(array_unique(array_filter(
+                    array_map('intval', (array) $rawTopicIds),
+                    fn($id) => $id > 0
+                )));
+
+                $allUnitTopicIds = $allUnitTopics->pluck('id')->all();
+                $mismatched = array_diff($requestedTopicIds, $allUnitTopicIds);
+                if (!empty($mismatched)) {
+                    return response()->json([
+                        'success'           => 0,
+                        'message'           => 'Hierarchy mismatch: One or more requested topic IDs do not belong to the selected unit or are inactive.',
+                        'code'              => 'HIERARCHY_MISMATCH',
+                        'invalid_topic_ids' => array_values($mismatched),
+                    ], 422);
+                }
+
+                $topics = $allUnitTopics->whereIn('id', $requestedTopicIds)->values();
+            } else {
+                $topics = $allUnitTopics;
+            }
+
+            if ($request->boolean('with_counts')) {
+                /** @var \App\Http\Controllers\Tests\AcademicHierarchyController $hierarchyController */
+                $hierarchyController = app(\App\Http\Controllers\Tests\AcademicHierarchyController::class);
+                return $hierarchyController->getTopics($request);
+            }
 
             return response()->json($topics);
 
-        }
-        catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => 0,
-                'topics' => 'Failed to retrieve topics'], 500);
-
+                'topics'  => 'Failed to retrieve topics',
+            ], 500);
         }
     }
 
