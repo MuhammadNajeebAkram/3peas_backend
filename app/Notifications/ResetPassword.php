@@ -25,12 +25,15 @@ class ResetPassword extends BaseResetPassword
      */
     public function toMail($notifiable)
     {
-        //$frontendUrl = 'http://localhost:3000/reset-password';
-        $frontendUrl = 'https://lms.al-faraabi.com/reset-password';
+        $frontendDomain = env('LMS_FRONTEND_URL', env('FRONTEND_URL', 'https://thestudentstimes.com'));
+        $frontendUrl = rtrim($frontendDomain, '/') . '/lms/reset-password';
+
         return (new MailMessage)
-            ->subject('Reset Your Al-Faraabi Password')
-            ->line('You are receiving this email because we received a password reset request for your account.')
+            ->subject('Reset Your Password — The Students Times (TST)')
+            ->greeting('Hello ' . ($notifiable->name ?? 'User') . ',')
+            ->line('You are receiving this email because we received a password reset request for your The Students Times account.')
             ->action('Reset Password', "{$frontendUrl}?token={$this->token}&email=" . urlencode($notifiable->getEmailForPasswordReset()))
-            ->line('If you did not request a password reset, no further action is required.');
+            ->line('This password reset link will expire in 60 minutes.')
+            ->line('If you did not request a password reset, no further action is required and your account remains safe.');
     }
 }
