@@ -67,11 +67,10 @@ class InstituteController extends Controller
 
     public function getInstitutes(Request $request){
         try{
+            $status = $request->input('status', 1);
             $institute = DB::table('institute_tbl')
-            ->where(
-                'activate', '=', $request -> status,               
-            )
-            ->where('city_id', '=', $request -> city_id)
+            ->where('activate', '=', $status ?? 1)
+            ->where('city_id', '=', $request->city_id)
             ->select(['id', 'name'])
             ->orderBy('name', 'asc')
             ->get();

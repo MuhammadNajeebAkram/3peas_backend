@@ -177,7 +177,7 @@ class WebUserAuthService
                 ], 403);
             }
 
-            $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
+            $user->load($user->role === 'teacher' ? ['teacherProfile.city', 'teacherProfile.institute'] : ['profile.userCity', 'profile.userInstitute']);
 
             return $this->authResponse($user, $token, 'Login successful.');
         } catch (ValidationException $e) {
@@ -216,7 +216,7 @@ class WebUserAuthService
                 ], 401);
             }
 
-            $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
+            $user->load($user->role === 'teacher' ? ['teacherProfile.city', 'teacherProfile.institute'] : ['profile.userCity', 'profile.userInstitute']);
 
             return response()->json([
                 'user' => $this->userPayload($user),
@@ -299,7 +299,7 @@ class WebUserAuthService
     private function authResponse(WebUser $user, string $token, string $message = 'Authenticated successfully.')
     {
         $this->recordActiveSession($user, $token);
-        $user->load($user->role === 'teacher' ? ['teacherProfile'] : ['profile']);
+        $user->load($user->role === 'teacher' ? ['teacherProfile.city', 'teacherProfile.institute'] : ['profile.userCity', 'profile.userInstitute']);
 
         return response()->json([
             'message' => $message,
@@ -349,23 +349,52 @@ class WebUserAuthService
     private function userPayload(WebUser $user): array
     {
         if ($user->role === 'teacher') {
+            $tp = $user->teacherProfile;
             return array_merge($user->only(['id', 'name', 'email', 'phone', 'avatar', 'login_provider', 'role']), [
-                'teacher_profile' => $user->teacherProfile,
+                'city_id' => $tp ? $tp->city_id : null,
+                'institute_id' => $tp ? $tp->institute_id : null,
+                'teacher_code' => $tp ? $tp->teacher_code : null,
+                'teacher_profile' => $tp ? [
+                    'id' => $tp->id,
+                    'city_id' => $tp->city_id,
+                    'institute_id' => $tp->institute_id,
+                    'teacher_code' => $tp->teacher_code,
+                    'collection_code' => $tp->collection_code,
+                    'status' => $tp->status,
+                    'can_collect_student_subscriptions' => (bool) $tp->can_collect_student_subscriptions,
+                    'city' => $tp->city ? ['id' => $tp->city->id, 'name' => $tp->city->name] : null,
+                    'institute' => $tp->institute ? ['id' => $tp->institute->id, 'name' => $tp->institute->name] : null,
+                ] : null,
             ]);
         }
+
+        $prof = $user->profile;
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'phone' => $user->phone ?? optional($user->profile)->phone,
+            'phone' => $user->phone ?? optional($prof)->phone,
             'avatar' => $user->avatar,
             'login_provider' => $user->login_provider,
             'role' => $user->role,
+            'referral_code' => optional($prof)->referral_code,
+            'city_id' => optional($prof)->city_id,
+            'institute_id' => optional($prof)->institute_id,
+            'gender_id' => optional($prof)->gender_id,
+            'dob' => optional($prof)->dob,
+            'address' => optional($prof)->address,
             'profile' => [
-                'city' => optional($user->profile)->city,
-                'school_name' => optional($user->profile)->school_name,
-                'teacher_referral_code' => optional($user->profile)->teacher_referral_code,
-                'preferred_language' => optional($user->profile)->preferred_language,
+                'city_id' => optional($prof)->city_id,
+                'institute_id' => optional($prof)->institute_id,
+                'gender_id' => optional($prof)->gender_id,
+                'dob' => optional($prof)->dob,
+                'address' => optional($prof)->address,
+                'city' => optional($prof->userCity ?? null)->name,
+                'institute' => optional($prof->userInstitute ?? null)->name,
+                'referral_code' => optional($prof)->referral_code,
+                'teacher_referral_code' => optional($prof)->referral_code,
+                'preferred_language' => optional($prof)->preferred_language ?? 'en',
+                'profile_completed' => (bool) optional($prof)->profile_completed,
             ],
         ];
     }

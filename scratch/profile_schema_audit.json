@@ -1,0 +1,745 @@
+{
+    "user_profile_tbl": {
+        "count": 7,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "user_id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "address",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "city_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "institute_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "gender_id",
+                "Type": "int",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "dob",
+                "Type": "date",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "designation",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "heard_about_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "referral_code",
+                "Type": "varchar(45)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "profile_completed",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "0"
+            },
+            {
+                "Field": "preferred_language",
+                "Type": "enum('en','ur')",
+                "Null": "NO",
+                "Key": "",
+                "Default": "en"
+            }
+        ],
+        "sample": {
+            "id": 166,
+            "user_id": 970,
+            "address": null,
+            "city_id": null,
+            "institute_id": null,
+            "gender_id": null,
+            "dob": null,
+            "designation": null,
+            "heard_about_id": null,
+            "created_at": "2026-11-23 20:46:40",
+            "updated_at": "2026-11-23 20:46:57",
+            "referral_code": null,
+            "profile_completed": 1,
+            "preferred_language": "en"
+        }
+    },
+    "web_users": {
+        "count": 345,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "email",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "email_verified_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "password",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "role",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "remember_token",
+                "Type": "varchar(100)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "last_token",
+                "Type": "text",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "phone",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "google_id",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "login_provider",
+                "Type": "enum('email','google')",
+                "Null": "NO",
+                "Key": "",
+                "Default": "email"
+            },
+            {
+                "Field": "avatar",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "status",
+                "Type": "enum('active','blocked')",
+                "Null": "NO",
+                "Key": "",
+                "Default": "active"
+            },
+            {
+                "Field": "last_login_at",
+                "Type": "datetime",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "deleted_at",
+                "Type": "datetime",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 970,
+            "name": "Muhammad Najeeb Qureshi",
+            "email": "thestudentstimes.official@gmail.com",
+            "email_verified_at": "2026-11-23 20:46:40",
+            "password": "$2y$12$Ty9MvJ9vpQi9qkeQU6KAnOL2axol3g8OKFqfvq6WqLsKtkYf6z.oe",
+            "role": "student",
+            "remember_token": null,
+            "last_token": "5da68d9e2fe0f2d420dad42ebb53fa77268bf8e2f06890101a860f74af68fff4",
+            "created_at": "2026-11-23 20:46:40",
+            "updated_at": "2026-11-23 20:46:57",
+            "phone": "03344321999",
+            "google_id": "104765039567406532333",
+            "login_provider": "google",
+            "avatar": "https:\/\/lh3.googleusercontent.com\/a\/ACg8ocLs51cJf_EPUD7F4qpBgkDAg31npXPLIVo2325y00kDbb7Azg=s96-c",
+            "status": "active",
+            "last_login_at": "2026-11-23 20:46:40",
+            "deleted_at": null
+        }
+    },
+    "teacher_profiles": {
+        "count": 3,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "web_user_id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "institute_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "city_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "teacher_code",
+                "Type": "varchar(32)",
+                "Null": "NO",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "collection_code",
+                "Type": "varchar(32)",
+                "Null": "YES",
+                "Key": "UNI",
+                "Default": null
+            },
+            {
+                "Field": "status",
+                "Type": "enum('pending','active','rejected','suspended')",
+                "Null": "NO",
+                "Key": "MUL",
+                "Default": "pending"
+            },
+            {
+                "Field": "approved_by",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "approved_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "status_changed_by",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            },
+            {
+                "Field": "status_changed_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "admin_note",
+                "Type": "text",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "can_collect_student_subscriptions",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "0"
+            }
+        ],
+        "sample": {
+            "id": 158,
+            "web_user_id": 450,
+            "institute_id": null,
+            "city_id": null,
+            "teacher_code": "PGCAB775",
+            "collection_code": null,
+            "status": "active",
+            "approved_by": null,
+            "approved_at": null,
+            "status_changed_by": null,
+            "status_changed_at": null,
+            "admin_note": null,
+            "created_at": "2026-11-12 06:12:37",
+            "updated_at": "2026-11-12 06:12:37",
+            "can_collect_student_subscriptions": 0
+        }
+    },
+    "city_tbl": {
+        "count": 19,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "activate",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "1"
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "district_id",
+                "Type": "bigint unsigned",
+                "Null": "YES",
+                "Key": "MUL",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 19,
+            "name": "Attock",
+            "activate": 1,
+            "created_at": "2025-05-14 17:23:30",
+            "updated_at": "2025-05-14 17:23:30",
+            "district_id": 3
+        }
+    },
+    "institute_tbl": {
+        "count": 17,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "address",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "city_id",
+                "Type": "int",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "phone",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "sector",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "activate",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "1"
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 17,
+            "name": "Jinnah College",
+            "address": "Setilite Town",
+            "city_id": 16,
+            "phone": "2312345",
+            "sector": "private",
+            "activate": 1,
+            "created_at": "2026-01-26 13:55:19",
+            "updated_at": "2026-01-26 13:55:19"
+        }
+    },
+    "board_tbl": {
+        "count": 10,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "board_name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "icon_name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "activate",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "1"
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "short_name",
+                "Type": "varchar(45)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 1,
+            "board_name": "Lahore Board",
+            "icon_name": "lahore.png",
+            "activate": 1,
+            "created_at": null,
+            "updated_at": null,
+            "short_name": "Lhr"
+        }
+    },
+    "class_tbl": {
+        "count": 5,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "class_name",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "slug",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "activate",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "1"
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "class_name_um",
+                "Type": "varchar(255)",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 5,
+            "class_name": "Class 9",
+            "slug": null,
+            "activate": 1,
+            "created_at": "2026-11-13 14:52:45",
+            "updated_at": "2026-11-13 14:52:45",
+            "class_name_um": null
+        }
+    },
+    "heard_about_tbl": {
+        "count": 1,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "source",
+                "Type": "varchar(255)",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "activate",
+                "Type": "tinyint(1)",
+                "Null": "NO",
+                "Key": "",
+                "Default": "1"
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 1,
+            "source": "Teacher",
+            "activate": 1,
+            "created_at": null,
+            "updated_at": null
+        }
+    },
+    "user_selected_subject_tbl": {
+        "count": 388,
+        "columns": [
+            {
+                "Field": "id",
+                "Type": "bigint unsigned",
+                "Null": "NO",
+                "Key": "PRI",
+                "Default": null
+            },
+            {
+                "Field": "user_id",
+                "Type": "int",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "subject_id",
+                "Type": "int",
+                "Null": "NO",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "created_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            },
+            {
+                "Field": "updated_at",
+                "Type": "timestamp",
+                "Null": "YES",
+                "Key": "",
+                "Default": null
+            }
+        ],
+        "sample": {
+            "id": 380,
+            "user_id": 63,
+            "subject_id": 1,
+            "created_at": "2025-12-04 19:33:18",
+            "updated_at": "2025-12-04 19:33:18"
+        }
+    }
+}

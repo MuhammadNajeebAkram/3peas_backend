@@ -25,7 +25,7 @@ class ResetPassword extends BaseResetPassword
      */
     public function toMail($notifiable)
     {
-        $frontendDomain = env('LMS_FRONTEND_URL', env('FRONTEND_URL', 'https://thestudentstimes.com'));
+        $frontendDomain = env('LMS_FRONTEND_URL', env('FRONTEND_URL', 'https://thestudenttimes.com'));
         $frontendUrl = rtrim($frontendDomain, '/') . '/lms/reset-password';
 
         return (new MailMessage)

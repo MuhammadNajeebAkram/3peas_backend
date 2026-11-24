@@ -44,13 +44,19 @@ class WebUserAuthController extends Controller
         abort_unless($user, 401);
 
         if ($user->role === 'teacher') {
-            return app(\App\Http\Controllers\TeacherAccountController::class)->update($request);
+            app(\App\Http\Controllers\TeacherAccountController::class)->update($request);
+            return $this->webUserAuthService->me();
         }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:30', Rule::unique('web_users', 'phone')->ignore($user->id)],
-            'referral_code' => ['nullable', 'integer', 'min:0'],
+            'city_id' => ['nullable', 'integer', 'exists:city_tbl,id'],
+            'institute_id' => ['nullable', 'integer', 'exists:institute_tbl,id'],
+            'gender_id' => ['nullable', 'integer', Rule::in([1, 2, 3])],
+            'dob' => ['nullable', 'date'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'referral_code' => ['nullable', 'string', 'max:45'],
             'preferred_language' => ['required', Rule::in(['en', 'ur'])],
         ]);
 
@@ -62,6 +68,11 @@ class WebUserAuthController extends Controller
             WebUserProfile::updateOrCreate(
                 ['user_id' => $user->id],
                 [
+                    'city_id' => $data['city_id'] ?? null,
+                    'institute_id' => $data['institute_id'] ?? null,
+                    'gender_id' => $data['gender_id'] ?? null,
+                    'dob' => $data['dob'] ?? null,
+                    'address' => $data['address'] ?? null,
                     'referral_code' => $data['referral_code'] ?? null,
                     'preferred_language' => $data['preferred_language'],
                     'profile_completed' => true,

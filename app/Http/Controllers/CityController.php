@@ -37,8 +37,9 @@ class CityController extends Controller
 
     public function getCities(Request $request){
         try{
+            $status = $request->input('status', 1);
             $city = DB::table('city_tbl')
-            ->where('activate', '=', $request -> status)
+            ->where('activate', '=', $status ?? 1)
             ->select(['id', 'name'])
             ->orderBy('name', 'asc')
             ->get();
