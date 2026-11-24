@@ -28,6 +28,7 @@ use App\Http\Controllers\CityController;
 use App\Http\Controllers\InstituteController;
 use App\Http\Controllers\StudentActivityController;
 use App\Http\Controllers\CurriculumBoardController;
+use App\Http\Controllers\ContactInquiryController;
 use App\Http\Controllers\HeardAboutController;
 use App\Http\Controllers\StudyPlanController;
 use App\Http\Controllers\StudyGroupController;
@@ -65,6 +66,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 */
+
+Route::post('/contact/inquiry', [ContactInquiryController::class, 'submit'])->middleware('throttle:20,1');
 
 Route::prefix('auth')->group(function () {
     Route::post('/teacher/register', [\App\Http\Controllers\TeacherAccountController::class, 'register'])->middleware('throttle:5,1');

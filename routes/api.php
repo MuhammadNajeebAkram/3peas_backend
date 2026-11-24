@@ -65,6 +65,8 @@ use App\Http\Controllers\OfferedProgramController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\LegacyPastPaperController;
 use App\Http\Controllers\TstPastPaperController;
+use App\Http\Controllers\ContactInquiryController;
+use App\Http\Controllers\Admin\AdminContactInquiryController;
 use App\Http\Middleware\CheckFrontendApiKey;
 
 /*
@@ -140,6 +142,12 @@ Route::prefix('admin/auth')->group(function () {
                 ->whereNumber('id')->middleware('permission:question-reports.manage');
             Route::post('/bulk-status', [\App\Http\Controllers\Admin\AdminQuestionReportController::class, 'bulkUpdate'])
                 ->middleware('permission:question-reports.manage');
+        });
+        Route::prefix('contact-inquiries')->group(function () {
+            Route::get('/', [AdminContactInquiryController::class, 'index']);
+            Route::get('/{id}', [AdminContactInquiryController::class, 'show'])->whereNumber('id');
+            Route::patch('/{id}/status', [AdminContactInquiryController::class, 'updateStatus'])->whereNumber('id');
+            Route::delete('/{id}', [AdminContactInquiryController::class, 'destroy'])->whereNumber('id');
         });
         Route::prefix('teacher-subscriptions')->group(function () {
             Route::get('/', [AdminTeacherSubscriptionController::class, 'index'])->middleware('permission:teacher-subscriptions.view');
@@ -750,6 +758,8 @@ Route::middleware(CheckFrontendApiKey::class)->group(function () {
         Route::get('/breaking', [NewsController::class, 'getBreakingNews']);
         Route::get('/featured', [NewsController::class, 'getFeaturedNews']);
     });
+
+    Route::post('/contact/inquiry', [ContactInquiryController::class, 'submit']);
     
 
     //
