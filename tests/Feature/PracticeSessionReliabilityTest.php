@@ -198,7 +198,7 @@ class PracticeSessionReliabilityTest extends TestCase
         ]);
         PracticeSessionScope::create(['session_id' => $oldSession->id, 'unit_id' => $this->unitId]);
 
-        // 2. Student requests 10 questions for the same scope
+        // 2. Student requests 8 questions for the same scope (2 scenario groups * 4 questions)
         $response = $this->actingAs($this->student, 'web_api')
             ->withHeader('X-Idempotency-Key', 'rel_incomp_' . uniqid())
             ->postJson('/web_api/auth/tests/generate-selected-units-practice-session', [
@@ -206,16 +206,16 @@ class PracticeSessionReliabilityTest extends TestCase
                 'subject_id'         => $this->subjectId,
                 'book_id'            => $this->bookId,
                 'unit_ids'           => [$this->unitId],
-                'total_questions'    => 10,
+                'total_questions'    => 8,
                 'mcq_format'         => 'scenario',
             ]);
 
         $response->assertStatus(200);
         $data = $response->json('data');
 
-        // New session must have 10 questions and distinct ID
+        // New session must have 8 questions and distinct ID
         $this->assertNotEquals($oldSession->id, $data['session_id']);
-        $this->assertEquals(10, $data['total_questions']);
+        $this->assertEquals(8, $data['total_questions']);
 
         // Old session must have been transitioned to abandoned
         $this->assertEquals('abandoned', $oldSession->fresh()->status);
@@ -282,7 +282,7 @@ class PracticeSessionReliabilityTest extends TestCase
         PracticeSessionScope::create(['session_id' => $staleSession->id, 'unit_id' => $this->unitId]);
         DB::table('practice_sessions')->where('id', $staleSession->id)->update(['created_at' => now()->subHours(72)]);
 
-        // Request 10 questions
+        // Request 8 questions
         $response = $this->actingAs($this->student, 'web_api')
             ->withHeader('X-Idempotency-Key', 'rel_stale_' . uniqid())
             ->postJson('/web_api/auth/tests/generate-selected-units-practice-session', [
@@ -290,7 +290,7 @@ class PracticeSessionReliabilityTest extends TestCase
                 'subject_id'         => $this->subjectId,
                 'book_id'            => $this->bookId,
                 'unit_ids'           => [$this->unitId],
-                'total_questions'    => 10,
+                'total_questions'    => 8,
                 'mcq_format'         => 'scenario',
             ]);
 
@@ -379,29 +379,29 @@ class PracticeSessionReliabilityTest extends TestCase
         $this->assertEquals('abandoned', $response->json('status'));
     }
 
-    public function test_scenario_group_with_five_questions_preserves_all_five_questions(): void
+    public function test_scenario_group_with_five_questions_selects_only_random_four_questions(): void
     {
         $response = $this->actingAs($this->student, 'web_api')
-            ->withHeader('X-Idempotency-Key', 'rel_5q_' . uniqid())
+            ->withHeader('X-Idempotency-Key', 'rel_4q_' . uniqid())
             ->postJson('/web_api/auth/tests/generate-selected-units-practice-session', [
                 'offered_program_id' => 2,
                 'subject_id'         => $this->subjectId,
                 'book_id'            => $this->bookId,
                 'unit_ids'           => [$this->unitId],
-                'total_questions'    => 10,
+                'total_questions'    => 8,
                 'mcq_format'         => 'scenario',
             ]);
 
         $response->assertStatus(200);
         $data = $response->json('data');
 
-        $this->assertEquals(10, $data['total_questions']);
+        $this->assertEquals(8, $data['total_questions']);
         $this->assertCount(2, $data['scenario_blocks']);
 
-        // Each 5-question scenario group must have all 5 questions present
+        // Each 5-question scenario group in DB must only yield random 4 questions (no more than 4)
         foreach ($data['scenario_blocks'] as $block) {
-            $this->assertCount(5, $block['questions']);
-            $this->assertCount(5, $block['question_ids']);
+            $this->assertCount(4, $block['questions']);
+            $this->assertCount(4, $block['question_ids']);
         }
     }
 }

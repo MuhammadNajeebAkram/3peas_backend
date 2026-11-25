@@ -340,12 +340,10 @@ trait SelectsLmsMcqQuestions
         // 2. Group by scenario_group_id and filter ONLY to groups with at least 4 eligible questions
         $grouped = $eligibleQuestions->groupBy('scenario_group_id');
         $qualifyingGroupIds = [];
-        $groupSizes = [];
 
         foreach ($grouped as $sgId => $groupMembers) {
             if ($groupMembers->count() >= 4) {
                 $qualifyingGroupIds[] = (int) $sgId;
-                $groupSizes[(int) $sgId] = $groupMembers->count();
             }
         }
 
@@ -355,12 +353,16 @@ trait SelectsLmsMcqQuestions
 
         $selectedScenarioGroupIds = [];
         if ($isQuestionTarget) {
-            // Target is total questions: find a subset of complete scenario groups whose total questions equal targetCount
-            $combination = $this->findScenarioGroupCombination($groupSizes, $targetCount);
-            if ($combination === null) {
+            // Target is total questions. Every scenario group strictly yields 4 questions.
+            if ($targetCount % 4 !== 0) {
                 return null;
             }
-            $selectedScenarioGroupIds = $combination;
+            $neededGroups = (int) ($targetCount / 4);
+            if (count($qualifyingGroupIds) < $neededGroups) {
+                return null;
+            }
+            shuffle($qualifyingGroupIds);
+            $selectedScenarioGroupIds = array_slice($qualifyingGroupIds, 0, $neededGroups);
         } else {
             // Target is number of groups
             if (count($qualifyingGroupIds) < $targetCount) {
@@ -376,10 +378,13 @@ trait SelectsLmsMcqQuestions
 
         $groupPosition = array_flip($selectedScenarioGroupIds);
 
-        // 4. For each selected scenario group, preserve ALL questions belonging to that group (no dropping 5th question)
+        // 4. For each selected scenario group: pick exactly 4 random questions (no more than 4)
         $selectedQuestions = collect();
         foreach ($selectedScenarioGroupIds as $sgId) {
             $members = $grouped->get($sgId);
+            if ($members->count() > 4) {
+                $members = $members->shuffle()->take(4);
+            }
             $selectedQuestions = $selectedQuestions->concat($members);
         }
 
