@@ -1538,7 +1538,6 @@ class PracticeSessionController extends Controller
             $opts = $optionsByQuestion->get($sq->question_id, collect());
             $scenarioRecord = $sq->scenario_group_id ? $scenariosById->get($sq->scenario_group_id) : null;
             $answerShown = (bool) $sq->answer_shown;
-            $revealAnswer = $isSubmitted || $answerShown;
 
             return [
                 'id'                      => (int) $sq->question_id,
@@ -1546,8 +1545,8 @@ class PracticeSessionController extends Controller
                 'question_order'          => (int) $sq->question_order,
                 'question'                => $sq->question,
                 'question_um'             => $sq->question_um,
-                'explanation'             => $revealAnswer ? $sq->explanation : null,
-                'explanation_um'          => $revealAnswer ? $sq->explanation_um : null,
+                'explanation'             => $sq->explanation,
+                'explanation_um'          => $sq->explanation_um,
                 'topic_id'                => $sq->topic_id ? (int) $sq->topic_id : null,
                 'topic_name'              => $sq->topic_name ?? '',
                 'topic_no'                => $sq->topic_no ?? '',
@@ -1561,18 +1560,18 @@ class PracticeSessionController extends Controller
                 ] : null,
                 'scenario_group_id'       => $sq->scenario_group_id ? (int) $sq->scenario_group_id : null,
                 'scenario_question_order' => $sq->scenario_question_order ? (int) $sq->scenario_question_order : (int) $sq->question_order,
-                'options'                 => $opts->map(function ($opt) use ($revealAnswer) {
+                'options'                 => $opts->map(function ($opt) {
                     return [
                         'id'        => (int) $opt->id,
                         'option'    => $opt->option,
                         'option_um' => $opt->option_um,
-                        'is_answer' => $revealAnswer ? (bool) $opt->is_answer : null,
+                        'is_answer' => (bool) $opt->is_answer,
                     ];
                 })->values()->all(),
                 'saved_answer'            => [
                     'selected_option_id' => $sq->selected_option_id ? (int) $sq->selected_option_id : null,
                     'is_attempted'       => (bool) $sq->is_attempted,
-                    'is_correct'         => $revealAnswer ? ($sq->is_correct !== null ? (bool) $sq->is_correct : null) : null,
+                    'is_correct'         => $sq->is_correct !== null ? (bool) $sq->is_correct : null,
                     'answer_shown'       => (bool) $sq->answer_shown,
                     'time_spent_seconds' => $sq->time_spent_seconds ? (int) $sq->time_spent_seconds : 0,
                     'practiced_at'       => $sq->practiced_at ? Carbon::parse($sq->practiced_at)->toISOString() : null,
@@ -1768,6 +1767,9 @@ class PracticeSessionController extends Controller
                     'data'    => [
                         'session_id'              => $lockedSession->id,
                         'question_id'             => (int) $sessionQuestionRow->question_id,
+                        'correct_option_id'       => (int) $sessionQuestionRow->correct_option_id,
+                        'explanation'             => $sessionQuestionRow->explanation ?? null,
+                        'explanation_um'          => $sessionQuestionRow->explanation_um ?? null,
                         'is_attempted'            => $isAttempted,
                         'is_correct'              => $isCorrect,
                         'status'                  => $lockedSession->status,
@@ -2069,6 +2071,8 @@ class PracticeSessionController extends Controller
                 'psq.question_order',
                 'topics.unit_id',
                 'questions.topic_id',
+                'questions.explanation',
+                'questions.explanation_um',
                 'options.id as correct_option_id'
             )
             ->orderBy('psq.question_order')
