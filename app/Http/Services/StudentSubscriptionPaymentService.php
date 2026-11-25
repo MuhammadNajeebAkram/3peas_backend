@@ -2,6 +2,7 @@
 
 namespace App\Http\Services;
 
+use App\Jobs\SendPaymentReceiptEmailJob;
 use App\Models\OfferedClass;
 use App\Models\OfferedProgram;
 use App\Models\PaymentAccount;
@@ -132,12 +133,26 @@ class StudentSubscriptionPaymentService
                 'subscription_id' => $subscription->id, 'status' => 'approved', 'approved_at' => today(),
                 'approved_by' => $reviewerType === 'admin' ? $reviewerId : null,
                 'confirmed_by_web_user_id' => $reviewerType === 'teacher' ? $reviewerId : null,
-                'confirmed_at' => now(), 'receipt_number' => $payment->receipt_number ?: 'TCR-'.Str::ulid(),
+                'confirmed_at' => now(),
                 'rejected_by' => null, 'rejected_by_web_user_id' => null, 'rejection_reason' => null,
                 'admin_remarks' => $remarks ?? $payment->admin_remarks,
             ]);
-            $this->event($payment, 'approved', $reviewerType, $reviewerId, $previousStatus, 'approved', null, ['subscription_id' => $subscription->id]);
-            return $payment->fresh(['offeredProgram', 'userSubscription', 'teacherProfile.webUser', 'user']);
+
+            // Post double-entry transaction to financial ledger
+            $transaction = app(FinancialLedgerService::class)->recordStudentPayment($payment, $reviewerId, $reviewerType);
+
+            // Generate official sequential payment receipt & PDF
+            $receipt = app(ReceiptService::class)->issueReceipt($payment, $transaction);
+
+            // Dispatch automated email with receipt PDF after transaction commit
+            SendPaymentReceiptEmailJob::dispatch($receipt->id)->afterCommit();
+
+            $this->event($payment, 'approved', $reviewerType, $reviewerId, $previousStatus, 'approved', null, [
+                'subscription_id' => $subscription->id,
+                'receipt_number' => $receipt->receipt_number,
+                'financial_transaction_id' => $transaction->id,
+            ]);
+            return $payment->fresh(['offeredProgram', 'userSubscription', 'teacherProfile.webUser', 'user', 'receipt', 'financialTransaction']);
         });
     }
 

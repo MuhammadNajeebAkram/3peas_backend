@@ -388,6 +388,7 @@ Route::prefix('auth')->group(function () {
             Route::post('/generate-selected-units-practice-session', [PracticeSessionController::class, 'generateSelectedUnitsPracticeSessionForLms']);
             Route::post('/generate-full-book-practice-session', [PracticeSessionController::class, 'generateFullBookPracticeSessionForLms']);
             Route::get('/practice-sessions/{sessionId}', [PracticeSessionController::class, 'getPracticeSessionForLms'])->whereNumber('sessionId');
+            Route::post('/practice-sessions/{sessionId}/abandon', [PracticeSessionController::class, 'abandonPracticeSessionForLms'])->whereNumber('sessionId');
             Route::post('/save-practice-session-question-progress', [PracticeSessionController::class, 'savePracticeSessionQuestionProgressForLms']);
             Route::post('/submit-practice-session', [PracticeSessionController::class, 'submitPracticeSessionForLms']);
         });
@@ -409,6 +410,7 @@ Route::prefix('auth')->group(function () {
         Route::get('/subscription-offerings', [UserPaymentController::class, 'offerings']);
         Route::get('/subscription-payment-requests', [UserPaymentController::class, 'mine']);
         Route::get('/subscription-payment-requests/{id}/proof', [\App\Http\Controllers\PaymentEvidenceController::class, 'student'])->whereNumber('id');
+        Route::get('/subscription-payment-requests/{id}/receipt', [UserPaymentController::class, 'receipt'])->whereNumber('id');
         Route::get('/payments/methods', [\App\Http\Controllers\TeacherPaymentController::class, 'methods']);
         Route::post('/payments/teacher/lookup', [\App\Http\Controllers\TeacherPaymentController::class, 'lookup'])->middleware('throttle:20,1');
         Route::get('/payments/teacher/requests', [\App\Http\Controllers\TeacherPaymentController::class, 'mine']);

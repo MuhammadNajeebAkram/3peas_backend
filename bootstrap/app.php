@@ -28,7 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::prefix('web_api')
                 ->name('web_api.')
                 ->group(base_path('routes/web_api.php'));
-            
+
+            Route::prefix('admin/auth')->group(function () {
+                Route::post('login', [\App\Http\Controllers\AdminAuth\AuthController::class, 'login']);
+            });
         },
     )
     ->withMiddleware(function (Middleware $middleware) {

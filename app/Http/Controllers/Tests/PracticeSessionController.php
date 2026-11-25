@@ -542,7 +542,9 @@ class PracticeSessionController extends Controller
                                 (int) $validated['subject_id'],
                                 $scopeType,
                                 $unitIds,
-                                null
+                                null,
+                                (int) $validated['total_questions'],
+                                $validated['mcq_format'] ?? 'all'
                             );
 
                             if ($activeSession !== null) {
@@ -561,6 +563,16 @@ class PracticeSessionController extends Controller
                                     'status'  => 200,
                                 ];
                             }
+
+                            // If no compatible session found, auto-abandon any lingering in-progress session for this scope
+                            $this->abandonIncompatibleSessionsForScope(
+                                $student->id,
+                                $offeredProgramId,
+                                (int) $validated['subject_id'],
+                                $scopeType,
+                                $unitIds,
+                                null
+                            );
                         }
 
                         $record = $this->createPracticeSessionRecord(
@@ -836,7 +848,9 @@ class PracticeSessionController extends Controller
                             (int) $validated['subject_id'],
                             'full_book',
                             $unitIds,
-                            (int) $validated['book_id']
+                            (int) $validated['book_id'],
+                            (int) $validated['total_questions'],
+                            $validated['mcq_format'] ?? 'all'
                         );
 
                         if ($activeSession !== null) {
@@ -855,6 +869,16 @@ class PracticeSessionController extends Controller
                                 'status'  => 200,
                             ];
                         }
+
+                        // Auto-abandon incompatible lingering in-progress sessions for full book
+                        $this->abandonIncompatibleSessionsForScope(
+                            $student->id,
+                            $offeredProgramId,
+                            (int) $validated['subject_id'],
+                            'full_book',
+                            $unitIds,
+                            (int) $validated['book_id']
+                        );
 
                         $record = $this->createPracticeSessionRecord(
                             $student->id,
@@ -935,6 +959,77 @@ class PracticeSessionController extends Controller
     }
 
     /**
+     * Determine actual MCQ format of an existing session based on its questions.
+     */
+    protected function determineSessionMcqFormat(int $sessionId): string
+    {
+        $questionIds = PracticeSessionQuestion::where('session_id', $sessionId)
+            ->pluck('question_id')
+            ->all();
+
+        if (empty($questionIds)) {
+            return 'all';
+        }
+
+        $totalCount = count($questionIds);
+        $scenarioCount = DB::table('exam_question_tbl')
+            ->whereIn('id', $questionIds)
+            ->whereNotNull('scenario_group_id')
+            ->count();
+
+        if ($scenarioCount === $totalCount) {
+            return 'scenario';
+        }
+
+        if ($scenarioCount === 0) {
+            return 'straight';
+        }
+
+        return 'all';
+    }
+
+    /**
+     * Auto-abandon incompatible in-progress sessions for the given scope.
+     */
+    protected function abandonIncompatibleSessionsForScope(
+        int $userId,
+        ?int $offeredProgramId,
+        int $subjectId,
+        string $scopeType,
+        array $unitIds,
+        ?int $bookId = null
+    ): void {
+        sort($unitIds);
+        $sortedRequestedUnitIds = array_values($unitIds);
+
+        $candidatesQuery = PracticeSession::query()
+            ->where('user_id', $userId)
+            ->where('subject_id', $subjectId)
+            ->where('scope_type', $scopeType)
+            ->where('status', 'in_progress');
+
+        if ($offeredProgramId !== null) {
+            $candidatesQuery->where('offered_program_id', $offeredProgramId);
+        } else {
+            $candidatesQuery->whereNull('offered_program_id');
+        }
+
+        $candidates = $candidatesQuery->with('scopes')->get();
+
+        foreach ($candidates as $candidate) {
+            $candidateUnitIds = $candidate->scopes->pluck('unit_id')
+                ->map(fn ($id) => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+
+            if ($candidateUnitIds === $sortedRequestedUnitIds) {
+                $candidate->update(['status' => 'abandoned']);
+            }
+        }
+    }
+
+    /**
      * Find an existing active (in_progress) practice session for the student matching the requested scope.
      */
     protected function findActiveSessionForScope(
@@ -943,7 +1038,9 @@ class PracticeSessionController extends Controller
         int $subjectId,
         string $scopeType,
         array $unitIds,
-        ?int $bookId = null
+        ?int $bookId = null,
+        ?int $requestedTotalQuestions = null,
+        ?string $requestedMcqFormat = null
     ): ?PracticeSession {
         sort($unitIds);
         $sortedRequestedUnitIds = array_values($unitIds);
@@ -965,6 +1062,12 @@ class PracticeSessionController extends Controller
             ->get();
 
         foreach ($candidates as $candidate) {
+            // Auto-abandon stale sessions older than 48 hours
+            if ($candidate->created_at && $candidate->created_at->lt(now()->subHours(48))) {
+                $candidate->update(['status' => 'abandoned']);
+                continue;
+            }
+
             $candidateUnitIds = $candidate->scopes->pluck('unit_id')
                 ->map(fn ($id) => (int) $id)
                 ->sort()
@@ -972,6 +1075,19 @@ class PracticeSessionController extends Controller
                 ->all();
 
             if ($candidateUnitIds === $sortedRequestedUnitIds) {
+                // If question count requested, validate compatibility
+                if ($requestedTotalQuestions !== null && (int) $candidate->total_questions !== $requestedTotalQuestions) {
+                    continue;
+                }
+
+                // If MCQ format requested, validate actual question format compatibility
+                if ($requestedMcqFormat !== null && $requestedMcqFormat !== 'all') {
+                    $candidateFormat = $this->determineSessionMcqFormat($candidate->id);
+                    if ($candidateFormat !== $requestedMcqFormat) {
+                        continue;
+                    }
+                }
+
                 return $candidate;
             }
         }
@@ -1003,8 +1119,10 @@ class PracticeSessionController extends Controller
             ->values()
             ->all();
 
+        $actualFormat = $this->determineSessionMcqFormat($session->id);
+
         $data = [
-            'mcq_format'          => $mcqFormat,
+            'mcq_format'          => $actualFormat,
             'session_id'          => $session->id,
             'offered_program_id'  => (int) $session->offered_program_id,
             'subject_id'          => (int) $session->subject_id,
@@ -1489,6 +1607,60 @@ class PracticeSessionController extends Controller
                 'questions'           => $formattedQuestions,
             ],
         ]);
+    }
+
+    /**
+     * Abandon an active in-progress practice session for LMS student.
+     */
+    public function abandonPracticeSessionForLms(Request $request, int $sessionId)
+    {
+        $student = $request->user();
+        if (!$student || ($student->role ?? null) !== 'student') {
+            return response()->json([
+                'success' => 0,
+                'error'   => 'Unauthorized. Active student session required.',
+            ], 401);
+        }
+
+        $session = PracticeSession::find($sessionId);
+        if (!$session) {
+            return response()->json([
+                'success' => 0,
+                'error'   => 'Practice session not found.',
+            ], 404);
+        }
+
+        if ((int) $session->user_id !== (int) $student->id) {
+            return response()->json([
+                'success' => 0,
+                'error'   => 'Forbidden: You do not own this practice session.',
+            ], 403);
+        }
+
+        if ($session->status === 'submitted') {
+            return response()->json([
+                'success' => 0,
+                'error'   => 'Completed sessions cannot be abandoned.',
+            ], 409);
+        }
+
+        if ($session->status === 'abandoned') {
+            return response()->json([
+                'success'    => 1,
+                'message'    => 'Practice session is already abandoned.',
+                'session_id' => $sessionId,
+                'status'     => 'abandoned',
+            ], 200);
+        }
+
+        $session->update(['status' => 'abandoned']);
+
+        return response()->json([
+            'success'    => 1,
+            'message'    => 'Practice session abandoned.',
+            'session_id' => $sessionId,
+            'status'     => 'abandoned',
+        ], 200);
     }
 
     public function savePracticeSessionQuestionProgressForLms(Request $request)

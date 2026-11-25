@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Services\ReceiptService;
 use App\Http\Services\StudentSubscriptionPaymentService;
+use App\Jobs\SendPaymentReceiptEmailJob;
 use App\Models\SubscriptionPaymentRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class AdminStudentPaymentRequestController extends Controller
 {
@@ -26,6 +29,7 @@ class AdminStudentPaymentRequestController extends Controller
         $payment = SubscriptionPaymentRequest::with([
             'user:id,name,email,phone', 'teacherProfile.webUser:id,name,email,phone', 'offeredProgram.offeredClass.userClass',
             'paymentAccount', 'userSubscription', 'userApproved:id,name', 'userRejected:id,name',
+            'receipt', 'financialTransaction.entries.account',
         ])->findOrFail($id);
         $payment->review_history = DB::table('subscription_payment_request_events as events')
             ->leftJoin('users', function ($join) { $join->on('users.id', '=', 'events.reviewer_id')->where('events.reviewer_type', '=', 'admin'); })
@@ -46,5 +50,39 @@ class AdminStudentPaymentRequestController extends Controller
     {
         $data = $request->validate(['rejection_reason' => 'required|string|min:3|max:255', 'admin_remarks' => 'nullable|string|max:255']);
         return response()->json(['message' => 'Payment request rejected.', 'payment_request' => $payments->reject($id, 'admin', (int) auth('api')->id(), $data['rejection_reason'], null, $data['admin_remarks'] ?? null)]);
+    }
+
+    public function receipt(int $id, ReceiptService $receiptService)
+    {
+        $payment = SubscriptionPaymentRequest::findOrFail($id);
+        abort_unless($payment->status === 'approved', 404, 'Receipt is only available for approved payments.');
+
+        $receipt = $payment->receipt ?: $receiptService->issueReceipt($payment);
+
+        if ($receipt->pdf_path && Storage::disk('s3')->exists($receipt->pdf_path)) {
+            return response(Storage::disk('s3')->get($receipt->pdf_path))
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', "attachment; filename=\"Receipt-{$receipt->receipt_number}.pdf\"")
+                ->header('Cache-Control', 'private, no-store, no-cache, max-age=0');
+        }
+
+        $pdf = $receiptService->getPdf($receipt);
+        return $pdf->download("Receipt-{$receipt->receipt_number}.pdf")
+            ->header('Cache-Control', 'private, no-store, no-cache, max-age=0');
+    }
+
+    public function resendReceipt(int $id, ReceiptService $receiptService)
+    {
+        $payment = SubscriptionPaymentRequest::findOrFail($id);
+        abort_unless($payment->status === 'approved', 409, 'Receipt can only be emailed for approved payments.');
+
+        $receipt = $payment->receipt ?: $receiptService->issueReceipt($payment);
+
+        SendPaymentReceiptEmailJob::dispatch($receipt->id)->afterCommit();
+
+        return response()->json([
+            'message' => 'Payment receipt has been queued for email delivery to ' . ($receipt->email_sent_to ?: $payment->user?->email),
+            'receipt' => $receipt->fresh(),
+        ]);
     }
 }

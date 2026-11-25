@@ -30,4 +30,9 @@ class TeacherSettlement extends Model
     {
         return $this->belongsTo(PaymentAccount::class);
     }
+
+    public function financialTransaction()
+    {
+        return $this->morphOne(FinancialTransaction::class, 'reference');
+    }
 }

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\SubscriptionPaymentRequest;
 use App\Http\Services\AwsUploadService;
+use App\Http\Services\ReceiptService;
 use App\Http\Services\StudentSubscriptionPaymentService;
 use Illuminate\Support\Facades\Storage;
 
@@ -62,7 +63,27 @@ class UserPaymentController extends Controller
 
     public function methods() { return response()->json(['methods' => app(StudentSubscriptionPaymentService::class)->paymentAccounts(), 'teacher_collection_available' => app(\App\Http\Services\TeacherCollectionPermissionService::class)->anyEligibleTeacher()]); }
 
-    public function mine() { return response()->json(SubscriptionPaymentRequest::where('user_id', auth('web_api')->id())->with(['offeredProgram:id,title', 'userSubscription:id,status,expires_at', 'paymentAccount:id,title'])->latest('id')->paginate(20)); }
+    public function mine() { return response()->json(SubscriptionPaymentRequest::where('user_id', auth('web_api')->id())->with(['offeredProgram:id,title', 'userSubscription:id,status,expires_at', 'paymentAccount:id,title,bank_name,method', 'receipt'])->latest('id')->paginate(20)); }
+
+    public function receipt(int $id, ReceiptService $receiptService)
+    {
+        $payment = SubscriptionPaymentRequest::findOrFail($id);
+        abort_unless((int) $payment->user_id === (int) auth('web_api')->id(), 403, 'Unauthorized receipt access.');
+        abort_unless($payment->status === 'approved', 404, 'Receipt is only available once payment has been approved.');
+
+        $receipt = $payment->receipt ?: $receiptService->issueReceipt($payment);
+
+        if ($receipt->pdf_path && Storage::disk('s3')->exists($receipt->pdf_path)) {
+            return response(Storage::disk('s3')->get($receipt->pdf_path))
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', "attachment; filename=\"Receipt-{$receipt->receipt_number}.pdf\"")
+                ->header('Cache-Control', 'private, no-store, no-cache, max-age=0');
+        }
+
+        $pdf = $receiptService->getPdf($receipt);
+        return $pdf->download("Receipt-{$receipt->receipt_number}.pdf")
+            ->header('Cache-Control', 'private, no-store, no-cache, max-age=0');
+    }
 
     public function proof(int $id)
     {

@@ -69,5 +69,13 @@ class SubscriptionPaymentRequest extends Model
         return $this->belongsTo(WebUser::class, 'user_id');
     }
     
+    public function receipt()
+    {
+        return $this->hasOne(PaymentReceipt::class, 'subscription_payment_request_id');
+    }
 
+    public function financialTransaction()
+    {
+        return $this->morphOne(FinancialTransaction::class, 'reference');
+    }
 }

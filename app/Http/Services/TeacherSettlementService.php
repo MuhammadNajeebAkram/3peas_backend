@@ -112,6 +112,11 @@ class TeacherSettlementService
             // Pending allocations reserve funds, so confirmation cannot over-settle a collection.
             $settlement->update(['status' => $status, 'reviewed_by' => $adminId, 'reviewed_at' => now(),
                 'rejection_reason' => $status === 'rejected' ? $reason : null]);
+
+            if ($status === 'confirmed') {
+                app(FinancialLedgerService::class)->recordTeacherSettlement($settlement, $adminId);
+            }
+
             return $settlement->load('allocations');
         });
     }

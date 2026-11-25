@@ -21,6 +21,13 @@ class OfferedClass extends Model
         'is_active',
         'display_order',
     ];
+
+    protected $casts = [
+        'session_start' => 'date',
+        'session_end' => 'date',
+        'is_free' => 'boolean',
+        'is_active' => 'boolean',
+    ];
     
 
     public function userClass(){

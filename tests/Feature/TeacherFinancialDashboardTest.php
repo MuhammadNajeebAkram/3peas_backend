@@ -30,6 +30,8 @@ class TeacherFinancialDashboardTest extends TestCase
             'driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true,
         ]]);
         DB::purge('teacher_fin_test');
+        Storage::fake('s3');
+        Storage::fake('local');
 
         foreach (['users', 'institute_tbl', 'city_tbl'] as $name) {
             Schema::create($name, function (Blueprint $t) {
@@ -106,6 +108,8 @@ class TeacherFinancialDashboardTest extends TestCase
             '2026_09_17_000003_create_teacher_settlements.php',
             '2026_11_10_000004_add_teacher_collection_permission_to_profiles.php',
             '2026_11_10_000005_create_subscription_payment_request_events_table.php',
+            '2026_11_25_102727_create_financial_ledger_and_receipts_tables.php',
+            '2026_11_25_112000_add_unique_constraints_to_financial_tables.php',
         ] as $file) {
             (require database_path('migrations/'.$file))->up();
         }

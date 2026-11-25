@@ -179,13 +179,30 @@ class AwsUploadService
     }
 
     /**
+     * Check if path is a private financial document (receipts, payment proofs)
+     */
+    public function isPrivateFinancialPath(?string $s3Key): bool
+    {
+        if (! $s3Key) {
+            return false;
+        }
+
+        return str_contains($s3Key, 'receipts/') || str_contains($s3Key, 'payment_proofs/');
+    }
+
+    /**
      * Get public URL for S3 file (with CDN support)
      * 
      * @param string $s3Key - S3 key/path
-     * @return string - Public URL
+     * @return string|null - Public URL or null if private
      */
     public function getS3Url($s3Key)
     {
+        if ($this->isPrivateFinancialPath($s3Key)) {
+            Log::warning("Blocked attempt to generate public CDN URL for private financial object", ['key' => $s3Key]);
+            return null;
+        }
+
         $cdnUrl = config('filesystems.cdn_url');
         
         if ($cdnUrl) {

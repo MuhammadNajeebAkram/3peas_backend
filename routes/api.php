@@ -13,6 +13,7 @@ use App\Http\Controllers\AdminTeacherSubscriptionController;
 use App\Http\Controllers\AdminTeacherSubscriptionPlanController;
 use App\Http\Controllers\AdminTeacherCollectionPermissionController;
 use App\Http\Controllers\AdminStudentPaymentRequestController;
+use App\Http\Controllers\AdminFinancialLedgerController;
 use App\Http\Controllers\PaymentEvidenceController;
 use App\Http\Controllers\AdminLoginLogController;
 use App\Http\Controllers\AdminUserProfileController;
@@ -165,6 +166,14 @@ Route::prefix('admin/auth')->group(function () {
             Route::get('/{id}/proof', [PaymentEvidenceController::class, 'admin'])->whereNumber('id')->middleware('permission:student-payment-requests.view,student-payment-requests.review');
             Route::post('/{id}/approve', [AdminStudentPaymentRequestController::class, 'approve'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
             Route::post('/{id}/reject', [AdminStudentPaymentRequestController::class, 'reject'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
+            Route::get('/{id}/receipt', [AdminStudentPaymentRequestController::class, 'receipt'])->whereNumber('id')->middleware('permission:student-payment-requests.view,student-payment-requests.review');
+            Route::post('/{id}/resend-receipt', [AdminStudentPaymentRequestController::class, 'resendReceipt'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
+        });
+        Route::prefix('financial-ledger')->middleware('permission:student-payment-requests.view,student-payment-requests.review,payments.view')->group(function () {
+            Route::get('/overview', [AdminFinancialLedgerController::class, 'overview']);
+            Route::get('/transactions/{id}', [AdminFinancialLedgerController::class, 'showTransaction'])->whereNumber('id');
+            Route::post('/transactions/{id}/reverse', [AdminFinancialLedgerController::class, 'reverseTransaction'])->whereNumber('id')->middleware('permission:student-payment-requests.review');
+            Route::post('/recognize-revenue', [AdminFinancialLedgerController::class, 'recognizeRevenue'])->middleware('permission:student-payment-requests.review');
         });
         Route::prefix('ai-providers')->group(function () {
             Route::get('/all', [AiProviderController::class, 'index'])->middleware('permission:ai-providers.view,questions.create');

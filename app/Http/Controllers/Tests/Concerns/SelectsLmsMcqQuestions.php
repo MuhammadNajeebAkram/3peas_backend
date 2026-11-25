@@ -169,22 +169,17 @@ trait SelectsLmsMcqQuestions
         int $scenarioPercentage = 30
     ): ?array {
         if ($mcqFormat === 'scenario') {
-            if ($requestedCount % 4 !== 0) {
-                throw new \InvalidArgumentException(
-                    'The requested question count cannot be fulfilled using complete four-question scenario groups. Total questions must be a multiple of 4.'
-                );
-            }
-            $scenarioCount = (int) ($requestedCount / 4);
             $selection = $this->selectLmsScenarioMcqQuestions(
                 $unitIds,
-                $scenarioCount,
+                $requestedCount,
                 $topicIds,
                 $allowExercise,
-                $allowSupplementary
+                $allowSupplementary,
+                true
             );
             if ($selection === null) {
                 throw new \InvalidArgumentException(
-                    'Not enough complete active scenario groups available for the selected chapter. Each scenario group requires at least 4 active questions. Try fewer scenarios.'
+                    'Not enough complete active scenario groups available for the selected chapter. Each scenario group requires at least 4 active questions. Try fewer questions.'
                 );
             }
             return $selection;
@@ -257,12 +252,55 @@ trait SelectsLmsMcqQuestions
         ];
     }
 
+    /**
+     * Find a combination of scenario group IDs whose question counts sum exactly to $target.
+     *
+     * @param array<int, int> $groupSizes Associative array: groupId => questionCount
+     * @param int $target Target number of questions
+     * @return array<int>|null Selected group IDs on success, null if impossible
+     */
+    protected function findScenarioGroupCombination(array $groupSizes, int $target): ?array
+    {
+        $keys = array_keys($groupSizes);
+        shuffle($keys);
+
+        $solution = null;
+
+        $backtrack = function ($index, $currentSum, $selected) use (&$backtrack, &$solution, $keys, $groupSizes, $target) {
+            if ($currentSum === $target) {
+                $solution = $selected;
+                return true;
+            }
+            if ($currentSum > $target || $index >= count($keys)) {
+                return false;
+            }
+
+            $gid = $keys[$index];
+            $cnt = $groupSizes[$gid];
+
+            if ($currentSum + $cnt <= $target) {
+                $selected[] = $gid;
+                if ($backtrack($index + 1, $currentSum + $cnt, $selected)) {
+                    return true;
+                }
+                array_pop($selected);
+            }
+
+            return $backtrack($index + 1, $currentSum, $selected);
+        };
+
+        $backtrack(0, 0, []);
+
+        return $solution;
+    }
+
     private function selectLmsScenarioMcqQuestions(
         array $unitIds,
-        int $scenarioCount,
+        int $targetCount,
         ?array $topicIds = null,
         bool $allowExercise = true,
-        bool $allowSupplementary = true
+        bool $allowSupplementary = true,
+        bool $isQuestionTarget = false
     ): ?array {
         if (!$allowExercise && !$allowSupplementary) {
             return null;
@@ -302,29 +340,47 @@ trait SelectsLmsMcqQuestions
         // 2. Group by scenario_group_id and filter ONLY to groups with at least 4 eligible questions
         $grouped = $eligibleQuestions->groupBy('scenario_group_id');
         $qualifyingGroupIds = [];
+        $groupSizes = [];
 
         foreach ($grouped as $sgId => $groupMembers) {
             if ($groupMembers->count() >= 4) {
                 $qualifyingGroupIds[] = (int) $sgId;
+                $groupSizes[(int) $sgId] = $groupMembers->count();
             }
         }
 
-        // Rule 6 & 10: Groups with fewer than 4 eligible questions excluded. Fails if insufficient complete groups.
-        if (count($qualifyingGroupIds) < $scenarioCount) {
+        if (empty($qualifyingGroupIds)) {
             return null;
         }
 
-        // 3. Randomly select $scenarioCount scenario group IDs from qualifying groups
-        shuffle($qualifyingGroupIds);
-        $selectedScenarioGroupIds = array_slice($qualifyingGroupIds, 0, $scenarioCount);
+        $selectedScenarioGroupIds = [];
+        if ($isQuestionTarget) {
+            // Target is total questions: find a subset of complete scenario groups whose total questions equal targetCount
+            $combination = $this->findScenarioGroupCombination($groupSizes, $targetCount);
+            if ($combination === null) {
+                return null;
+            }
+            $selectedScenarioGroupIds = $combination;
+        } else {
+            // Target is number of groups
+            if (count($qualifyingGroupIds) < $targetCount) {
+                return null;
+            }
+            shuffle($qualifyingGroupIds);
+            $selectedScenarioGroupIds = array_slice($qualifyingGroupIds, 0, $targetCount);
+        }
+
+        if (empty($selectedScenarioGroupIds)) {
+            return null;
+        }
+
         $groupPosition = array_flip($selectedScenarioGroupIds);
 
-        // 4. For each selected scenario group, select EXACTLY 4 questions
+        // 4. For each selected scenario group, preserve ALL questions belonging to that group (no dropping 5th question)
         $selectedQuestions = collect();
         foreach ($selectedScenarioGroupIds as $sgId) {
             $members = $grouped->get($sgId);
-            $sampled = $members->shuffle()->take(4);
-            $selectedQuestions = $selectedQuestions->concat($sampled);
+            $selectedQuestions = $selectedQuestions->concat($members);
         }
 
         // 5. Stable order within group (by scenario_question_order, then id)
