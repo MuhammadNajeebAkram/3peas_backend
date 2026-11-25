@@ -87,6 +87,7 @@ Route::prefix('admin/auth')->group(function () {
         Route::get('me', [AdminAuthController::class, 'me']);
         Route::prefix('teachers')->group(function () {
             Route::get('/', [\App\Http\Controllers\AdminTeacherController::class, 'index'])->middleware('permission:teachers.view');
+            Route::post('/', [\App\Http\Controllers\AdminTeacherController::class, 'store'])->middleware('permission:teachers.approve');
             Route::post('/activate', [\App\Http\Controllers\AdminTeacherController::class, 'activate'])->middleware('permission:teachers.approve');
             Route::get('/{id}', [\App\Http\Controllers\AdminTeacherController::class, 'show'])->whereNumber('id')->middleware('permission:teachers.view');
             Route::post('/{id}/activate', [\App\Http\Controllers\AdminTeacherController::class, 'activate'])->whereNumber('id')->middleware('permission:teachers.approve');

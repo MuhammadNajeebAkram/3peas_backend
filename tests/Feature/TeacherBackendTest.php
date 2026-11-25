@@ -241,6 +241,61 @@ class TeacherBackendTest extends TeacherPaymentTest
         $this->assertEquals('suspended', $profile->fresh()->status);
     }
 
+    public function test_admin_can_create_teacher_manually(): void
+    {
+        $this->actingAs(User::first(), 'api');
+
+        // Test validation failure
+        $this->postJson('/api/admin/auth/teachers', [])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['name', 'email', 'phone', 'password']);
+
+        // Test successful creation of active teacher
+        $res = $this->postJson('/api/admin/auth/teachers', [
+            'name' => 'Sir Ahmed Raza',
+            'email' => 'ahmed.raza@testschool.edu',
+            'phone' => '03009876543',
+            'password' => 'SecurePass123!',
+            'status' => 'active',
+            'admin_note' => 'Created directly by head admin',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('message', 'Teacher account created successfully.')
+            ->assertJsonPath('teacher.web_user.name', 'Sir Ahmed Raza')
+            ->assertJsonPath('teacher.web_user.email', 'ahmed.raza@testschool.edu')
+            ->assertJsonPath('teacher.status', 'active');
+
+        $createdTeacher = TeacherProfile::with('webUser')->latest('id')->first();
+        $this->assertNotNull($createdTeacher);
+        $this->assertEquals('Sir Ahmed Raza', $createdTeacher->webUser->name);
+        $this->assertEquals('teacher', $createdTeacher->webUser->role);
+        $this->assertNotNull($createdTeacher->collection_code);
+        $this->assertNotNull($createdTeacher->approved_at);
+        $this->assertNotNull($createdTeacher->approved_by);
+
+        // Verify default free subscription was assigned
+        $this->assertDatabaseHas('teacher_subscriptions', [
+            'teacher_profile_id' => $createdTeacher->id,
+            'status' => 'active',
+        ]);
+
+        // Test creating a pending teacher
+        $resPending = $this->postJson('/api/admin/auth/teachers', [
+            'name' => 'Miss Fatima Khan',
+            'email' => 'fatima.khan@testschool.edu',
+            'phone' => '03009876544',
+            'password' => 'SecurePass123!',
+            'status' => 'pending',
+        ]);
+
+        $resPending->assertStatus(201)
+            ->assertJsonPath('teacher.status', 'pending');
+        $pendingTeacher = TeacherProfile::where('web_user_id', $resPending->json('teacher.web_user.id'))->first();
+        $this->assertNull($pendingTeacher->collection_code);
+        $this->assertNull($pendingTeacher->approved_at);
+    }
+
     public function test_admin_permissions_are_required(): void
     {
         $role = Role::create(['name' => 'unprivileged']);

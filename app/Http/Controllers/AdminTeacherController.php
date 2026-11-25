@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Services\TeacherFinancialReportService;
 use App\Http\Services\TeacherSettlementService;
 use App\Models\TeacherProfile;
+use App\Models\WebUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -33,6 +35,90 @@ class AdminTeacherController extends Controller
         $teachers = $query->latest('id')->paginate(20);
         $teachers->getCollection()->each(fn (TeacherProfile $teacher) => $teacher->makeHidden('collection_code'));
         return response()->json($teachers);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:web_users,email'],
+            'phone' => ['required', 'string', 'max:30', 'unique:web_users,phone'],
+            'password' => ['required', 'string', 'min:8'],
+            'institute_id' => ['nullable', 'integer', 'exists:institute_tbl,id'],
+            'city_id' => ['nullable', 'integer', 'exists:city_tbl,id'],
+            'status' => ['sometimes', 'in:active,pending'],
+            'collection_code' => ['nullable', 'string', 'max:32', 'regex:/^[A-Z0-9-]{6,32}$/', Rule::unique('teacher_profiles', 'collection_code')],
+            'can_collect_student_subscriptions' => ['sometimes', 'boolean'],
+            'admin_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (!empty($data['collection_code'])) {
+            abort_unless($this->mayManageCollectionPermission(), 403, 'Collection permission management is required to assign a custom collection code.');
+        }
+
+        $status = $data['status'] ?? 'active';
+        $canCollect = $request->boolean('can_collect_student_subscriptions', false);
+
+        if ($canCollect) {
+            abort_unless($this->mayManageCollectionPermission(), 403, 'Collection permission management is required to enable collection permission.');
+        }
+
+        $teacher = DB::transaction(function () use ($data, $status, $canCollect) {
+            $webUser = WebUser::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'password' => Hash::make($data['password']),
+                'role' => 'teacher',
+                'status' => 'active',
+                'login_provider' => 'email',
+                'email_verified_at' => now(),
+            ]);
+
+            $adminId = auth('api')->id();
+
+            $profile = new TeacherProfile();
+            $profile->web_user_id = $webUser->id;
+            $profile->institute_id = $data['institute_id'] ?? null;
+            $profile->city_id = $data['city_id'] ?? null;
+            $profile->status = $status;
+            $profile->admin_note = $data['admin_note'] ?? null;
+            $profile->can_collect_student_subscriptions = $canCollect;
+
+            if ($status === 'active') {
+                $profile->approved_by = $adminId;
+                $profile->approved_at = now();
+                $profile->status_changed_by = $adminId;
+                $profile->status_changed_at = now();
+            }
+
+            $profile->save();
+
+            if ($status === 'active') {
+                $code = $data['collection_code'] ?? $this->newCode();
+                $this->assignCode($profile, $code);
+                $profile->save();
+            }
+
+            $this->event($profile, 'created_by_admin', [
+                'admin_id' => $adminId,
+                'status' => $status,
+                'collection_code' => $profile->collection_code,
+                'note' => $data['admin_note'] ?? null,
+            ]);
+
+            if ($status === 'active') {
+                app(\App\Http\Services\TeacherSubscriptionService::class)
+                    ->assignDefaultFree($profile, $adminId);
+            }
+
+            return $profile->load(['webUser:id,name,email,phone,status', 'city:id,name', 'institute:id,name']);
+        });
+
+        return response()->json([
+            'message' => 'Teacher account created successfully.',
+            'teacher' => $teacher->makeHidden('collection_code')->makeVisible('admin_note'),
+        ], 201);
     }
 
     public function show(int $id, TeacherSettlementService $settlements)
