@@ -200,6 +200,16 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/update/{id}', [AiRequestController::class, 'update'])->whereNumber('id')->middleware('permission:ai-requests.update');
             Route::delete('/delete/{id}', [AiRequestController::class, 'destroy'])->whereNumber('id')->middleware('permission:ai-requests.delete');
         });
+        Route::prefix('receipt-extraction-ai')->group(function () {
+            Route::get('/', [\App\Http\Controllers\AdminReceiptExtractionAiController::class, 'show'])
+                ->middleware('permission:receipt-extraction-ai.view');
+            Route::get('/models', [\App\Http\Controllers\AdminReceiptExtractionAiController::class, 'models'])
+                ->middleware('permission:receipt-extraction-ai.view');
+            Route::put('/', [\App\Http\Controllers\AdminReceiptExtractionAiController::class, 'update'])
+                ->middleware(['permission:receipt-extraction-ai.update', 'throttle:20,1']);
+            Route::post('/test-connection', [\App\Http\Controllers\AdminReceiptExtractionAiController::class, 'testConnection'])
+                ->middleware(['permission:receipt-extraction-ai.test', 'throttle:10,1']);
+        });
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::get('profile', [AdminUserProfileController::class, 'show']);
         Route::post('profile/update', [AdminUserProfileController::class, 'update']);

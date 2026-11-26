@@ -37,6 +37,9 @@ class LmsPermissionsSeeder extends Seeder
             'ai-requests.create',
             'ai-requests.update',
             'ai-requests.delete',
+            'receipt-extraction-ai.view',
+            'receipt-extraction-ai.update',
+            'receipt-extraction-ai.test',
             'questions.generate-explanation',
 
             'admin.media.presign',

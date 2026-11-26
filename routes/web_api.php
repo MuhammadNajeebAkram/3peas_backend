@@ -407,6 +407,7 @@ Route::prefix('auth')->group(function () {
         });
         
         Route::post('/save-payment-request', [UserPaymentController::class, 'submitPaymentRequest'])->middleware('throttle:10,1');
+        Route::post('/payments/extract-receipt', [UserPaymentController::class, 'extractReceipt'])->middleware('throttle:10,1');
         Route::get('/subscription-offerings', [UserPaymentController::class, 'offerings']);
         Route::get('/subscription-payment-requests', [UserPaymentController::class, 'mine']);
         Route::get('/subscription-payment-requests/{id}/proof', [\App\Http\Controllers\PaymentEvidenceController::class, 'student'])->whereNumber('id');

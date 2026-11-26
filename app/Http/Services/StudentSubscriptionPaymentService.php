@@ -58,7 +58,7 @@ class StudentSubscriptionPaymentService
             $payment = SubscriptionPaymentRequest::create([
                 'user_id' => $studentId, 'offered_program_id' => $program->id, 'payment_account_id' => $account->id,
                 'payment_method' => 'account', 'price' => $quote['price'], 'discount_amount' => $quote['discount_amount'], 'discount_percentage' => $quote['discount_percentage'],
-                'final_amount' => $quote['final_amount'], 'transaction_id' => $data['transaction_id'], 'payer_name' => $data['payer_name'] ?? null,
+                'final_amount' => $quote['final_amount'], 'transaction_id' => $data['transaction_id'] ?? null, 'payer_name' => $data['payer_name'] ?? null,
                 'payer_phone' => $data['payer_phone'] ?? null, 'proof_file_path' => $proofPath, 'status' => 'pending',
             ]);
             $this->event($payment, 'submitted', 'student', $studentId, null, 'pending');

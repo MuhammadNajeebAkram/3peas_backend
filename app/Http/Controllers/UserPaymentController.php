@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use App\Models\SubscriptionPaymentRequest;
+use App\Exceptions\ReceiptExtractionException;
 use App\Http\Services\AwsUploadService;
+use App\Http\Services\PaymentReceiptExtractionService;
 use App\Http\Services\ReceiptService;
 use App\Http\Services\StudentSubscriptionPaymentService;
+use App\Models\SubscriptionPaymentRequest;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class UserPaymentController extends Controller
@@ -26,7 +28,8 @@ class UserPaymentController extends Controller
         abort_unless(auth('web_api')->user()?->role === 'student' && auth('web_api')->user()?->status === 'active', 403);
         foreach (['transaction_id', 'payer_name', 'payer_phone'] as $field) {
             if (is_string($request->input($field))) {
-                $request->merge([$field => trim($request->input($field))]);
+                $trimmed = trim($request->input($field));
+                $request->merge([$field => $trimmed === '' ? null : $trimmed]);
             }
         }
         $request->validate(['payment_method' => 'sometimes|in:account,bank,jazzcash']);
@@ -34,9 +37,9 @@ class UserPaymentController extends Controller
         $data = $request->validate([
             'offered_program_id' => 'required|integer|exists:offered_programs,id',
             'payment_account_id' => 'required|integer|exists:payment_accounts,id',
-            'transaction_id' => 'required|string|max:255|unique:subscription_payment_requests,transaction_id',
-            'payer_name' => 'required|string|max:255',
-            'payer_phone' => 'required|string|max:20',
+            'transaction_id' => 'nullable|string|max:255|unique:subscription_payment_requests,transaction_id',
+            'payer_name' => 'nullable|string|max:255',
+            'payer_phone' => 'nullable|string|max:20',
             'proof_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             'amount' => 'prohibited', 'price' => 'prohibited', 'price_paid' => 'prohibited',
             'discount_amount' => 'prohibited', 'discount_percentage' => 'prohibited', 'final_amount' => 'prohibited',
@@ -57,6 +60,30 @@ class UserPaymentController extends Controller
             throw $e;
         }
         return response()->json(['message' => 'Payment request submitted and is awaiting review.', 'payment_request' => $payment], 201);
+    }
+
+    public function extractReceipt(Request $request, PaymentReceiptExtractionService $extractionService)
+    {
+        $user = auth('web_api')->user();
+        abort_unless($user && $user->role === 'student' && $user->status === 'active', 403, 'Only active student accounts can extract payment receipts.');
+
+        $request->validate([
+            'proof_file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+        ]);
+
+        try {
+            $extracted = $extractionService->extract($request->file('proof_file'));
+        } catch (ReceiptExtractionException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $exception->errorCode(),
+            ], $exception->statusCode());
+        }
+
+        return response()->json([
+            'message' => 'Receipt scanned successfully.',
+            'data' => $extracted,
+        ]);
     }
 
     public function offerings() { return response()->json(['data' => app(StudentSubscriptionPaymentService::class)->offerings()]); }
