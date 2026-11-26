@@ -277,6 +277,29 @@ class TeacherSubscriptionService
         return $result;
     }
 
+    public function expireIfDue(int $subscriptionId, ?int $adminId = null, ?string $reason = null): ?TeacherSubscription
+    {
+        return DB::transaction(function () use ($subscriptionId, $adminId, $reason) {
+            $snapshot = TeacherSubscription::find($subscriptionId);
+            if (!$snapshot) {
+                return null;
+            }
+            TeacherProfile::lockForUpdate()->findOrFail($snapshot->teacher_profile_id);
+            $subscription = TeacherSubscription::lockForUpdate()->find($subscriptionId);
+            if (!$subscription || $subscription->status !== 'active' || !$subscription->expires_at || $subscription->expires_at->isFuture()) {
+                return null;
+            }
+            $this->transition(
+                $subscription,
+                'expired',
+                'subscription_expired',
+                $adminId,
+                $reason ?? 'Expired at configured expiry time.'
+            );
+            return $subscription->fresh(['plan.features']);
+        });
+    }
+
     public function expireDueSubscriptions(int $chunkSize = 100): int
     {
         $expired = 0;

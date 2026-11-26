@@ -70,6 +70,7 @@ class LmsPermissionsSeeder extends Seeder
             'web-users.view',
             'web-users.create',
             'web-users.update',
+            'web-users.change-role',
             'web-users.approve-subscription',
             'student-payment-requests.view',
             'student-payment-requests.review',

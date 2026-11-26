@@ -157,7 +157,7 @@ class WebUserAuthController extends Controller
             'name' => ['required', 'string'],
             'email' => ['required', 'email', 'unique:web_users,email'],
             'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', 'string'],
+            'role' => ['required', 'string', Rule::in(['student', 'teacher'])],
             'phone' => ['nullable', 'string', 'unique:web_users,phone'],
             'google_id' => ['nullable', 'string', 'unique:web_users,google_id'],
             'login_provider' => ['required', Rule::in(['email', 'google'])],
@@ -277,7 +277,7 @@ class WebUserAuthController extends Controller
             'name' => ['required', 'string'],
             'email' => ['required', 'email', Rule::unique('web_users', 'email')->ignore($request->user_id)],
             'password' => ['nullable', 'string', 'min:8'],
-            'role' => ['required', 'string'],
+            'role' => ['sometimes', 'string', Rule::in(['student', 'teacher'])],
             'phone' => ['nullable', 'string', Rule::unique('web_users', 'phone')->ignore($request->user_id)],
             'google_id' => ['nullable', 'string', Rule::unique('web_users', 'google_id')->ignore($request->user_id)],
             'login_provider' => ['required', Rule::in(['email', 'google'])],
@@ -318,10 +318,25 @@ class WebUserAuthController extends Controller
             $user = WebUser::find($userId);
 
             if (!$user) {
+                DB::rollBack();
+
                 return response()->json([
                     'success' => 0,
                     'error' => "Target user (ID: {$userId}) not found."
                 ], 404);
+            }
+
+            if (
+                array_key_exists('role', $validatedData) &&
+                strtolower(trim((string) $validatedData['role'])) !== strtolower((string) $user->role)
+            ) {
+                DB::rollBack();
+
+                return response()->json([
+                    'success' => 0,
+                    'code' => 'ROLE_CHANGE_REQUIRES_DEDICATED_ENDPOINT',
+                    'error' => 'Role cannot be changed through general user update. Use the dedicated Change Role workflow.',
+                ], 422);
             }
 
             $profile = $validatedData['profile'] ?? [];
@@ -331,7 +346,6 @@ class WebUserAuthController extends Controller
             $userData = [
                 'name' => $validatedData['name'],
                 'email' => $validatedData['email'],
-                'role' => $validatedData['role'],
                 'avatar' => $validatedData['avatar'] ?? null,
                 'status' => $validatedData['status'] ?? 'active',
                 'phone' => $validatedData['phone'] ?? null,
@@ -361,16 +375,6 @@ class WebUserAuthController extends Controller
             ];
 
             $userProfile->update($profileData);
-
-            if ($user->role === 'teacher') {
-                \App\Models\TeacherProfile::firstOrCreate(
-                    ['web_user_id' => $user->id],
-                    [
-                        'city_id' => $profile['city_id'] ?? null,
-                        'institute_id' => $profile['institute_id'] ?? null,
-                    ]
-                );
-            }
 
             if ($subscriptions !== null) {
                 $submittedSubscriptionIds = [];

@@ -276,7 +276,12 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/update', [WebUserAuthController::class, 'updateUserDataByAdmin'])->middleware('permission:web-users.update');
             Route::post('/subscription/approve', [WebUserAuthController::class, 'approveStudentSubscriptionByAdmin'])->middleware('permission:student-payment-requests.review');
             Route::get('/user/{id}', [WebUserAuthController::class, 'getUserDataByAdmin'])->middleware('permission:web-users.view');
-
+            Route::get('/{id}/role-change-preview', [\App\Http\Controllers\AdminWebUserRoleController::class, 'preview'])
+                ->whereNumber('id')
+                ->middleware('permission:web-users.change-role');
+            Route::post('/{id}/change-role', [\App\Http\Controllers\AdminWebUserRoleController::class, 'changeRole'])
+                ->whereNumber('id')
+                ->middleware(['permission:web-users.change-role', 'throttle:20,1']);
         });
        
        
@@ -726,11 +731,11 @@ Route::post('save-institute', [InstituteController::class, 'saveInstitute']);
 Route::post('update-institute', [InstituteController::class, 'updateInstitute']);
 Route::get('get-institutes-by-city/{id}', [InstituteController::class, 'getInstitutesByCity']);
 
-Route::post('create-web-user', [WebUserAuthController::class, 'saveUserDataByAdmin']);
-Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserDataByAdmin']);
-Route::get('get-unverified-web-users', [WebUserAuthController::class, 'getUnVerifiedWebUsers']);
-Route::post('update-web-user', [WebUserAuthController::class, 'updateUserDataByAdmin']);
-Route::post('verified-web-user', [WebUserAuthController::class, 'verifiedUserByAdmin']);
+Route::post('create-web-user', [WebUserAuthController::class, 'saveUserDataByAdmin'])->middleware([LogAdminActivity::class, 'permission:web-users.create']);
+Route::get('get-web-user-data', [WebUserAuthController::class, 'getUserDataByAdmin'])->middleware('permission:web-users.view');
+Route::get('get-unverified-web-users', [WebUserAuthController::class, 'getUnVerifiedWebUsers'])->middleware('permission:web-users.view');
+Route::post('update-web-user', [WebUserAuthController::class, 'updateUserDataByAdmin'])->middleware([LogAdminActivity::class, 'permission:web-users.update']);
+Route::post('verified-web-user', [WebUserAuthController::class, 'verifiedUserByAdmin'])->middleware([LogAdminActivity::class, 'permission:web-users.verify']);
 
 Route::post('get_study_plans', [StudyPlanController::class, 'getStudyPlansByClass']);
 Route::post('get_study_groups', [StudyGroupController::class, 'getStudyGroups']);
