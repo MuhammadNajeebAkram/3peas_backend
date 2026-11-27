@@ -17,6 +17,7 @@ class AiPermissionsSeeder extends Seeder
             }
         }
         $ids[] = Permission::firstOrCreate(['name' => 'questions.generate-explanation'])->id;
+        $ids[] = Permission::firstOrCreate(['name' => 'questions.bulk-generate-explanation'])->id;
         $ids[] = Permission::firstOrCreate(['name' => 'questions.generate'])->id;
         $ids[] = Permission::firstOrCreate(['name' => 'ai-providers.test'])->id;
         Role::firstOrCreate(['name' => 'super_admin'])->permissions()->syncWithoutDetaching($ids);

@@ -473,6 +473,32 @@ Route::prefix('admin/auth')->group(function () {
             Route::post('/generate-explanation', [QuestionExplanationController::class, 'generate'])
                 ->middleware(['permission:questions.view', 'permission:questions.generate-explanation', 'throttle:10,1']);
             Route::post('/save-explanation', [QuestionExplanationController::class, 'save'])->middleware('permission:questions.update');
+            Route::prefix('bulk-explanations')->group(function () {
+                Route::post('/preview', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'preview'])
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::post('/batches', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'createBatch'])
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation', 'throttle:10,1']);
+                Route::get('/batches', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'index'])
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::get('/batches/{batch}', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'show'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::get('/batches/{batch}/items', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'items'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::post('/batches/{batch}/apply', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'apply'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation', 'permission:questions.update']);
+                Route::post('/batches/{batch}/retry-failed', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'retryFailed'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::post('/batches/{batch}/cancel', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'cancel'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+                Route::post('/batches/{batch}/reconcile', [\App\Http\Controllers\BulkQuestionExplanationController::class, 'reconcile'])
+                    ->whereNumber('batch')
+                    ->middleware(['permission:questions.view', 'permission:questions.bulk-generate-explanation']);
+            });
             Route::post('/export', [QuestionsController::class, 'exportQuestions'])->middleware(['permission:questions.report.view', 'permission:questions.report.export']);
             Route::post('/filter', [QuestionsController::class, 'getQuestionsByFilters'])->middleware('permission:questions.view');
             Route::post('/detail', [QuestionsController::class, 'getQuestionDataById'])->middleware('permission:questions.view');

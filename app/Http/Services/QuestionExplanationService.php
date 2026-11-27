@@ -4,6 +4,9 @@ namespace App\Http\Services;
 
 use App\Models\AiModel;
 use App\Models\AiRequest;
+use App\Models\ExamQuestion;
+use App\Models\User;
+use App\Support\ExplanationContentHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -13,7 +16,14 @@ class QuestionExplanationService
 {
     public const PROMPT_VERSION = 'question-explanation-v3';
 
+    public const QUESTION_LOCK_SECONDS = 210;
+
     public function __construct(private AiService $ai) {}
+
+    public static function questionLockKey(int $questionId): string
+    {
+        return 'question-explanation:question:'.$questionId;
+    }
 
     public function context(int $id): array
     {
@@ -41,10 +51,23 @@ class QuestionExplanationService
     public function authorize(Request $request, array $context, string ...$permissions): void
     {
         $user = $request->user();
+        abort_unless($user instanceof User, 403, 'You are not allowed to access this question.');
+        $this->authorizeUser($user, $context, ...$permissions);
+    }
+
+    public function authorizeUser(User $user, array $context, string ...$permissions): void
+    {
+        if (! $this->isUserAuthorized($user, $context, ...$permissions)) {
+            abort(403, 'You are not allowed to access this question.');
+        }
+    }
+
+    public function isUserAuthorized(User $user, array $context, string ...$permissions): bool
+    {
         $user->loadMissing('role');
         $roleName = str_replace(['-', ' '], '_', strtolower(trim((string) $user->role?->name)));
         if ($roleName === 'super_admin') {
-            return;
+            return true;
         }
         $question = $context['question'];
         $keys = ['curriculum_board' => 'curriculum_board_id', 'class' => 'class_id', 'subject' => 'subject_id',
@@ -61,9 +84,11 @@ class QuestionExplanationService
 
                 return $key && isset($question[$key]) && (int) $question[$key] === (int) $scope->scope_id;
             })) {
-                abort(403, 'You are not allowed to access this question.');
+                return false;
             }
         }
+
+        return true;
     }
 
     public function model(?int $id, ?int $providerId = null): AiModel
@@ -83,63 +108,220 @@ class QuestionExplanationService
         return $model;
     }
 
-    public function generate(Request $request, array $context, AiModel $model, string $language): AiRequest
+    public function generate(Request $request, array $context, AiModel $model, string $language, string $triggerType = 'single'): AiRequest
+    {
+        return $this->generateForUser((int) $request->user()->id, $context, $model, $language, $triggerType);
+    }
+
+    public function inspectContextEligibility(array $context, ?AiModel $model = null): array
     {
         $question = $context['question'];
+        $options = $context['options'] ?? [];
+
         if (! ((int) ($question['is_mcq'] ?? 0) === 1 || (int) ($question['question_type'] ?? 0) === 1)) {
-            throw ValidationException::withMessages(['question_id' => 'Explanation generation currently supports multiple-choice questions.']);
+            return [
+                'eligible' => false,
+                'reason_code' => 'not_mcq',
+                'reason' => 'Explanation generation currently supports multiple-choice questions.',
+                'has_images' => false,
+                'image_count' => 0,
+                'images' => [],
+                'correct_option_id' => null,
+                'correct_option_text' => null,
+                'content_bytes' => 0,
+            ];
         }
-        $correct = array_filter($context['options'], fn ($option) => (int) $option['is_answer'] === 1);
-        if (count($context['options']) < 2 || count($correct) !== 1) {
-            throw ValidationException::withMessages(['question_id' => 'The question must have at least two options and exactly one correct option.']);
+
+        $correct = array_values(array_filter($options, fn ($option) => (int) ($option['is_answer'] ?? 0) === 1));
+        if (count($options) < 2 || count($correct) !== 1) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'invalid_answer_structure',
+                'reason' => 'The question must have at least two options and exactly one correct option.',
+                'has_images' => (bool) ($question['has_diagram'] ?? false),
+                'image_count' => 0,
+                'images' => [],
+                'correct_option_id' => null,
+                'correct_option_text' => null,
+                'content_bytes' => 0,
+            ];
         }
+
         $images = [];
         $questionEn = $this->text($question['question'] ?? null, $images);
         $questionUr = $this->text($question['question_um'] ?? null, $images);
-        if ($questionEn === '' && $questionUr === '' && $images === []) {
-            throw ValidationException::withMessages(['question_id' => 'The question statement is empty.']);
-        }
-        $content = [
-            'question' => $questionEn,
-            'question_ur' => $questionUr,
-            'subject' => $question['subject_name'], 'class' => $question['class_name'],
-            'topic' => $question['topic_name'],
-            'scenario' => $this->text($question['scenario_text'] ?? null, $images),
-            'scenario_ur' => $this->text($question['scenario_text_um'] ?? null, $images),
-            'options' => [], 'correct_option_id' => (int) reset($correct)['id'],
-        ];
+        $scenarioEn = $this->text($question['scenario_text'] ?? null, $images);
+        $scenarioUr = $this->text($question['scenario_text_um'] ?? null, $images);
+
         if (filled($question['scenario_image'] ?? null)) {
             $images[] = $question['scenario_image'];
         }
-        foreach ($context['options'] as $option) {
+
+        $parsedOptions = [];
+        $correctOptionText = null;
+        foreach ($options as $option) {
             $before = count($images);
-            $en = $this->text($option['option'], $images);
-            $ur = $this->text($option['option_um'], $images);
-            if ($en === '' && $ur === '' && count($images) === $before) {
-                throw ValidationException::withMessages(['question_id' => 'An answer option is empty.']);
+            $en = $this->text($option['option'] ?? null, $images);
+            $ur = $this->text($option['option_um'] ?? null, $images);
+            $optionImages = array_slice($images, $before);
+            if ($en === '' && $ur === '' && $optionImages === []) {
+                return [
+                    'eligible' => false,
+                    'reason_code' => 'empty_option',
+                    'reason' => 'An answer option is empty.',
+                    'has_images' => (bool) ($question['has_diagram'] ?? false) || $images !== [],
+                    'image_count' => count(array_unique($images)),
+                    'images' => array_values(array_unique($images)),
+                    'correct_option_id' => (int) $correct[0]['id'],
+                    'correct_option_text' => null,
+                    'content_bytes' => 0,
+                ];
             }
-            $content['options'][] = ['id' => (int) $option['id'], 'text' => $en, 'text_ur' => $ur,
-                'images' => array_slice($images, $before)];
+            if ((int) $option['id'] === (int) $correct[0]['id']) {
+                $correctOptionText = $en !== '' ? $en : ($ur !== '' ? $ur : '[Image option]');
+            }
+            $parsedOptions[] = [
+                'id' => (int) $option['id'],
+                'text' => $en,
+                'text_ur' => $ur,
+                'images' => $optionImages,
+            ];
         }
-        if (blank($content['subject']) || ($content['question'] === '' && $content['question_ur'] === '' && $images === [])) {
-            throw ValidationException::withMessages(['question_id' => 'Question content and subject are required.']);
+
+        $uniqueImages = array_values(array_unique($images));
+        $hasImages = (bool) ($question['has_diagram'] ?? false) || $uniqueImages !== [];
+
+        if ($questionEn === '' && $questionUr === '' && $uniqueImages === []) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'empty_question',
+                'reason' => 'The question statement is empty.',
+                'has_images' => $hasImages,
+                'image_count' => count($uniqueImages),
+                'images' => $uniqueImages,
+                'correct_option_id' => (int) $correct[0]['id'],
+                'correct_option_text' => $correctOptionText,
+                'content_bytes' => 0,
+            ];
         }
-        if ((bool) ($question['has_diagram'] ?? false) && $images === []) {
-            throw ValidationException::withMessages(['question_id' => 'This question requires a diagram, but no image is available in its statement or scenario.']);
+
+        if (blank($question['subject_name'] ?? null)) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'missing_subject',
+                'reason' => 'Question content and subject are required.',
+                'has_images' => $hasImages,
+                'image_count' => count($uniqueImages),
+                'images' => $uniqueImages,
+                'correct_option_id' => (int) $correct[0]['id'],
+                'correct_option_text' => $correctOptionText,
+                'content_bytes' => 0,
+            ];
         }
-        $text = json_encode($content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        if ($images !== [] && ! $model->supports_images) {
-            throw ValidationException::withMessages(['model_id' => 'Select a model that supports images for this question.']);
+
+        if ((bool) ($question['has_diagram'] ?? false) && $uniqueImages === []) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'missing_diagram_image',
+                'reason' => 'This question requires a diagram, but no image is available in its statement or scenario.',
+                'has_images' => true,
+                'image_count' => 0,
+                'images' => [],
+                'correct_option_id' => (int) $correct[0]['id'],
+                'correct_option_text' => $correctOptionText,
+                'content_bytes' => 0,
+            ];
         }
-        if (strlen($text) > 40000 || count($images) > 8) {
-            throw ValidationException::withMessages(['question_id' => 'Question context is too large for a short explanation.']);
+
+        $content = [
+            'question' => $questionEn,
+            'question_ur' => $questionUr,
+            'subject' => $question['subject_name'],
+            'class' => $question['class_name'],
+            'topic' => $question['topic_name'],
+            'scenario' => $scenarioEn,
+            'scenario_ur' => $scenarioUr,
+            'options' => $parsedOptions,
+            'correct_option_id' => (int) $correct[0]['id'],
+        ];
+        $encoded = json_encode($content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        if ($uniqueImages !== [] && $model !== null && ! $model->supports_images) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'model_does_not_support_images',
+                'reason' => 'Select a model that supports images for this question.',
+                'has_images' => true,
+                'image_count' => count($uniqueImages),
+                'images' => $uniqueImages,
+                'correct_option_id' => (int) $correct[0]['id'],
+                'correct_option_text' => $correctOptionText,
+                'content_bytes' => strlen($encoded),
+            ];
         }
-        foreach (array_unique($images) as $image) {
+
+        if (strlen($encoded) > 40000 || count($images) > 8) {
+            return [
+                'eligible' => false,
+                'reason_code' => 'context_too_large',
+                'reason' => 'Question context is too large for a short explanation.',
+                'has_images' => $hasImages,
+                'image_count' => count($uniqueImages),
+                'images' => $uniqueImages,
+                'correct_option_id' => (int) $correct[0]['id'],
+                'correct_option_text' => $correctOptionText,
+                'content_bytes' => strlen($encoded),
+            ];
+        }
+
+        foreach ($uniqueImages as $image) {
             if (! filter_var($image, FILTER_VALIDATE_URL) || parse_url($image, PHP_URL_SCHEME) !== 'https'
                 || preg_match('/\.svg(?:\?|$)/i', $image)) {
-                throw ValidationException::withMessages(['question_id' => 'Question images must be accessible HTTPS raster images (PNG, JPEG, WebP, or GIF).']);
+                return [
+                    'eligible' => false,
+                    'reason_code' => 'invalid_image_url',
+                    'reason' => 'Question images must be accessible HTTPS raster images (PNG, JPEG, WebP, or GIF).',
+                    'has_images' => true,
+                    'image_count' => count($uniqueImages),
+                    'images' => $uniqueImages,
+                    'correct_option_id' => (int) $correct[0]['id'],
+                    'correct_option_text' => $correctOptionText,
+                    'content_bytes' => strlen($encoded),
+                ];
             }
         }
+
+        return [
+            'eligible' => true,
+            'reason_code' => null,
+            'reason' => null,
+            'has_images' => $hasImages,
+            'image_count' => count($uniqueImages),
+            'images' => $uniqueImages,
+            'correct_option_id' => (int) $correct[0]['id'],
+            'correct_option_text' => $correctOptionText,
+            'content_bytes' => strlen($encoded),
+            'encoded_content' => $encoded,
+        ];
+    }
+
+    public function generateForUser(
+        int $userId,
+        array $context,
+        AiModel $model,
+        string $language,
+        string $triggerType = 'single',
+        array $extraMetadata = []
+    ): AiRequest {
+        $inspection = $this->inspectContextEligibility($context, $model);
+        if (! $inspection['eligible']) {
+            $errorField = $inspection['reason_code'] === 'model_does_not_support_images' ? 'model_id' : 'question_id';
+            throw ValidationException::withMessages([$errorField => $inspection['reason']]);
+        }
+
+        $question = $context['question'];
+        $text = $inspection['encoded_content'];
+        $uniqueImages = $inspection['images'];
         $fields = $this->fields($language);
         $properties = [];
         foreach ($fields as $field) {
@@ -163,16 +345,63 @@ PROMPT;
 
         return $this->ai->generate($model, [
             'instructions' => $instructions."\nRequested language: ".$language,
-            'text' => $text, 'images' => array_values(array_unique($images)),
+            'text' => $text, 'images' => $uniqueImages,
             'max_output_tokens' => max(500, min(4000, $model->provider->setting('max_output_tokens', 1800))),
             'schema' => ['type' => 'object', 'properties' => $properties, 'required' => array_keys($properties), 'additionalProperties' => false],
         ], [
-            'user_id' => $request->user()->id, 'purpose' => 'question_explanation',
-            'subject_type' => 'exam_question', 'subject_id' => $question['id'],
-            'language' => $language, 'prompt_version' => self::PROMPT_VERSION,
-            'metadata' => ['context_hash' => $this->fingerprint($context),
-                'explanation_hashes' => $this->explanationHashes($context), 'image_count' => count(array_unique($images))],
-        ], fn ($draft) => $this->validateDraft($draft, $language));
+            'user_id' => $userId,
+            'trigger_type' => $triggerType,
+            'purpose' => 'question_explanation',
+            'subject_type' => 'exam_question',
+            'subject_id' => $question['id'],
+            'language' => $language,
+            'prompt_version' => self::PROMPT_VERSION,
+            'metadata' => array_merge($extraMetadata, [
+                'context_hash' => $this->fingerprint($context),
+                'explanation_hashes' => $this->explanationHashes($context),
+                'image_count' => count($uniqueImages),
+            ]),
+        ], fn ($draft) => $this->validateDraft($draft, $language), $triggerType === 'bulk' ? 1 : 2);
+    }
+
+    public function saveApprovedDraft(
+        User $user,
+        int $questionId,
+        int $aiRequestId,
+        string $language,
+        array $explanations,
+        bool $requireMissingFields = false
+    ): array {
+        $fields = $this->fields($language);
+        foreach ($fields as $field) {
+            $this->validateExplanation($explanations[$field] ?? null, $field);
+        }
+
+        return DB::transaction(function () use ($user, $questionId, $aiRequestId, $language, $explanations, $fields, $requireMissingFields) {
+            $question = ExamQuestion::lockForUpdate()->findOrFail($questionId);
+            $record = AiRequest::lockForUpdate()->findOrFail($aiRequestId);
+            abort_unless($record->purpose === 'question_explanation' && $record->subject_type === 'exam_question'
+                && (int) $record->subject_id === $questionId && $record->language === $language
+                && $record->status === 'successful' && $record->record_source === 'provider', 422, 'The AI draft does not match this question and language.');
+            $context = $this->context($questionId);
+            $this->authorizeUser($user, $context, 'questions.update');
+            abort_unless(hash_equals((string) data_get($record->metadata, 'context_hash', ''), $this->fingerprint($context)),
+                409, 'The question or options changed after generation. Generate a new explanation.');
+            $hashes = $this->explanationHashes($context);
+            foreach ($fields as $field) {
+                abort_unless(hash_equals((string) data_get($record->metadata, 'explanation_hashes.'.$field, ''), $hashes[$field]),
+                    409, 'The saved explanation changed after generation. Reload and generate a new draft.');
+                if ($requireMissingFields && ExplanationContentHelper::hasContent($question->$field)) {
+                    abort(409, 'An explanation already exists for this question and cannot be overwritten.');
+                }
+                $question->$field = $this->toTiptapHtml($explanations[$field]);
+            }
+            $question->save();
+            $record->metadata = array_merge($record->metadata ?? [], ['saved_by' => $user->id, 'saved_at' => now()->toIso8601String()]);
+            $record->save();
+
+            return $question->only($fields);
+        });
     }
 
     public function fields(string $language): array

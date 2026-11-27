@@ -14,20 +14,21 @@ class AiService
     public function __construct(private ProviderRegistry $providers) {}
 
     /** Each outbound attempt gets its own row, including retries and unknown usage. */
-    public function generate(AiModel $model, array $payload, array $context, callable $validate): AiRequest
+    public function generate(AiModel $model, array $payload, array $context, callable $validate, int $maxAttempts = 2): AiRequest
     {
+        $maxAttempts = max(1, min(2, $maxAttempts));
         $outputName = ($context['purpose'] ?? null) === 'question_generation' ? 'question draft' : 'explanation';
         $model->load('provider');
         abort_unless($model->is_active && $model->provider->is_active, 422, 'The model and provider must be active.');
         abort_unless($model->provider->is_configured, 503, 'The AI provider adapter or API key is not configured.');
         $adapter = $this->providers->for($model->provider);
         $operationId = (string) Str::uuid();
-        for ($attempt = 1; $attempt <= 2; $attempt++) {
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             $record = AiRequest::create(array_merge($context, [
                 'ai_model_id' => $model->id, 'provider' => $model->provider->key,
                 'requested_model' => $model->model_key, 'operation_id' => $operationId,
                 'attempt_number' => $attempt, 'record_source' => 'provider',
-                'trigger_type' => 'user', 'environment' => app()->environment(),
+                'trigger_type' => $context['trigger_type'] ?? 'user', 'environment' => app()->environment(),
                 'status' => 'pending', 'pricing_snapshot' => $model->pricingSnapshot(),
                 // No key, headers, or question/image contents are persisted here.
                 'request_parameters' => ['model' => $model->model_key, 'max_output_tokens' => $payload['max_output_tokens'], 'schema' => $payload['schema']],
@@ -83,7 +84,7 @@ class AiService
                     : 'The AI provider could not generate a valid '.$outputName.'. Check the request log and model access.';
                 $record->fill(['status' => 'failed', 'error_code' => 'provider_http_'.$response->status(),
                     'error_message' => $response->status() === 404 ? $message : 'The AI provider returned HTTP '.$response->status().'.'])->save();
-                if ($attempt < 2 && ($response->status() === 429 || $response->serverError())) {
+                if ($attempt < $maxAttempts && ($response->status() === 429 || $response->serverError())) {
                     usleep(500000);
 
                     continue;

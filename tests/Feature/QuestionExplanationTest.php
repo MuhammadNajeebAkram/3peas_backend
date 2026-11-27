@@ -340,7 +340,7 @@ class QuestionExplanationTest extends TestCase
         DB::table('exam_question_options_tbl')->where('id', 2)->update(['is_answer' => 1]);
         $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en'])->assertUnprocessable();
         DB::table('exam_question_options_tbl')->where('id', 2)->update(['is_answer' => 0]);
-        $lock = Cache::lock('question-explanation:'.auth()->id().':1', 210);
+        $lock = Cache::lock(\App\Http\Services\QuestionExplanationService::questionLockKey(1), 210);
         $lock->get();
         $this->postJson(self::GENERATE, ['question_id' => 1, 'language' => 'en'])->assertConflict();
         $lock->release();

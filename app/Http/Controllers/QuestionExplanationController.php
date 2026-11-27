@@ -4,11 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AiGenerationException;
 use App\Http\Services\QuestionExplanationService;
-use App\Models\AiRequest;
-use App\Models\ExamQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class QuestionExplanationController extends Controller
@@ -24,11 +21,14 @@ class QuestionExplanationController extends Controller
         $context = $service->context($data['question_id']);
         $service->authorize($request, $context, 'questions.view', 'questions.generate-explanation');
         $model = $service->model($data['model_id'] ?? null, $data['ai_provider_id'] ?? null);
-        // Shared cache locks protect concurrent clicks while keeping deliberate regeneration possible.
-        $lock = Cache::lock('question-explanation:'.$request->user()->id.':'.$data['question_id'], 210);
+        // Global question-level cache lock prevents concurrent single/bulk generation for the same question.
+        $lock = Cache::lock(
+            QuestionExplanationService::questionLockKey((int) $data['question_id']),
+            QuestionExplanationService::QUESTION_LOCK_SECONDS
+        );
         abort_unless($lock->get(), 409, 'An explanation is already being generated for this question.');
         try {
-            $record = $service->generate($request, $context, $model, $data['language']);
+            $record = $service->generate($request, $context, $model, $data['language'], 'single');
 
             return response()->json(['success' => 1, 'data' => array_merge([
                 'ai_request_id' => $record->id, 'question_id' => $data['question_id'],
@@ -54,33 +54,15 @@ class QuestionExplanationController extends Controller
             'explanation_um' => [Rule::requiredIf(in_array($request->input('language'), ['ur', 'both'], true)),
                 Rule::prohibitedIf($request->input('language') === 'en'), 'string', 'max:350'],
         ]);
-        $context = $service->context($data['question_id']);
+        $context = $service->context((int) $data['question_id']);
         $service->authorize($request, $context, 'questions.update');
-        foreach ($service->fields($data['language']) as $field) {
-            $service->validateExplanation($data[$field], $field);
-        }
-        $saved = DB::transaction(function () use ($request, $data, $service) {
-            $question = ExamQuestion::lockForUpdate()->findOrFail($data['question_id']);
-            $record = AiRequest::lockForUpdate()->findOrFail($data['ai_request_id']);
-            abort_unless($record->purpose === 'question_explanation' && $record->subject_type === 'exam_question'
-                && (int) $record->subject_id === (int) $data['question_id'] && $record->language === $data['language']
-                && $record->status === 'successful' && $record->record_source === 'provider', 422, 'The AI draft does not match this question and language.');
-            $context = $service->context($data['question_id']);
-            $service->authorize($request, $context, 'questions.update');
-            abort_unless(hash_equals((string) data_get($record->metadata, 'context_hash', ''), $service->fingerprint($context)),
-                409, 'The question or options changed after generation. Generate a new explanation.');
-            $hashes = $service->explanationHashes($context);
-            foreach ($service->fields($data['language']) as $field) {
-                abort_unless(hash_equals((string) data_get($record->metadata, 'explanation_hashes.'.$field, ''), $hashes[$field]),
-                    409, 'The saved explanation changed after generation. Reload and generate a new draft.');
-                $question->$field = $service->toTiptapHtml($data[$field]);
-            }
-            $question->save();
-            $record->metadata = array_merge($record->metadata ?? [], ['saved_by' => $request->user()->id, 'saved_at' => now()->toIso8601String()]);
-            $record->save();
-
-            return $question->only($service->fields($data['language']));
-        });
+        $saved = $service->saveApprovedDraft(
+            $request->user(),
+            (int) $data['question_id'],
+            (int) $data['ai_request_id'],
+            $data['language'],
+            $data
+        );
 
         return response()->json(['success' => 1, 'message' => 'Explanation saved.',
             'data' => array_merge(['question_id' => $data['question_id'], 'language' => $data['language']], $saved)]);

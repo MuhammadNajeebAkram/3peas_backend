@@ -43,6 +43,15 @@ return [
             'after_commit' => false,
         ],
 
+        'database_ai_explanations' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('AI_BULK_EXPLANATION_QUEUE', 'ai-explanations'),
+            'retry_after' => max(180, (int) env('AI_EXPLANATION_QUEUE_RETRY_AFTER', 270)),
+            'after_commit' => true,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

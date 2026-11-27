@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use App\Notifications\ResetPassword as CustomResetPassword;
@@ -64,6 +66,12 @@ class AppServiceProvider extends ServiceProvider
 
         ResetPasswordNotification::toMailUsing(function ($notifiable, $token) {
             return (new CustomResetPassword($token))->toMail($notifiable);
+        });
+
+        RateLimiter::for('ai-bulk-explanations', function (object $job) {
+            $perMinute = max(1, (int) config('ai_bulk_explanations.rate_limit_per_minute', 20));
+
+            return Limit::perMinute($perMinute)->by('ai-bulk-explanations');
         });
     }
 
